@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.trip.flow.ui.tripdetails.AddPlaceScreen
 import com.trip.flow.ui.tripdetails.TripDetailsScreen
 import com.trip.flow.ui.trips.CreateTripScreen
 import com.trip.flow.ui.trips.TripListScreen
@@ -156,8 +157,12 @@ fun TripFlowNavHost(
                 ) + fadeOut()
             }
         ) {
-            // TODO: Implement AddPlaceScreen
-            // For now, just go back
+            val tripId = it.arguments?.getString("tripId") ?: return@composable
+            val dayId = it.arguments?.getString("dayId") ?: return@composable
+
+            AddPlaceScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
         
         // Add Expense (placeholder)
@@ -183,4 +188,3 @@ fun TripFlowNavHost(
         }
     }
 }
-
