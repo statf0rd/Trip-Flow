@@ -254,9 +254,9 @@ fun AddExpenseScreen(
                 )
             )
 
-            if (uiState.error != null) {
+            uiState.error?.let { errorText ->
                 Text(
-                    text = uiState.error,
+                    text = errorText,
                     color = Error,
                     style = MaterialTheme.typography.bodySmall
                 )
