@@ -446,6 +446,7 @@ fun ExpensesTab(
             items(expenses, key = { it.id }) { expense ->
                 ExpenseItem(
                     expense = expense,
+                    baseCurrency = currency,
                     onClick = { onExpenseClick(expense.id) }
                 )
             }
@@ -513,6 +514,7 @@ private fun ExpenseSummaryCard(
 @Composable
 private fun ExpenseItem(
     expense: Expense,
+    baseCurrency: String,
     onClick: () -> Unit
 ) {
     val dateFormatter = remember { 
@@ -574,12 +576,12 @@ private fun ExpenseItem(
             
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = formatCurrency(expense.amountInBaseCurrency, expense.currency),
+                    text = formatCurrency(expense.amountInBaseCurrency, baseCurrency),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(expense.category.colorHex)
                 )
-                if (expense.currency != expense.currency) {
+                if (expense.currency != baseCurrency) {
                     Text(
                         text = "${expense.amount} ${expense.currency}",
                         style = MaterialTheme.typography.labelSmall,
@@ -603,4 +605,3 @@ private fun formatCurrency(amount: Double, currency: String): String {
     }
     return "${String.format("%,.0f", amount)} $symbol"
 }
-

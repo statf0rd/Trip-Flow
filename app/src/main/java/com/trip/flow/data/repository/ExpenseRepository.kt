@@ -43,12 +43,14 @@ class ExpenseRepository @Inject constructor(
         // Create splits based on split type
         if (expense.splitType != SplitType.PAYER_ONLY) {
             val participants = tripDao.getParticipants(expense.tripId)
-            val splits = when (expense.splitType) {
-                SplitType.EQUAL -> createEqualSplits(expense, participants.map { it.userId to it.displayName })
-                SplitType.EXACT -> createExactSplits(expense)
-                else -> emptyList()
+            if (participants.isNotEmpty()) {
+                val splits = when (expense.splitType) {
+                    SplitType.EQUAL -> createEqualSplits(expense, participants.map { it.userId to it.displayName })
+                    SplitType.EXACT -> createExactSplits(expense)
+                    else -> emptyList()
+                }
+                expenseDao.insertExpenseSplits(splits)
             }
-            expenseDao.insertExpenseSplits(splits)
         }
         
         return expense.id
@@ -60,8 +62,10 @@ class ExpenseRepository @Inject constructor(
         expenseDao.deleteSplitsForExpense(expense.id)
         if (expense.splitType != SplitType.PAYER_ONLY) {
             val participants = tripDao.getParticipants(expense.tripId)
-            val splits = createEqualSplits(expense, participants.map { it.userId to it.displayName })
-            expenseDao.insertExpenseSplits(splits)
+            if (participants.isNotEmpty()) {
+                val splits = createEqualSplits(expense, participants.map { it.userId to it.displayName })
+                expenseDao.insertExpenseSplits(splits)
+            }
         }
     }
     
@@ -74,6 +78,8 @@ class ExpenseRepository @Inject constructor(
         expense: Expense,
         participants: List<Pair<String, String>>
     ): List<ExpenseSplit> {
+        if (participants.isEmpty()) return emptyList()
+        
         val shareAmount = expense.amount / participants.size
         val shareInBase = expense.amountInBaseCurrency / participants.size
         
@@ -255,4 +261,3 @@ class ExpenseRepository @Inject constructor(
         )
     }
 }
-
