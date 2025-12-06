@@ -38,7 +38,7 @@ coil = "2.7.0"
 playServicesMaps = "19.1.0"
 playServicesLocation = "21.3.0"
 mapsCompose = "6.4.2"
-mapsUtils = "5.1.1"
+mapsUtils = "3.8.2"
 secretsGradle = "2.0.1"
 
 # Icons Extended
