@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors -->
+    <color name="coral_primary">#FFFF6B5B</color>
+    <color name="coral_light">#FFFF8A7A</color>
+    <color name="coral_dark">#FFE54E3D</color>
+    <color name="coral_subtle">#FFFFF0EE</color>
+
+    <!-- Secondary Colors -->
+    <color name="teal_secondary">#FF2DD4BF</color>
+    <color name="teal_light">#FF5EEAD4</color>
+    <color name="teal_dark">#FF14B8A6</color>
+    <color name="teal_subtle">#FFE6FAF7</color>
+
+    <!-- Accent Colors -->
+    <color name="golden_accent">#FFFBBF24</color>
+    <color name="golden_light">#FFFCD34D</color>
+    <color name="golden_dark">#FFF59E0B</color>
+
+    <!-- Neutral Colors -->
+    <color name="slate_950">#FF0F172A</color>
+    <color name="slate_900">#FF1E293B</color>
+    <color name="slate_700">#FF475569</color>
+    <color name="slate_500">#FF94A3B8</color>
+    <color name="slate_300">#FFE2E8F0</color>
+    <color name="slate_100">#FFF8FAFC</color>
+    <color name="slate_50">#FFFAFBFC</color>
+
+    <!-- Status Colors -->
+    <color name="success">#FF10B981</color>
+    <color name="warning">#FFF59E0B</color>
+    <color name="error">#FFEF4444</color>
+    <color name="info">#FF3B82F6</color>
+
+    <!-- Dark Theme -->
+    <color name="dark_background">#FF0D1117</color>
+    <color name="dark_surface">#FF161B22</color>
+</resources>
