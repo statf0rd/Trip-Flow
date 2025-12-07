@@ -64,6 +64,25 @@ class TripDetailsViewModel @Inject constructor(
             expenseRepository.deleteExpense(expenseId)
         }
     }
+    
+    private val _isDeleted = MutableStateFlow(false)
+    val isDeleted: StateFlow<Boolean> = _isDeleted.asStateFlow()
+    
+    fun deleteTrip() {
+        viewModelScope.launch {
+            tripRepository.deleteTrip(tripId)
+            _isDeleted.value = true
+        }
+    }
+    
+    fun optimizeRoute() {
+        // TODO: Implement route optimization
+        // This will be implemented in RouteOptimizer service
+        viewModelScope.launch {
+            // For now, just reorder places by proximity (nearest neighbor heuristic)
+            // Will be enhanced with AI/ML later
+        }
+    }
 }
 
 data class TripDetailsUiState(
@@ -75,6 +94,7 @@ data class TripDetailsUiState(
     val totalExpenses: Double = 0.0,
     val balances: List<Balance> = emptyList(),
     val isLoading: Boolean = false,
+    val isDeleted: Boolean = false,
     val error: String? = null
 )
 

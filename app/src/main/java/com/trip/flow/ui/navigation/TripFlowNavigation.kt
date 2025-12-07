@@ -10,8 +10,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.trip.flow.ui.settings.SettingsScreen
 import com.trip.flow.ui.tripdetails.AddExpenseScreen
 import com.trip.flow.ui.tripdetails.AddPlaceScreen
+import com.trip.flow.ui.tripdetails.PlaceDetailsScreen
 import com.trip.flow.ui.tripdetails.TripDetailsScreen
 import com.trip.flow.ui.trips.CreateTripScreen
 import com.trip.flow.ui.trips.TripListScreen
@@ -22,14 +24,22 @@ import com.trip.flow.ui.trips.TripListScreen
 sealed class Screen(val route: String) {
     object TripList : Screen("trips")
     object CreateTrip : Screen("trips/create")
+    object Settings : Screen("settings")
+    
     object TripDetails : Screen("trips/{tripId}") {
         fun createRoute(tripId: String) = "trips/$tripId"
     }
     object AddPlace : Screen("trips/{tripId}/days/{dayId}/add-place") {
         fun createRoute(tripId: String, dayId: String) = "trips/$tripId/days/$dayId/add-place"
     }
+    object PlaceDetails : Screen("places/{placeId}") {
+        fun createRoute(placeId: String) = "places/$placeId"
+    }
     object AddExpense : Screen("trips/{tripId}/add-expense") {
         fun createRoute(tripId: String) = "trips/$tripId/add-expense"
+    }
+    object EditExpense : Screen("trips/{tripId}/expenses/{expenseId}/edit") {
+        fun createRoute(tripId: String, expenseId: String) = "trips/$tripId/expenses/$expenseId/edit"
     }
 }
 
@@ -76,6 +86,18 @@ fun TripFlowNavHost(
                 },
                 onNavigateToCreateTrip = {
                     navController.navigate(Screen.CreateTrip.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
+                }
+            )
+        }
+        
+        // Settings
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -134,11 +156,17 @@ fun TripFlowNavHost(
                 },
                 onNavigateToAddExpense = { id ->
                     navController.navigate(Screen.AddExpense.createRoute(id))
+                },
+                onNavigateToPlaceDetails = { placeId ->
+                    navController.navigate(Screen.PlaceDetails.createRoute(placeId))
+                },
+                onNavigateToEditExpense = { id, expenseId ->
+                    navController.navigate(Screen.EditExpense.createRoute(id, expenseId))
                 }
             )
         }
         
-        // Add Place (placeholder)
+        // Add Place
         composable(
             route = Screen.AddPlace.route,
             arguments = listOf(
@@ -158,15 +186,24 @@ fun TripFlowNavHost(
                 ) + fadeOut()
             }
         ) {
-            val tripId = it.arguments?.getString("tripId") ?: return@composable
-            val dayId = it.arguments?.getString("dayId") ?: return@composable
-
             AddPlaceScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
         
-        // Add Expense (placeholder)
+        // Place Details
+        composable(
+            route = Screen.PlaceDetails.route,
+            arguments = listOf(
+                navArgument("placeId") { type = NavType.StringType }
+            )
+        ) {
+            PlaceDetailsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Add Expense
         composable(
             route = Screen.AddExpense.route,
             arguments = listOf(
@@ -185,8 +222,33 @@ fun TripFlowNavHost(
                 ) + fadeOut()
             }
         ) {
-            val tripId = it.arguments?.getString("tripId") ?: return@composable
-
+            AddExpenseScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        // Edit Expense
+        composable(
+            route = Screen.EditExpense.route,
+            arguments = listOf(
+                navArgument("tripId") { type = NavType.StringType },
+                navArgument("expenseId") { type = NavType.StringType }
+            ),
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeIn()
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeOut()
+            }
+        ) {
+            // TODO: Implement EditExpenseScreen
+            // For now, use AddExpenseScreen with edit mode
             AddExpenseScreen(
                 onNavigateBack = { navController.popBackStack() }
             )

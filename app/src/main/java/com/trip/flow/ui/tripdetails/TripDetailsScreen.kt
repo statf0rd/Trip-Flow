@@ -2,7 +2,6 @@ package com.trip.flow.ui.tripdetails
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -13,8 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -35,11 +32,15 @@ fun TripDetailsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAddPlace: (String, String) -> Unit, // tripId, dayId
     onNavigateToAddExpense: (String) -> Unit,
+    onNavigateToPlaceDetails: (String) -> Unit = {}, // placeId
+    onNavigateToEditExpense: (String, String) -> Unit = { _, _ -> }, // tripId, expenseId
     viewModel: TripDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
+    
+    var showDeleteDialog by remember { mutableStateOf(false) }
     
     val tabs = listOf(
         TabItem("План", Icons.Rounded.EventNote),
@@ -47,14 +48,23 @@ fun TripDetailsScreen(
         TabItem("Расходы", Icons.Rounded.Payments)
     )
     
+    // Handle trip deletion
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) {
+            onNavigateBack()
+        }
+    }
+    
     Scaffold(
         topBar = {
             uiState.trip?.let { trip ->
                 TripDetailsTopBar(
                     trip = trip,
                     onNavigateBack = onNavigateBack,
-                    onShare = { /* Share trip */ },
-                    onEdit = { /* Edit trip */ }
+                    onShare = { /* TODO: Share trip */ },
+                    onEdit = { /* TODO: Edit trip */ },
+                    onDelete = { showDeleteDialog = true },
+                    onOptimizeRoute = { viewModel.optimizeRoute() }
                 )
             }
         },
@@ -119,10 +129,11 @@ fun TripDetailsScreen(
                             days = uiState.days,
                             places = uiState.places,
                             onDayClick = { /* Expand day */ },
-                            onPlaceClick = { /* Show place details */ },
+                            onPlaceClick = { placeId -> onNavigateToPlaceDetails(placeId) },
                             onAddPlace = { dayId -> 
                                 onNavigateToAddPlace(tripId, dayId) 
-                            }
+                            },
+                            onDeletePlace = { placeId -> viewModel.deletePlace(placeId) }
                         )
                         1 -> MapTab(
                             trip = uiState.trip!!,
@@ -133,13 +144,52 @@ fun TripDetailsScreen(
                             expenses = uiState.expenses,
                             totalAmount = uiState.totalExpenses,
                             currency = uiState.trip!!.baseCurrency,
-                            onExpenseClick = { /* Show expense details */ },
-                            onAddExpense = { onNavigateToAddExpense(tripId) }
+                            onExpenseClick = { expenseId -> 
+                                onNavigateToEditExpense(tripId, expenseId) 
+                            },
+                            onAddExpense = { onNavigateToAddExpense(tripId) },
+                            onDeleteExpense = { expenseId -> viewModel.deleteExpense(expenseId) }
                         )
                     }
                 }
             }
         }
+    }
+    
+    // Delete trip confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteForever,
+                    contentDescription = null,
+                    tint = Error
+                )
+            },
+            title = {
+                Text("Удалить поездку?")
+            },
+            text = {
+                Text("Все данные поездки, включая места и расходы, будут удалены безвозвратно.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        viewModel.deleteTrip()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Error)
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 
@@ -149,11 +199,15 @@ private fun TripDetailsTopBar(
     trip: Trip,
     onNavigateBack: () -> Unit,
     onShare: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onOptimizeRoute: () -> Unit
 ) {
     val dateFormatter = remember { 
         DateTimeFormatter.ofPattern("d MMM", Locale("ru")) 
     }
+    
+    var showMenu by remember { mutableStateOf(false) }
     
     TopAppBar(
         title = {
@@ -187,11 +241,84 @@ private fun TripDetailsTopBar(
                     )
                 }
             }
-            IconButton(onClick = onEdit) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Меню"
-                )
+            
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Меню"
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Редактировать") },
+                        onClick = {
+                            showMenu = false
+                            onEdit()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Оптимизировать маршрут") },
+                        onClick = {
+                            showMenu = false
+                            onOptimizeRoute()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.AutoAwesome,
+                                contentDescription = null,
+                                tint = TealSecondary
+                            )
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Поделиться") },
+                        onClick = {
+                            showMenu = false
+                            onShare()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Share,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                    
+                    HorizontalDivider()
+                    
+                    DropdownMenuItem(
+                        text = { 
+                            Text(
+                                "Удалить поездку",
+                                color = Error
+                            ) 
+                        },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = null,
+                                tint = Error
+                            )
+                        }
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -256,4 +383,3 @@ data class TabItem(
     val title: String,
     val icon: ImageVector
 )
-

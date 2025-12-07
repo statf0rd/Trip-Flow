@@ -1,45 +1,22 @@
 package com.trip.flow.ui.tripdetails
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,17 +25,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.trip.flow.data.model.ExpenseCategory
 import com.trip.flow.ui.components.TripFlowButton
-import com.trip.flow.ui.theme.CoralPrimary
-import com.trip.flow.ui.theme.Error
-import com.trip.flow.ui.theme.Slate500
-import com.trip.flow.ui.theme.Slate600
-import com.trip.flow.ui.theme.Slate700
+import com.trip.flow.ui.theme.*
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddExpenseScreen(
     onNavigateBack: () -> Unit,
@@ -67,6 +40,7 @@ fun AddExpenseScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val trip by viewModel.trip.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
     }
@@ -104,16 +78,93 @@ fun AddExpenseScreen(
                 .padding(paddingValues)
                 .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Trip info
             trip?.let {
-                Text(
-                    text = "Базовая валюта поездки: ${it.baseCurrency}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate600
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Slate100
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Wallet,
+                            contentDescription = null,
+                            tint = Slate600,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Базовая валюта: ${it.baseCurrency}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Slate700
+                        )
+                    }
+                }
             }
 
+            // Amount section
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Сумма",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate700
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = uiState.amount,
+                        onValueChange = viewModel::updateAmount,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("0", color = Slate500) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Payments,
+                                contentDescription = null,
+                                tint = CoralPrimary
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+                
+                // Currency selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    buildCurrencyList(trip?.baseCurrency).forEach { currency ->
+                        val isSelected = currency == uiState.currency
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.updateCurrency(currency) },
+                            label = { Text(currency) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CoralPrimary.copy(alpha = 0.15f),
+                                selectedLabelColor = CoralPrimary
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Description field
             OutlinedTextField(
                 value = uiState.description,
                 onValueChange = viewModel::updateDescription,
@@ -129,50 +180,61 @@ fun AddExpenseScreen(
                 },
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Next
-                )
+                ),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp)
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = uiState.amount,
-                    onValueChange = viewModel::updateAmount,
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Сумма") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Payments,
-                            contentDescription = null,
-                            tint = Slate500
+            // Category selector
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Категория",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate700
+                )
+                
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ExpenseCategory.entries.forEach { category ->
+                        val isSelected = category == uiState.category
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.updateCategory(category) },
+                            label = {
+                                Text(
+                                    text = "${category.emoji} ${category.displayName}",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            leadingIcon = if (isSelected) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(category.colorHex).copy(alpha = 0.15f),
+                                selectedLabelColor = Color(category.colorHex),
+                                selectedLeadingIconColor = Color(category.colorHex)
+                            )
                         )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Next
-                    )
-                )
-
-                CurrencySelector(
-                    currencies = buildCurrencyList(trip?.baseCurrency),
-                    selected = uiState.currency,
-                    onSelected = viewModel::updateCurrency
-                )
+                    }
+                }
             }
 
-            ExpenseCategorySelector(
-                selected = uiState.category,
-                onSelected = viewModel::updateCategory
-            )
-
+            // Payer field
             OutlinedTextField(
                 value = uiState.paidBy,
                 onValueChange = viewModel::updatePayer,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Плательщик") },
-                placeholder = { Text("Вы или имя участника", color = Slate500) },
+                placeholder = { Text("Ваше имя", color = Slate500) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.AccountCircle,
@@ -182,13 +244,17 @@ fun AddExpenseScreen(
                 },
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Next
-                )
+                ),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp)
             )
 
+            // Date and time row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Date picker
                 OutlinedTextField(
                     value = uiState.date?.format(dateFormatter) ?: "",
                     onValueChange = {},
@@ -197,6 +263,7 @@ fun AddExpenseScreen(
                         .clickable { showDatePicker = true },
                     label = { Text("Дата") },
                     readOnly = true,
+                    enabled = false,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.CalendarToday,
@@ -204,21 +271,21 @@ fun AddExpenseScreen(
                             tint = Slate500
                         )
                     },
-                    trailingIcon = {
-                        IconButton(onClick = { showDatePicker = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.EditCalendar,
-                                contentDescription = null
-                            )
-                        }
-                    }
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLeadingIconColor = Slate500,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
 
+                // Time field
                 OutlinedTextField(
                     value = uiState.time,
                     onValueChange = viewModel::updateTime,
                     modifier = Modifier.weight(1f),
-                    label = { Text("Время (опционально)") },
+                    label = { Text("Время") },
                     placeholder = { Text("14:30", color = Slate500) },
                     leadingIcon = {
                         Icon(
@@ -229,16 +296,19 @@ fun AddExpenseScreen(
                     },
                     keyboardOptions = KeyboardOptions(
                         imeAction = ImeAction.Next
-                    )
+                    ),
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
 
+            // Notes field
             OutlinedTextField(
                 value = uiState.notes,
                 onValueChange = viewModel::updateNotes,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Заметки (опционально)") },
-                placeholder = { Text("Чаевые, детали разделения и т.д.", color = Slate500) },
+                placeholder = { Text("Чаевые, детали...", color = Slate500) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Notes,
@@ -250,20 +320,45 @@ fun AddExpenseScreen(
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = { viewModel.saveExpense() }
-                )
+                    onDone = { 
+                        focusManager.clearFocus()
+                        if (uiState.isValid) viewModel.saveExpense() 
+                    }
+                ),
+                minLines = 2,
+                maxLines = 3,
+                shape = RoundedCornerShape(14.dp)
             )
 
+            // Error message
             uiState.error?.let { errorText ->
-                Text(
-                    text = errorText,
-                    color = Error,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = ErrorLight
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Error,
+                            contentDescription = null,
+                            tint = Error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = errorText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Error
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Save button
             TripFlowButton(
                 text = "Сохранить расход",
                 onClick = viewModel::saveExpense,
@@ -272,9 +367,12 @@ fun AddExpenseScreen(
                 icon = Icons.Rounded.Check,
                 modifier = Modifier.fillMaxWidth()
             )
+            
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 
+    // Date picker dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = uiState.date?.atStartOfDay(ZoneId.systemDefault())
@@ -317,103 +415,10 @@ fun AddExpenseScreen(
     }
 }
 
-@Composable
-private fun CurrencySelector(
-    currencies: List<String>,
-    selected: String,
-    onSelected: (String) -> Unit
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        currencies.forEach { currency ->
-            FilterChip(
-                selected = currency == selected,
-                onClick = { onSelected(currency) },
-                label = {
-                    Text(
-                        text = currency,
-                        modifier = Modifier.wrapContentWidth()
-                    )
-                },
-                leadingIcon = if (currency == selected) {
-                    {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = CoralPrimary.copy(alpha = 0.12f),
-                    selectedLabelColor = CoralPrimary,
-                    selectedLeadingIconColor = CoralPrimary
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExpenseCategorySelector(
-    selected: ExpenseCategory,
-    onSelected: (ExpenseCategory) -> Unit
-) {
-    val categories = listOf(
-        ExpenseCategory.FOOD,
-        ExpenseCategory.ACCOMMODATION,
-        ExpenseCategory.TRANSPORT,
-        ExpenseCategory.ENTERTAINMENT,
-        ExpenseCategory.SHOPPING,
-        ExpenseCategory.OTHER
-    )
-
-    Column {
-        Text(
-            text = "Категория",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = Slate700
-        )
-        Spacer(modifier = Modifier.size(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            categories.forEach { category ->
-                FilterChip(
-                    selected = category == selected,
-                    onClick = { onSelected(category) },
-                    label = {
-                        Text(
-                            text = "${category.emoji} ${category.displayName}",
-                            modifier = Modifier.wrapContentWidth()
-                        )
-                    },
-                    leadingIcon = if (category == selected) {
-                        {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = CoralPrimary.copy(alpha = 0.12f),
-                        selectedLabelColor = CoralPrimary,
-                        selectedLeadingIconColor = CoralPrimary
-                    )
-                )
-            }
-        }
-    }
-}
-
 private fun buildCurrencyList(base: String?): List<String> {
-    val defaults = listOf("RUB", "USD", "EUR", "TRY")
+    val defaults = listOf("RUB", "USD", "EUR", "TRY", "THB", "AED")
     return listOfNotNull(base) + defaults
         .filter { it != base }
         .distinct()
+        .take(5)
 }

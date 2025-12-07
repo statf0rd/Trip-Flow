@@ -35,7 +35,8 @@ fun PlanTab(
     places: List<Place>,
     onDayClick: (String) -> Unit,
     onPlaceClick: (String) -> Unit,
-    onAddPlace: (String) -> Unit
+    onAddPlace: (String) -> Unit,
+    onDeletePlace: (String) -> Unit = {}
 ) {
     if (days.isEmpty()) {
         EmptyState(
@@ -55,7 +56,8 @@ fun PlanTab(
                     places = places.filter { it.tripDayId == day.id },
                     onDayClick = { onDayClick(day.id) },
                     onPlaceClick = onPlaceClick,
-                    onAddPlace = { onAddPlace(day.id) }
+                    onAddPlace = { onAddPlace(day.id) },
+                    onDeletePlace = onDeletePlace
                 )
             }
         }
@@ -68,7 +70,8 @@ private fun DayCard(
     places: List<Place>,
     onDayClick: () -> Unit,
     onPlaceClick: (String) -> Unit,
-    onAddPlace: () -> Unit
+    onAddPlace: () -> Unit,
+    onDeletePlace: (String) -> Unit
 ) {
     val dateFormatter = remember { 
         DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")) 
@@ -165,7 +168,8 @@ private fun DayCard(
                         PlaceItem(
                             place = place,
                             isLast = index == places.lastIndex,
-                            onClick = { onPlaceClick(place.id) }
+                            onClick = { onPlaceClick(place.id) },
+                            onDelete = { onDeletePlace(place.id) }
                         )
                     }
                     
@@ -193,8 +197,11 @@ private fun DayCard(
 private fun PlaceItem(
     place: Place,
     isLast: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -312,15 +319,57 @@ private fun PlaceItem(
             }
         }
         
-        // Visited indicator
-        if (place.isVisited) {
-            Icon(
-                imageVector = Icons.Rounded.CheckCircle,
-                contentDescription = "Посещено",
-                tint = TealSecondary,
-                modifier = Modifier.size(20.dp)
-            )
+        // Actions
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Visited indicator
+            if (place.isVisited) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = "Посещено",
+                    tint = TealSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            
+            // Delete button
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Удалить",
+                    tint = Slate400,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
+    }
+    
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить место?") },
+            text = { Text("${place.name} будет удалено из плана поездки.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Error)
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 
@@ -416,7 +465,8 @@ fun ExpensesTab(
     totalAmount: Double,
     currency: String,
     onExpenseClick: (String) -> Unit,
-    onAddExpense: () -> Unit
+    onAddExpense: () -> Unit,
+    onDeleteExpense: (String) -> Unit = {}
 ) {
     if (expenses.isEmpty()) {
         EmptyState(
@@ -447,7 +497,8 @@ fun ExpensesTab(
                 ExpenseItem(
                     expense = expense,
                     baseCurrency = currency,
-                    onClick = { onExpenseClick(expense.id) }
+                    onClick = { onExpenseClick(expense.id) },
+                    onDelete = { onDeleteExpense(expense.id) }
                 )
             }
         }
@@ -515,11 +566,13 @@ private fun ExpenseSummaryCard(
 private fun ExpenseItem(
     expense: Expense,
     baseCurrency: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val dateFormatter = remember { 
         DateTimeFormatter.ofPattern("d MMM", Locale("ru")) 
     }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -589,7 +642,47 @@ private fun ExpenseItem(
                     )
                 }
             }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Delete button
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Удалить",
+                    tint = Slate400,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
+    }
+    
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить расход?") },
+            text = { Text("\"${expense.description}\" будет удалён из списка расходов.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Error)
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 

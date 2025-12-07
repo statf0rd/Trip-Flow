@@ -34,6 +34,7 @@ import java.util.Locale
 fun TripListScreen(
     onNavigateToTrip: (String) -> Unit,
     onNavigateToCreateTrip: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     viewModel: TripListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -57,7 +58,7 @@ fun TripListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Settings */ }) {
+                    IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
                             contentDescription = "Настройки"

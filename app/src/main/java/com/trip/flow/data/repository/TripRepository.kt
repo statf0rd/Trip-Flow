@@ -150,6 +150,9 @@ class TripRepository @Inject constructor(
     suspend fun getPlacesByTrip(tripId: String): List<Place> =
         placeDao.getPlacesByTrip(tripId)
     
+    suspend fun getPlaceById(placeId: String): Place? =
+        placeDao.getPlaceById(placeId)
+    
     suspend fun addPlace(place: Place) {
         val maxOrder = placeDao.getMaxOrderIndex(place.tripDayId) ?: -1
         placeDao.insertPlace(place.copy(orderIndex = maxOrder + 1))

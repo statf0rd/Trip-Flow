@@ -6,18 +6,20 @@ import androidx.lifecycle.viewModelScope
 import com.trip.flow.data.model.Place
 import com.trip.flow.data.model.PlaceCategory
 import com.trip.flow.data.model.TripDay
+import com.trip.flow.data.places.PlaceSuggestion
+import com.trip.flow.data.places.PlacesService
 import com.trip.flow.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class AddPlaceViewModel @Inject constructor(
     private val tripRepository: TripRepository,
+    private val placesService: PlacesService,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -31,28 +33,75 @@ class AddPlaceViewModel @Inject constructor(
 
     private val _day = MutableStateFlow<TripDay?>(null)
     val day: StateFlow<TripDay?> = _day.asStateFlow()
+    
+    private val _searchQuery = MutableStateFlow("")
+    
+    private val _suggestions = MutableStateFlow<List<PlaceSuggestion>>(emptyList())
+    val suggestions: StateFlow<List<PlaceSuggestion>> = _suggestions.asStateFlow()
 
     init {
         // Preload day info for header
         viewModelScope.launch {
             _day.value = tripRepository.getTripDayById(dayId)
         }
+        
+        // Setup search debounce
+        viewModelScope.launch {
+            _searchQuery
+                .debounce(300)
+                .filter { it.length >= 2 }
+                .distinctUntilChanged()
+                .collect { query ->
+                    searchPlaces(query)
+                }
+        }
+    }
+    
+    private suspend fun searchPlaces(query: String) {
+        _uiState.update { it.copy(isSearching = true) }
+        try {
+            val results = placesService.searchPlaces(query)
+            _suggestions.value = results
+        } catch (e: Exception) {
+            _suggestions.value = emptyList()
+        } finally {
+            _uiState.update { it.copy(isSearching = false) }
+        }
     }
 
     fun updateName(value: String) {
         _uiState.update { it.copy(name = value) }
+        _searchQuery.value = value
+        
+        // If user clears the field, clear suggestions
+        if (value.isBlank()) {
+            _suggestions.value = emptyList()
+        }
+    }
+    
+    fun selectSuggestion(suggestion: PlaceSuggestion) {
+        _uiState.update { state ->
+            state.copy(
+                name = suggestion.name,
+                address = suggestion.address,
+                latitude = suggestion.latitude,
+                longitude = suggestion.longitude,
+                category = suggestion.category,
+                rating = suggestion.rating,
+                selectedPlaceId = suggestion.placeId
+            )
+        }
+        // Clear suggestions after selection
+        _suggestions.value = emptyList()
+        _searchQuery.value = ""
+    }
+    
+    fun clearSuggestions() {
+        _suggestions.value = emptyList()
     }
 
     fun updateAddress(value: String) {
         _uiState.update { it.copy(address = value) }
-    }
-
-    fun updateLatitude(value: String) {
-        _uiState.update { it.copy(latitude = value) }
-    }
-
-    fun updateLongitude(value: String) {
-        _uiState.update { it.copy(longitude = value) }
     }
 
     fun updateTime(value: String) {
@@ -73,8 +122,12 @@ class AddPlaceViewModel @Inject constructor(
 
     fun savePlace() {
         val state = _uiState.value
-        val lat = state.latitude.toDoubleOrNull() ?: return
-        val lon = state.longitude.toDoubleOrNull() ?: return
+        
+        // Validate coordinates
+        if (state.latitude == 0.0 && state.longitude == 0.0) {
+            _uiState.update { it.copy(error = "Выберите место из подсказок или укажите координаты") }
+            return
+        }
 
         _uiState.update { it.copy(isSaving = true, error = null) }
 
@@ -85,12 +138,14 @@ class AddPlaceViewModel @Inject constructor(
                     tripDayId = dayId,
                     name = state.name.trim(),
                     address = state.address.trim().ifBlank { null },
-                    latitude = lat,
-                    longitude = lon,
+                    placeId = state.selectedPlaceId,
+                    latitude = state.latitude,
+                    longitude = state.longitude,
                     category = state.category,
                     iconEmoji = state.category.emoji,
                     scheduledTime = state.time.trim().ifBlank { null },
                     estimatedDuration = state.durationMinutes.toIntOrNull(),
+                    rating = state.rating,
                     notes = state.notes.trim().ifBlank { null }
                 )
                 tripRepository.addPlace(place)
@@ -110,19 +165,24 @@ class AddPlaceViewModel @Inject constructor(
 data class AddPlaceUiState(
     val name: String = "",
     val address: String = "",
-    val latitude: String = "",
-    val longitude: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
     val category: PlaceCategory = PlaceCategory.ATTRACTION,
     val time: String = "",
     val durationMinutes: String = "",
     val notes: String = "",
+    val rating: Float? = null,
+    val selectedPlaceId: String? = null,
+    val isSearching: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val error: String? = null
 ) {
     val isValid: Boolean
         get() = name.isNotBlank() &&
-                latitude.toDoubleOrNull() != null &&
-                longitude.toDoubleOrNull() != null &&
+                (latitude != 0.0 || longitude != 0.0) &&
                 !isSaving
+    
+    val hasCoordinates: Boolean
+        get() = latitude != 0.0 || longitude != 0.0
 }
