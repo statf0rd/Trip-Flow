@@ -144,6 +144,9 @@ fun TripFlowNavHost(
                 onNavigateBack = {
                     navController.popBackStack()
                 },
+                onNavigateToGroupTrips = {
+                    navController.navigate(Screen.GroupTrips.route)
+                },
                 onTripCreated = { tripId ->
                     navController.navigate(Screen.TripDetails.createRoute(tripId)) {
                         popUpTo(Screen.TripList.route)
