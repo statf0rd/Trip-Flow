@@ -37,6 +37,7 @@ import java.util.Locale
 fun CreateTripScreen(
     onNavigateBack: () -> Unit,
     onTripCreated: (String) -> Unit,
+    onNavigateToGroupTrips: () -> Unit = {},
     viewModel: CreateTripViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -116,6 +117,66 @@ fun CreateTripScreen(
                 )
             )
             
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Group trips
+            Text(
+                text = "Групповые поездки",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Slate700
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            TripFlowCard(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Group,
+                        contentDescription = null,
+                        tint = CoralPrimary
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Создать групповую поездку",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Приглашения, участники и общий бюджет",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate600
+                        )
+                    }
+
+                    Switch(
+                        checked = uiState.isGroupTrip,
+                        onCheckedChange = viewModel::updateIsGroupTrip
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(
+                    onClick = onNavigateToGroupTrips,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        text = "Открыть раздел",
+                        color = CoralPrimary
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
             
             // Dates Section
