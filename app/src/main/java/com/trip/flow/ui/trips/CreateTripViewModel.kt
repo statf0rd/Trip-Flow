@@ -56,6 +56,10 @@ class CreateTripViewModel @Inject constructor(
     fun updateBudget(budget: Double?) {
         _uiState.update { it.copy(budget = budget) }
     }
+
+    fun updateIsGroupTrip(isGroupTrip: Boolean) {
+        _uiState.update { it.copy(isGroupTrip = isGroupTrip) }
+    }
     
     fun createTrip() {
         val state = _uiState.value
@@ -72,7 +76,8 @@ class CreateTripViewModel @Inject constructor(
                     endDate = state.endDate!!,
                     baseCurrency = state.baseCurrency,
                     hotelName = state.hotelName.takeIf { it.isNotBlank() },
-                    budget = state.budget
+                    budget = state.budget,
+                    isGroupTrip = state.isGroupTrip
                 )
                 
                 val tripId = tripRepository.createTrip(trip)
@@ -98,6 +103,7 @@ data class CreateTripUiState(
     val baseCurrency: String = "RUB",
     val hotelName: String = "",
     val budget: Double? = null,
+    val isGroupTrip: Boolean = false,
     
     val isCreating: Boolean = false,
     val createdTripId: String? = null,
