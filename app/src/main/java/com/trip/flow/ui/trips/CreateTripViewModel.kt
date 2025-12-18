@@ -1,5 +1,6 @@
 package com.trip.flow.ui.trips
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.trip.flow.data.model.Trip
@@ -15,10 +16,14 @@ import javax.inject.Inject
 
 @HiltViewModel
 class CreateTripViewModel @Inject constructor(
-    private val tripRepository: TripRepository
+    private val tripRepository: TripRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
-    private val _uiState = MutableStateFlow(CreateTripUiState())
+    private val initialIsGroupTrip: Boolean =
+        savedStateHandle.get<Boolean>("isGroupTrip") ?: false
+
+    private val _uiState = MutableStateFlow(CreateTripUiState(isGroupTrip = initialIsGroupTrip))
     val uiState: StateFlow<CreateTripUiState> = _uiState.asStateFlow()
     
     fun updateName(name: String) {
