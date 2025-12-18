@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.trip.flow.ui.grouptrips.GroupTripsScreen
 import com.trip.flow.ui.settings.SettingsScreen
 import com.trip.flow.ui.tripdetails.AddExpenseScreen
 import com.trip.flow.ui.tripdetails.AddPlaceScreen
@@ -25,6 +26,7 @@ sealed class Screen(val route: String) {
     object TripList : Screen("trips")
     object CreateTrip : Screen("trips/create")
     object Settings : Screen("settings")
+    object GroupTrips : Screen("group-trips")
     
     object TripDetails : Screen("trips/{tripId}") {
         fun createRoute(tripId: String) = "trips/$tripId"
@@ -98,6 +100,19 @@ fun TripFlowNavHost(
             SettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToGroupTrips = {
+                    navController.navigate(Screen.GroupTrips.route)
+                }
+            )
+        }
+
+        // Group Trips
+        composable(Screen.GroupTrips.route) {
+            GroupTripsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToTrip = { tripId ->
+                    navController.navigate(Screen.TripDetails.createRoute(tripId))
                 }
             )
         }
