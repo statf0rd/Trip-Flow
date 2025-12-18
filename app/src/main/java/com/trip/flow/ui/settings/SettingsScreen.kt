@@ -21,6 +21,7 @@ import com.trip.flow.ui.theme.*
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToGroupTrips: () -> Unit = {},
     onNavigateToAuth: () -> Unit = {} // TODO: Implement auth navigation
 ) {
     Scaffold(
@@ -66,7 +67,7 @@ fun SettingsScreen(
                     icon = Icons.Rounded.Group,
                     title = "Групповые поездки",
                     subtitle = "Приглашения и участники",
-                    onClick = { /* TODO */ }
+                    onClick = onNavigateToGroupTrips
                 )
             }
             
