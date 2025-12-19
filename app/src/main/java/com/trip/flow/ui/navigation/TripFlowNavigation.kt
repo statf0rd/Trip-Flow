@@ -24,7 +24,9 @@ import com.trip.flow.ui.trips.TripListScreen
  */
 sealed class Screen(val route: String) {
     object TripList : Screen("trips")
-    object CreateTrip : Screen("trips/create")
+    object CreateTrip : Screen("trips/create?isGroupTrip={isGroupTrip}") {
+        fun createRoute(isGroupTrip: Boolean) = "trips/create?isGroupTrip=$isGroupTrip"
+    }
     object Settings : Screen("settings")
     object GroupTrips : Screen("group-trips")
     
@@ -86,8 +88,11 @@ fun TripFlowNavHost(
                 onNavigateToTrip = { tripId ->
                     navController.navigate(Screen.TripDetails.createRoute(tripId))
                 },
-                onNavigateToCreateTrip = {
-                    navController.navigate(Screen.CreateTrip.route)
+                onNavigateToCreateTrip = { isGroupTrip ->
+                    navController.navigate(Screen.CreateTrip.createRoute(isGroupTrip))
+                },
+                onNavigateToGroupTrips = {
+                    navController.navigate(Screen.GroupTrips.route)
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
@@ -120,6 +125,12 @@ fun TripFlowNavHost(
         // Create Trip
         composable(
             route = Screen.CreateTrip.route,
+            arguments = listOf(
+                navArgument("isGroupTrip") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            ),
             enterTransition = {
                 slideInVertically(
                     initialOffsetY = { it },

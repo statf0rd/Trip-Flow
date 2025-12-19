@@ -13,11 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,17 +30,23 @@ import com.trip.flow.ui.theme.*
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripListScreen(
     onNavigateToTrip: (String) -> Unit,
-    onNavigateToCreateTrip: () -> Unit,
+    onNavigateToCreateTrip: (isGroupTrip: Boolean) -> Unit,
+    onNavigateToGroupTrips: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: TripListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+
+    var showCreateTripSheet by rememberSaveable { mutableStateOf(false) }
+    val createTripSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     
     Scaffold(
         topBar = {
@@ -58,6 +66,12 @@ fun TripListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToGroupTrips) {
+                        Icon(
+                            imageVector = Icons.Rounded.Group,
+                            contentDescription = "Групповые поездки"
+                        )
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
@@ -72,7 +86,7 @@ fun TripListScreen(
         },
         floatingActionButton = {
             TripFlowFab(
-                onClick = onNavigateToCreateTrip,
+                onClick = { showCreateTripSheet = true },
                 icon = Icons.Rounded.Add,
                 contentDescription = "Создать путешествие"
             )
@@ -85,7 +99,7 @@ fun TripListScreen(
         } else if (!uiState.hasTrips) {
             EmptyTripsState(
                 modifier = Modifier.padding(paddingValues),
-                onCreateTrip = onNavigateToCreateTrip
+                onCreateTrip = { showCreateTripSheet = true }
             )
         } else {
             TripListContent(
@@ -93,6 +107,28 @@ fun TripListScreen(
                 onTripClick = onNavigateToTrip,
                 modifier = Modifier.padding(paddingValues)
             )
+        }
+    }
+
+    if (showCreateTripSheet) {
+        fun hideThen(action: () -> Unit) {
+            scope.launch {
+                createTripSheetState.hide()
+                showCreateTripSheet = false
+                action()
+            }
+        }
+
+        ModalBottomSheet(
+            onDismissRequest = { showCreateTripSheet = false },
+            sheetState = createTripSheetState
+        ) {
+            CreateTripTypeSheet(
+                onCreatePersonalTrip = { hideThen { onNavigateToCreateTrip(false) } },
+                onCreateGroupTrip = { hideThen { onNavigateToCreateTrip(true) } },
+                onJoinGroupTrip = { hideThen(onNavigateToGroupTrips) }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }
@@ -514,6 +550,116 @@ private fun EmptyTripsState(
     }
 }
 
+@Composable
+private fun CreateTripTypeSheet(
+    onCreatePersonalTrip: () -> Unit,
+    onCreateGroupTrip: () -> Unit,
+    onJoinGroupTrip: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Text(
+            text = "Создать путешествие",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Выберите формат: личная или групповая поездка",
+            style = MaterialTheme.typography.bodySmall,
+            color = Slate600
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CreateTripTypeItem(
+            icon = Icons.Rounded.Person,
+            iconTint = Slate700,
+            iconBackground = Slate100,
+            title = "Личная поездка",
+            description = "План и расходы только для вас",
+            onClick = onCreatePersonalTrip
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        CreateTripTypeItem(
+            icon = Icons.Rounded.Group,
+            iconTint = TealSecondary,
+            iconBackground = TealSubtle,
+            title = "Групповая поездка",
+            description = "Приглашения по коду и общие расходы",
+            onClick = onCreateGroupTrip
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextButton(
+            onClick = onJoinGroupTrip,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text(text = "У меня есть код — присоединиться")
+        }
+    }
+}
+
+@Composable
+private fun CreateTripTypeItem(
+    icon: ImageVector,
+    iconTint: Color,
+    iconBackground: Color,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    TripFlowCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = iconBackground
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate600
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = Slate400
+            )
+        }
+    }
+}
+
 private fun pluralizeDays(count: Int): String {
     return when {
         count % 100 in 11..19 -> "дней осталось"
@@ -540,4 +686,3 @@ private fun getDestinationEmoji(destination: String): String {
         else -> "🌍"
     }
 }
-
