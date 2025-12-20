@@ -11,8 +11,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.ui.auth.AuthFlowScreen
 import com.triloo.ui.grouptrips.GroupTripsScreen
+import com.triloo.ui.invite.InviteScreen
+import com.triloo.ui.qr.QrScannerScreen
+import com.triloo.ui.relay.RelayScreen
 import com.triloo.ui.settings.SettingsScreen
+import com.triloo.ui.settings.PrivacyPolicyScreen
 import com.triloo.ui.tripdetails.AddExpenseScreen
 import com.triloo.ui.tripdetails.AddPlaceScreen
 import com.triloo.ui.tripdetails.PlaceDetailsScreen
@@ -25,11 +31,22 @@ import com.triloo.ui.trips.TripListScreen
  */
 sealed class Screen(val route: String) {
     object TripList : Screen("trips")
+    object Auth : Screen("auth")
+    object PrivacyPolicy : Screen("privacy-policy")
+    object QrScanner : Screen("qr-scan?mode={mode}") {
+        fun createRoute(mode: String) = "qr-scan?mode=$mode"
+    }
     object CreateTrip : Screen("trips/create?isGroupTrip={isGroupTrip}") {
         fun createRoute(isGroupTrip: Boolean) = "trips/create?isGroupTrip=$isGroupTrip"
     }
     object Settings : Screen("settings")
     object GroupTrips : Screen("group-trips")
+    object Invite : Screen("trips/{tripId}/invite") {
+        fun createRoute(tripId: String) = "trips/$tripId/invite"
+    }
+    object Relay : Screen("trips/{tripId}/relay") {
+        fun createRoute(tripId: String) = "trips/$tripId/relay"
+    }
     
     object TripDetails : Screen("trips/{tripId}") {
         fun createRoute(tripId: String) = "trips/$tripId"
@@ -109,16 +126,50 @@ fun TrilooNavHost(
                 },
                 onNavigateToGroupTrips = {
                     navController.navigate(Screen.GroupTrips.route)
+                },
+                onNavigateToAuth = {
+                    navController.navigate(Screen.Auth.route)
+                },
+                onNavigateToPrivacyPolicy = {
+                    navController.navigate(Screen.PrivacyPolicy.route)
                 }
+            )
+        }
+
+        composable(Screen.PrivacyPolicy.route) {
+            PrivacyPolicyScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Auth
+        composable(Screen.Auth.route) {
+            AuthFlowScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAuthComplete = { navController.popBackStack() }
             )
         }
 
         // Group Trips
         composable(Screen.GroupTrips.route) {
+            val qrResultFlow = navController.currentBackStackEntry
+                ?.savedStateHandle
+                ?.getStateFlow("qr_result", null)
+            val qrResult = qrResultFlow?.collectAsStateWithLifecycle()?.value
+
             GroupTripsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToTrip = { tripId ->
                     navController.navigate(Screen.TripDetails.createRoute(tripId))
+                },
+                onScanInvite = {
+                    navController.navigate(Screen.QrScanner.createRoute("invite"))
+                },
+                qrResult = qrResult,
+                onConsumeQrResult = {
+                    navController.currentBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("qr_result", null)
                 }
             )
         }
@@ -184,11 +235,77 @@ fun TrilooNavHost(
                 onNavigateToAddExpense = { id ->
                     navController.navigate(Screen.AddExpense.createRoute(id))
                 },
+                onNavigateToInvite = { id ->
+                    navController.navigate(Screen.Invite.createRoute(id))
+                },
+                onNavigateToRelay = { id ->
+                    navController.navigate(Screen.Relay.createRoute(id))
+                },
                 onNavigateToPlaceDetails = { placeId ->
                     navController.navigate(Screen.PlaceDetails.createRoute(placeId))
                 },
                 onNavigateToEditExpense = { id, expenseId ->
                     navController.navigate(Screen.EditExpense.createRoute(id, expenseId))
+                }
+            )
+        }
+
+        // Invite
+        composable(
+            route = Screen.Invite.route,
+            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+        ) {
+            InviteScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Relay
+        composable(
+            route = Screen.Relay.route,
+            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+        ) {
+            val qrResultFlow = navController.currentBackStackEntry
+                ?.savedStateHandle
+                ?.getStateFlow("qr_result", null)
+            val qrResult = qrResultFlow?.collectAsStateWithLifecycle()?.value
+
+            RelayScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onScanRelay = { navController.navigate(Screen.QrScanner.createRoute("relay")) },
+                qrResult = qrResult,
+                onConsumeQrResult = {
+                    navController.currentBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("qr_result", null)
+                }
+            )
+        }
+
+        // QR Scanner
+        composable(
+            route = Screen.QrScanner.route,
+            arguments = listOf(
+                navArgument("mode") {
+                    type = NavType.StringType
+                    defaultValue = "relay"
+                }
+            )
+        ) { backStackEntry ->
+            val mode = backStackEntry.arguments?.getString("mode") ?: "relay"
+            val title = when (mode) {
+                "invite" -> "Сканировать приглашение"
+                else -> "Сканировать Relay QR"
+            }
+
+            QrScannerScreen(
+                title = title,
+                onNavigateBack = { navController.popBackStack() },
+                onResult = { result ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("qr_result", result)
+                    navController.popBackStack()
                 }
             )
         }
