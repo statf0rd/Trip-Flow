@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Trip Flow"
+rootProject.name = "Triloo"
 include(":app")
  

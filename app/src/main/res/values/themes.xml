@@ -2,17 +2,17 @@
 <resources>
 
     <!-- Base application theme -->
-    <style name="Theme.TripFlow" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Triloo" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <!-- Splash screen theme -->
-    <style name="Theme.TripFlow.Splash" parent="Theme.SplashScreen">
+    <style name="Theme.Triloo.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/coral_primary</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="postSplashScreenTheme">@style/Theme.TripFlow</item>
+        <item name="postSplashScreenTheme">@style/Theme.Triloo</item>
     </style>
 
 </resources>
