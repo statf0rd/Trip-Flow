@@ -1,0 +1,145 @@
+package com.triloo.ui.trips
+
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.triloo.data.model.Participant
+import com.triloo.data.model.ParticipantRole
+import com.triloo.data.model.Trip
+import com.triloo.data.repository.TripRepository
+import com.triloo.data.user.UserProfileRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import javax.inject.Inject
+
+@HiltViewModel
+class CreateTripViewModel @Inject constructor(
+    private val tripRepository: TripRepository,
+    private val userProfileRepository: UserProfileRepository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+    
+    private val initialIsGroupTrip: Boolean =
+        savedStateHandle.get<Boolean>("isGroupTrip") ?: false
+
+    private val _uiState = MutableStateFlow(CreateTripUiState(isGroupTrip = initialIsGroupTrip))
+    val uiState: StateFlow<CreateTripUiState> = _uiState.asStateFlow()
+    
+    fun updateName(name: String) {
+        _uiState.update { it.copy(name = name) }
+    }
+    
+    fun updateDestination(destination: String) {
+        _uiState.update { it.copy(destination = destination) }
+    }
+    
+    fun updateStartDate(date: LocalDate) {
+        _uiState.update { state ->
+            state.copy(
+                startDate = date,
+                // If end date is before start date, reset it
+                endDate = if (state.endDate != null && state.endDate.isBefore(date)) {
+                    date.plusDays(1)
+                } else state.endDate
+            )
+        }
+    }
+    
+    fun updateEndDate(date: LocalDate) {
+        _uiState.update { it.copy(endDate = date) }
+    }
+    
+    fun updateCurrency(currency: String) {
+        _uiState.update { it.copy(baseCurrency = currency) }
+    }
+    
+    fun updateHotelName(name: String) {
+        _uiState.update { it.copy(hotelName = name) }
+    }
+    
+    fun updateBudget(budget: Double?) {
+        _uiState.update { it.copy(budget = budget) }
+    }
+
+    fun updateIsGroupTrip(isGroupTrip: Boolean) {
+        _uiState.update { it.copy(isGroupTrip = isGroupTrip) }
+    }
+    
+    fun createTrip() {
+        val state = _uiState.value
+        if (!state.isValid) return
+        
+        _uiState.update { it.copy(isCreating = true) }
+        
+        viewModelScope.launch {
+            try {
+                val profile = userProfileRepository.getProfile()
+                val ownerId = profile.userId
+                val trip = Trip(
+                    name = state.name.trim(),
+                    destination = state.destination.trim(),
+                    startDate = state.startDate!!,
+                    endDate = state.endDate!!,
+                    baseCurrency = state.baseCurrency,
+                    hotelName = state.hotelName.takeIf { it.isNotBlank() },
+                    budget = state.budget,
+                    isGroupTrip = state.isGroupTrip,
+                    ownerId = if (state.isGroupTrip) ownerId else null
+                )
+                
+                val tripId = tripRepository.createTrip(trip)
+
+                if (state.isGroupTrip) {
+                    val displayName = profile.displayName.ifBlank { "Участник" }
+                    tripRepository.addParticipant(
+                        Participant(
+                            tripId = tripId,
+                            userId = ownerId,
+                            displayName = displayName,
+                            role = ParticipantRole.OWNER
+                        )
+                    )
+                }
+                _uiState.update { it.copy(isCreating = false, createdTripId = tripId) }
+                
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isCreating = false, 
+                        error = e.message ?: "Ошибка создания поездки"
+                    ) 
+                }
+            }
+        }
+    }
+}
+
+data class CreateTripUiState(
+    val name: String = "",
+    val destination: String = "",
+    val startDate: LocalDate? = null,
+    val endDate: LocalDate? = null,
+    val baseCurrency: String = "RUB",
+    val hotelName: String = "",
+    val budget: Double? = null,
+    val isGroupTrip: Boolean = false,
+    
+    val isCreating: Boolean = false,
+    val createdTripId: String? = null,
+    val error: String? = null
+) {
+    val isValid: Boolean
+        get() = name.isNotBlank() && 
+                destination.isNotBlank() && 
+                startDate != null && 
+                endDate != null &&
+                !endDate.isBefore(startDate)
+}
+
+
+
