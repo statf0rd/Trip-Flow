@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.trip.flow"
+    namespace = "com.triloo"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.trip.flow"
+        applicationId = "com.triloo"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -115,6 +115,10 @@ dependencies {
     implementation(libs.maps.compose)
     implementation(libs.maps.compose.utils)
     implementation(libs.android.maps.utils)
+
+    // QR / ZXing
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.android.embedded)
 
     // Testing
     testImplementation(libs.junit)

@@ -47,6 +47,10 @@ materialIconsExtended = "1.7.8"
 # Splash Screen
 splashScreen = "1.0.1"
 
+# QR / ZXing
+zxingCore = "3.5.3"
+zxingEmbedded = "4.3.0"
+
 [libraries]
 # Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -108,6 +112,10 @@ android-maps-utils = { group = "com.google.maps.android", name = "android-maps-u
 
 # Splash Screen
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
+
+# QR / ZXing
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
+zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingEmbedded" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

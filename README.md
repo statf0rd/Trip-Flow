@@ -1,4 +1,4 @@
-# 🌍 Trip Flow
+# 🌍 Triloo
 
 **Интерактивный помощник в путешествиях** с совместным планированием маршрута, расходами и геопозициями участников.
 
@@ -10,12 +10,16 @@
 
 ## 📱 Описание
 
-Trip Flow объединяет функциональность нескольких тревел-приложений в одном месте:
+Triloo объединяет функциональность нескольких тревел-приложений в одном месте:
 
 - 📍 **Планирование маршрута** по дням с интеграцией Google Maps
 - 💰 **Совместные расходы** с мультивалютностью и расчётом долгов
 - 👥 **Геошаринг** — видеть друзей на карте в реальном времени
+- 🔗 **Групповые поездки** с кодами приглашений и QR‑приглашениями
+- 📡 **Triloo Relay** — офлайн‑синхронизация поездок через QR‑пакеты
 - 🎯 **Персональные рекомендации** мест на основе предпочтений
+- 🌓 **Темная тема** с настройкой режима
+- 🔐 **Опциональная авторизация** для сохранения профиля
 
 ---
 
@@ -58,8 +62,10 @@ Trip Flow объединяет функциональность нескольк
 | **DI** | Hilt |
 | **Навигация** | Navigation Compose |
 | **БД** | Room |
+| **Хранение настроек** | DataStore |
 | **Сеть** | Retrofit + OkHttp |
 | **Карты** | Google Maps SDK + Places API |
+| **QR** | ZXing |
 | **Асинхронность** | Kotlin Coroutines + Flow |
 
 ---
@@ -67,21 +73,28 @@ Trip Flow объединяет функциональность нескольк
 ## 📦 Структура проекта
 
 ```
-app/src/main/java/com/trip/flow/
+app/src/main/java/com/triloo/
 ├── data/
 │   ├── local/           # Room Database, DAOs
 │   ├── model/           # Data classes (Trip, Expense, Place...)
+│   ├── relay/           # Triloo Relay (offline sync)
+│   ├── settings/        # App settings (theme, prefs)
+│   ├── user/            # Local user profile
 │   ├── remote/          # API services
 │   └── repository/      # Repository implementations
 ├── di/                  # Hilt modules
 ├── ui/
+│   ├── auth/            # Optional auth flow
 │   ├── components/      # Reusable UI components
+│   ├── invite/          # QR invitations
 │   ├── navigation/      # Navigation graph
+│   ├── qr/              # QR generator/scanner
+│   ├── relay/           # Triloo Relay UI
 │   ├── theme/           # Design system (colors, typography)
 │   ├── trips/           # Trip list & create screens
 │   └── tripdetails/     # Trip details & tabs
 ├── MainActivity.kt
-└── TripFlowApp.kt
+└── TrilooApp.kt
 ```
 
 ---
@@ -120,21 +133,22 @@ app/src/main/java/com/trip/flow/
 
 ### 🔲 Фаза 2: Core Features
 - [ ] AddPlaceScreen — добавление мест через Google Places
-- [ ] AddExpenseScreen — добавление расходов
+- [x] AddExpenseScreen — добавление расходов
 - [ ] Google Maps интеграция (карта с маркерами)
 - [ ] Directions API (маршруты между точками)
 - [ ] Конвертация валют (API + кеширование)
 
 ### 🔲 Фаза 3: Групповые функции
-- [ ] Приглашение участников (invite code)
-- [ ] Синхронизация данных (Firebase / собственный backend)
+- [x] Приглашение участников (invite code + QR)
+- [x] Triloo Relay — офлайн‑синхронизация через QR
+- [ ] Онлайн‑синхронизация (Firebase / собственный backend)
 - [ ] Расчёт долгов (кто кому сколько должен)
 - [ ] Геошаринг (отслеживание позиций участников)
 
 ### 🔲 Фаза 4: Улучшения
 - [ ] OCR для чеков (распознавание суммы)
 - [ ] Рекомендации мест на основе предпочтений
-- [ ] Оффлайн-режим
+- [x] Оффлайн‑режим (Triloo Relay)
 - [ ] Push-уведомления
 
 ---
@@ -144,7 +158,7 @@ app/src/main/java/com/trip/flow/
 ### Требования
 - Android Studio Hedgehog (2024.1) или новее
 - JDK 17
-- Android SDK 35
+- Android SDK 36
 
 ### Установка
 
@@ -171,7 +185,12 @@ MIT License — см. [LICENSE](LICENSE)
 
 ---
 
+## 🔒 Политика конфиденциальности
+
+См. [PRIVACY_POLICY.md](PRIVACY_POLICY.md)
+
+---
+
 ## 👨‍💻 Автор
 
 **Stanislav** — [@statf0rd](https://github.com/statf0rd)
-
