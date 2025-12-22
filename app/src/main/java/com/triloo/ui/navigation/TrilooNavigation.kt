@@ -39,6 +39,9 @@ sealed class Screen(val route: String) {
     object CreateTrip : Screen("trips/create?isGroupTrip={isGroupTrip}") {
         fun createRoute(isGroupTrip: Boolean) = "trips/create?isGroupTrip=$isGroupTrip"
     }
+    object EditTrip : Screen("trips/{tripId}/edit") {
+        fun createRoute(tripId: String) = "trips/$tripId/edit"
+    }
     object Settings : Screen("settings")
     object GroupTrips : Screen("group-trips")
     object Invite : Screen("trips/{tripId}/invite") {
@@ -53,6 +56,9 @@ sealed class Screen(val route: String) {
     }
     object AddPlace : Screen("trips/{tripId}/days/{dayId}/add-place") {
         fun createRoute(tripId: String, dayId: String) = "trips/$tripId/days/$dayId/add-place"
+    }
+    object EditPlace : Screen("places/{placeId}/edit") {
+        fun createRoute(placeId: String) = "places/$placeId/edit"
     }
     object PlaceDetails : Screen("places/{placeId}") {
         fun createRoute(placeId: String) = "places/$placeId"
@@ -241,11 +247,17 @@ fun TrilooNavHost(
                 onNavigateToRelay = { id ->
                     navController.navigate(Screen.Relay.createRoute(id))
                 },
+                onNavigateToEditTrip = { id ->
+                    navController.navigate(Screen.EditTrip.createRoute(id))
+                },
                 onNavigateToPlaceDetails = { placeId ->
                     navController.navigate(Screen.PlaceDetails.createRoute(placeId))
                 },
                 onNavigateToEditExpense = { id, expenseId ->
                     navController.navigate(Screen.EditExpense.createRoute(id, expenseId))
+                },
+                onNavigateToEditPlace = { placeId ->
+                    navController.navigate(Screen.EditPlace.createRoute(placeId))
                 }
             )
         }
@@ -334,6 +346,55 @@ fun TrilooNavHost(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+
+        // Edit Place
+        composable(
+            route = Screen.EditPlace.route,
+            arguments = listOf(
+                navArgument("placeId") { type = NavType.StringType }
+            ),
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeIn()
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeOut()
+            }
+        ) {
+            AddPlaceScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Edit Trip
+        composable(
+            route = Screen.EditTrip.route,
+            arguments = listOf(
+                navArgument("tripId") { type = NavType.StringType }
+            ),
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeIn()
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeOut()
+            }
+        ) {
+            CreateTripScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onTripCreated = { navController.popBackStack() }
+            )
+        }
         
         // Place Details
         composable(
@@ -343,7 +404,10 @@ fun TrilooNavHost(
             )
         ) {
             PlaceDetailsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { placeId ->
+                    navController.navigate(Screen.EditPlace.createRoute(placeId))
+                }
             )
         }
         
