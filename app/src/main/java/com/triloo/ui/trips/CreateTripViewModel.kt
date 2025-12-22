@@ -26,9 +26,39 @@ class CreateTripViewModel @Inject constructor(
     
     private val initialIsGroupTrip: Boolean =
         savedStateHandle.get<Boolean>("isGroupTrip") ?: false
+    private val editTripId: String? = savedStateHandle.get<String>("tripId")
 
-    private val _uiState = MutableStateFlow(CreateTripUiState(isGroupTrip = initialIsGroupTrip))
+    private var editingTrip: Trip? = null
+
+    private val _uiState = MutableStateFlow(
+        CreateTripUiState(
+            isGroupTrip = initialIsGroupTrip,
+            tripId = editTripId,
+            isEditing = editTripId != null
+        )
+    )
     val uiState: StateFlow<CreateTripUiState> = _uiState.asStateFlow()
+
+    init {
+        if (editTripId != null) {
+            viewModelScope.launch {
+                val trip = tripRepository.getTripById(editTripId) ?: return@launch
+                editingTrip = trip
+                _uiState.update { state ->
+                    state.copy(
+                        name = trip.name,
+                        destination = trip.destination,
+                        startDate = trip.startDate,
+                        endDate = trip.endDate,
+                        baseCurrency = trip.baseCurrency,
+                        hotelName = trip.hotelName.orEmpty(),
+                        budget = trip.budget,
+                        isGroupTrip = trip.isGroupTrip
+                    )
+                }
+            }
+        }
+    }
     
     fun updateName(name: String) {
         _uiState.update { it.copy(name = name) }
@@ -70,7 +100,7 @@ class CreateTripViewModel @Inject constructor(
         _uiState.update { it.copy(isGroupTrip = isGroupTrip) }
     }
     
-    fun createTrip() {
+    fun saveTrip() {
         val state = _uiState.value
         if (!state.isValid) return
         
@@ -78,32 +108,57 @@ class CreateTripViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                val profile = userProfileRepository.getProfile()
-                val ownerId = profile.userId
-                val trip = Trip(
-                    name = state.name.trim(),
-                    destination = state.destination.trim(),
-                    startDate = state.startDate!!,
-                    endDate = state.endDate!!,
-                    baseCurrency = state.baseCurrency,
-                    hotelName = state.hotelName.takeIf { it.isNotBlank() },
-                    budget = state.budget,
-                    isGroupTrip = state.isGroupTrip,
-                    ownerId = if (state.isGroupTrip) ownerId else null
-                )
-                
-                val tripId = tripRepository.createTrip(trip)
-
-                if (state.isGroupTrip) {
-                    val displayName = profile.displayName.ifBlank { "Участник" }
-                    tripRepository.addParticipant(
-                        Participant(
-                            tripId = tripId,
-                            userId = ownerId,
-                            displayName = displayName,
-                            role = ParticipantRole.OWNER
-                        )
+                val tripId = if (state.isEditing) {
+                    val baseTrip = editingTrip ?: tripRepository.getTripById(state.tripId ?: "")
+                    if (baseTrip == null) {
+                        _uiState.update {
+                            it.copy(
+                                isCreating = false,
+                                error = "Поездка не найдена"
+                            )
+                        }
+                        return@launch
+                    }
+                    val updatedTrip = baseTrip.copy(
+                        name = state.name.trim(),
+                        destination = state.destination.trim(),
+                        startDate = state.startDate!!,
+                        endDate = state.endDate!!,
+                        baseCurrency = state.baseCurrency,
+                        hotelName = state.hotelName.takeIf { it.isNotBlank() },
+                        budget = state.budget
                     )
+                    tripRepository.updateTrip(updatedTrip)
+                    updatedTrip.id
+                } else {
+                    val profile = userProfileRepository.getProfile()
+                    val ownerId = profile.userId
+                    val trip = Trip(
+                        name = state.name.trim(),
+                        destination = state.destination.trim(),
+                        startDate = state.startDate!!,
+                        endDate = state.endDate!!,
+                        baseCurrency = state.baseCurrency,
+                        hotelName = state.hotelName.takeIf { it.isNotBlank() },
+                        budget = state.budget,
+                        isGroupTrip = state.isGroupTrip,
+                        ownerId = if (state.isGroupTrip) ownerId else null
+                    )
+
+                    val newTripId = tripRepository.createTrip(trip)
+
+                    if (state.isGroupTrip) {
+                        val displayName = profile.displayName.ifBlank { "Участник" }
+                        tripRepository.addParticipant(
+                            Participant(
+                                tripId = newTripId,
+                                userId = ownerId,
+                                displayName = displayName,
+                                role = ParticipantRole.OWNER
+                            )
+                        )
+                    }
+                    newTripId
                 }
                 _uiState.update { it.copy(isCreating = false, createdTripId = tripId) }
                 
@@ -120,6 +175,7 @@ class CreateTripViewModel @Inject constructor(
 }
 
 data class CreateTripUiState(
+    val tripId: String? = null,
     val name: String = "",
     val destination: String = "",
     val startDate: LocalDate? = null,
@@ -128,6 +184,7 @@ data class CreateTripUiState(
     val hotelName: String = "",
     val budget: Double? = null,
     val isGroupTrip: Boolean = false,
+    val isEditing: Boolean = false,
     
     val isCreating: Boolean = false,
     val createdTripId: String? = null,
@@ -140,6 +197,5 @@ data class CreateTripUiState(
                 endDate != null &&
                 !endDate.isBefore(startDate)
 }
-
 
 

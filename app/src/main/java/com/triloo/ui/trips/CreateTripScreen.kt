@@ -53,7 +53,7 @@ fun CreateTripScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Новое путешествие",
+                        text = if (uiState.isEditing) "Редактировать путешествие" else "Новое путешествие",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -220,8 +220,8 @@ fun CreateTripScreen(
             
             // Create Button
             TrilooButton(
-                text = "Создать путешествие",
-                onClick = viewModel::createTrip,
+                text = if (uiState.isEditing) "Сохранить изменения" else "Создать путешествие",
+                onClick = viewModel::saveTrip,
                 enabled = uiState.isValid,
                 isLoading = uiState.isCreating,
                 icon = Icons.Rounded.Check,
@@ -422,7 +422,6 @@ private fun pluralizeDays(count: Int): String {
         else -> "дней"
     }
 }
-
 
 
 
