@@ -103,6 +103,7 @@ enum class PlaceCategory(val emoji: String, val displayName: String) {
     BEACH("🏖️", "Пляж"),
     SHOPPING("🛍️", "Шоппинг"),
     ENTERTAINMENT("🎭", "Развлечения"),
+    HOLIDAY("🎉", "Праздник"),
     TRANSPORT("🚇", "Транспорт"),
     VIEWPOINT("📸", "Смотровая"),
     NATURE("🌄", "Природа"),
@@ -120,6 +121,7 @@ enum class PlaceCategory(val emoji: String, val displayName: String) {
                 types.any { it.contains("beach") } -> BEACH
                 types.any { it.contains("shopping") || it.contains("store") } -> SHOPPING
                 types.any { it.contains("amusement") || it.contains("entertainment") } -> ENTERTAINMENT
+                types.any { it.contains("festival") || it.contains("event") } -> HOLIDAY
                 types.any { it.contains("transit") || it.contains("station") } -> TRANSPORT
                 types.any { it.contains("natural") } -> NATURE
                 types.any { it.contains("night_club") } -> NIGHTLIFE
@@ -155,6 +157,5 @@ enum class TravelMode(val displayName: String, val icon: String) {
     TRANSIT("Общ. транспорт", "🚇"),
     BICYCLING("На велосипеде", "🚴")
 }
-
 
 
