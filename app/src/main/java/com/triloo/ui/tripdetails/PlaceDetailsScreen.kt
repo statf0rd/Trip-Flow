@@ -226,7 +226,7 @@ private fun PlaceDetailsContent(
                 InfoRow(
                     icon = Icons.Rounded.Schedule,
                     label = "Запланировано",
-                    value = time
+                    value = formatTimeDisplay(time)
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
@@ -236,7 +236,7 @@ private fun PlaceDetailsContent(
                 InfoRow(
                     icon = Icons.Rounded.Timer,
                     label = "Длительность",
-                    value = "$duration мин"
+                    value = formatDurationLabel(duration)
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
@@ -400,11 +400,10 @@ private fun getCategoryColor(category: PlaceCategory): Color {
         PlaceCategory.SHOPPING -> TealSecondary
         PlaceCategory.NIGHTLIFE, PlaceCategory.BAR -> Color(0xFFEC4899)
         PlaceCategory.ENTERTAINMENT -> Color(0xFF8B5CF6)
+        PlaceCategory.HOLIDAY -> Color(0xFFF97316)
         PlaceCategory.TRANSPORT -> Color(0xFF6366F1)
         PlaceCategory.VIEWPOINT -> GoldenAccent
         else -> Slate600
     }
 }
-
-
 
