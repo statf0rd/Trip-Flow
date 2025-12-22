@@ -3,6 +3,7 @@ package com.triloo.ui.trips
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -45,6 +46,7 @@ fun TripListScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
     var showCreateTripSheet by rememberSaveable { mutableStateOf(false) }
+    var tripToDelete by remember { mutableStateOf<Trip?>(null) }
     val createTripSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     
@@ -52,18 +54,11 @@ fun TripListScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = "Triloo",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Ваши путешествия",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate600
-                        )
-                    }
+                    Text(
+                        text = "Ваши путешествия",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 },
                 actions = {
                     IconButton(onClick = onNavigateToGroupTrips) {
@@ -105,6 +100,7 @@ fun TripListScreen(
             TripListContent(
                 uiState = uiState,
                 onTripClick = onNavigateToTrip,
+                onTripLongClick = { trip -> tripToDelete = trip },
                 modifier = Modifier.padding(paddingValues)
             )
         }
@@ -131,12 +127,43 @@ fun TripListScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
+
+    tripToDelete?.let { trip ->
+        AlertDialog(
+            onDismissRequest = { tripToDelete = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteForever,
+                    contentDescription = null,
+                    tint = Error
+                )
+            },
+            title = { Text("Удалить путешествие?") },
+            text = { Text("Поездка \"${trip.name}\" будет удалена безвозвратно.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        tripToDelete = null
+                        viewModel.deleteTrip(trip.id)
+                    }
+                ) {
+                    Text("Удалить", color = Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { tripToDelete = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun TripListContent(
     uiState: TripListUiState,
     onTripClick: (String) -> Unit,
+    onTripLongClick: (Trip) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -150,6 +177,7 @@ private fun TripListContent(
                 CurrentTripCard(
                     trip = trip,
                     onClick = { onTripClick(trip.id) },
+                    onLongClick = { onTripLongClick(trip) },
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
                 Spacer(modifier = Modifier.height(24.dp))
@@ -175,6 +203,7 @@ private fun TripListContent(
                         UpcomingTripCard(
                             trip = trip,
                             onClick = { onTripClick(trip.id) },
+                            onLongClick = { onTripLongClick(trip) },
                             animationDelay = index * 50,
                             modifier = Modifier.width(280.dp)
                         )
@@ -197,6 +226,7 @@ private fun TripListContent(
                 PastTripCard(
                     trip = trip,
                     onClick = { onTripClick(trip.id) },
+                    onLongClick = { onTripLongClick(trip) },
                     animationDelay = index * 50,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                 )
@@ -209,14 +239,19 @@ private fun TripListContent(
 private fun CurrentTripCard(
     trip: Trip,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val daysLeft = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.endDate).toInt()
     
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(24.dp),
-        onClick = onClick
     ) {
         Box(
             modifier = Modifier
@@ -352,6 +387,7 @@ private fun QuickStat(
 private fun UpcomingTripCard(
     trip: Trip,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     animationDelay: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -372,7 +408,8 @@ private fun UpcomingTripCard(
     ) {
         TrilooCard(
             modifier = modifier,
-            onClick = onClick
+            onClick = onClick,
+            onLongClick = onLongClick
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -451,6 +488,7 @@ private fun UpcomingTripCard(
 private fun PastTripCard(
     trip: Trip,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     animationDelay: Int = 0
 ) {
@@ -473,10 +511,14 @@ private fun PastTripCard(
         exit = fadeOut(animationSpec = tween(durationMillis = 300))
     ) {
         Surface(
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                ),
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            onClick = onClick
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
