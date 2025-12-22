@@ -719,8 +719,9 @@ private fun TimelineEventCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    
-                    place.estimatedDuration?.let { duration ->
+
+                    val duration = durationMinutes ?: place.estimatedDuration
+                    duration?.let {
                         Icon(
                             imageVector = Icons.Rounded.Schedule,
                             contentDescription = null,
@@ -729,7 +730,7 @@ private fun TimelineEventCard(
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
-                            text = "${duration} мин",
+                            text = formatDurationLabel(it),
                             style = MaterialTheme.typography.labelSmall,
                             color = Slate600
                         )
@@ -737,36 +738,8 @@ private fun TimelineEventCard(
                 }
             }
         }
-        
-        // Actions
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Visited indicator
-            if (place.isVisited) {
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = "Посещено",
-                    tint = TealSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            
-            // Delete button
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Удалить",
-                    tint = Slate400,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
     }
-    
-    // Delete confirmation dialog
+
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
