@@ -103,7 +103,7 @@ fun SettingsScreen(
                 SettingsSwitchItem(
                     icon = Icons.Rounded.Notifications,
                     title = "Уведомления",
-                    subtitle = "Напоминания о поездках",
+                    subtitle = "Утренний план, за 1 час до места, окна между событиями",
                     checked = true,
                     onCheckedChange = { /* TODO */ }
                 )
@@ -325,6 +325,5 @@ private fun SettingsSwitchItem(
         )
     }
 }
-
 
 
