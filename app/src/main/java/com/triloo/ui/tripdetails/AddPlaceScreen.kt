@@ -3,14 +3,17 @@ package com.triloo.ui.tripdetails
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.*
@@ -19,10 +22,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -37,6 +40,11 @@ import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +72,12 @@ fun AddPlaceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Добавить место", fontWeight = FontWeight.SemiBold) },
+                title = { 
+                    Text(
+                        text = if (uiState.isEditing) "Редактировать место" else "Добавить место",
+                        fontWeight = FontWeight.SemiBold
+                    ) 
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -251,7 +264,7 @@ fun AddPlaceScreen(
             )
 
             // Category selector
-            CategorySelector(
+            CategoryCarousel(
                 selected = uiState.category,
                 onSelected = viewModel::updateCategory
             )
@@ -261,33 +274,84 @@ fun AddPlaceScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
-                    value = uiState.time,
-                    onValueChange = viewModel::updateTime,
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Время") },
-                    placeholder = { Text("09:30", color = Slate500) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.AccessTime,
-                            contentDescription = null,
-                            tint = Slate500
+                Column(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = uiState.time,
+                        onValueChange = viewModel::updateTime,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Время") },
+                        placeholder = {
+                            Text(
+                                text = if (uiState.timeFormat == TimeFormat.HOURS_24) "09:30" else "1:30 PM",
+                                color = Slate500
+                            )
+                        },
+                        suffix = {
+                            Text(
+                                text = uiState.timeFormat.label,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { viewModel.toggleTimeFormat() }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                maxLines = 1
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.AccessTime,
+                                contentDescription = null,
+                                tint = Slate500
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next
+                        ),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    uiState.lockedTimeFormat?.let { locked ->
+                        Text(
+                            text = "Формат зафиксирован: ${locked.label}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate500,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(top = 4.dp)
                         )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Next
-                    ),
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
+                    }
+                }
 
                 OutlinedTextField(
-                    value = uiState.durationMinutes,
+                    value = uiState.durationValue,
                     onValueChange = viewModel::updateDuration,
                     modifier = Modifier.weight(1f),
-                    label = { Text("Длительность") },
-                    placeholder = { Text("60", color = Slate500) },
-                    suffix = { Text("мин", color = Slate500) },
+                    label = {
+                        Text(
+                            text = "Длительность",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = if (uiState.durationUnit == DurationUnit.HOURS) "1" else "60",
+                            color = Slate500
+                        )
+                    },
+                    suffix = {
+                        Text(
+                            text = uiState.durationUnit.label,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { viewModel.toggleDurationUnit() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Timer,
@@ -296,7 +360,11 @@ fun AddPlaceScreen(
                         )
                     },
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
+                        keyboardType = if (uiState.durationUnit == DurationUnit.HOURS) {
+                            KeyboardType.Decimal
+                        } else {
+                            KeyboardType.Number
+                        },
                         imeAction = ImeAction.Next
                     ),
                     singleLine = true,
@@ -422,12 +490,36 @@ private fun SuggestionItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CategorySelector(
+private fun CategoryCarousel(
     selected: PlaceCategory,
     onSelected: (PlaceCategory) -> Unit
 ) {
+    val categories = remember { PlaceCategory.entries }
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val currentSelected by rememberUpdatedState(selected)
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }
+            .map { layoutInfo ->
+                val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                layoutInfo.visibleItemsInfo.minByOrNull { item ->
+                    kotlin.math.abs((item.offset + item.size / 2) - center)
+                }?.index
+            }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { index ->
+                val category = categories.getOrNull(index) ?: return@collect
+                if (category != currentSelected) {
+                    onSelected(category)
+                }
+            }
+    }
+
     Column {
         Text(
             text = "Категория",
@@ -436,37 +528,94 @@ private fun CategorySelector(
             color = Slate700
         )
         Spacer(modifier = Modifier.size(8.dp))
-        
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
         ) {
-            PlaceCategory.entries.forEach { category ->
-                FilterChip(
-                    selected = category == selected,
-                    onClick = { onSelected(category) },
-                    label = {
-                        Text(
-                            text = "${category.emoji} ${category.displayName}",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    },
-                    leadingIcon = if (category == selected) {
-                        {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+            LazyColumn(
+                state = listState,
+                flingBehavior = flingBehavior,
+                contentPadding = PaddingValues(vertical = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                itemsIndexed(categories) { index, category ->
+                    val isSelected = category == selected
+                    val layoutInfo = listState.layoutInfo
+                    val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                    val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                    val distance = itemInfo?.let {
+                        abs((it.offset + it.size / 2) - center)
+                    } ?: 0
+                    val maxDistance = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / 2f
+                    val normalized = if (maxDistance > 0) {
+                        (distance / maxDistance).coerceIn(0f, 1f)
+                    } else 0f
+                    val alpha = 1f - (normalized * 0.55f)
+                    val scale = 1f - (normalized * 0.08f)
+                    val backgroundColor = if (isSelected) {
+                        getCategoryColor(category).copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    }
+                    val textColor = if (isSelected) getCategoryColor(category) else Slate600
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .graphicsLayer {
+                                this.alpha = alpha
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .clickable {
+                                onSelected(category)
+                                scope.launch { listState.animateScrollToItem(index) }
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        color = backgroundColor
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = category.emoji,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = category.displayName,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = textColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    } else null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = getCategoryColor(category).copy(alpha = 0.15f),
-                        selectedLabelColor = getCategoryColor(category),
-                        selectedLeadingIconColor = getCategoryColor(category)
-                    )
-                )
+                    }
+                }
             }
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.9f),
+                                Color.Transparent,
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
+                            )
+                        )
+                    )
+            )
         }
     }
 }
@@ -479,6 +628,7 @@ private fun getCategoryColor(category: PlaceCategory): Color {
         PlaceCategory.PARK, PlaceCategory.NATURE, PlaceCategory.BEACH -> TealSecondary
         PlaceCategory.SHOPPING -> Color(0xFF14B8A6)
         PlaceCategory.ENTERTAINMENT -> Color(0xFF8B5CF6)
+        PlaceCategory.HOLIDAY -> Color(0xFFF97316)
         PlaceCategory.TRANSPORT -> Color(0xFF6366F1)
         PlaceCategory.VIEWPOINT -> GoldenAccent
         else -> Slate600
