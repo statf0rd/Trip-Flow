@@ -1,6 +1,5 @@
 package com.triloo.ui.tripdetails
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -36,6 +35,8 @@ fun TripDetailsScreen(
     onNavigateToAddExpense: (String) -> Unit,
     onNavigateToInvite: (String) -> Unit,
     onNavigateToRelay: (String) -> Unit,
+    onNavigateToEditTrip: (String) -> Unit,
+    onNavigateToEditPlace: (String) -> Unit = {},
     onNavigateToPlaceDetails: (String) -> Unit = {}, // placeId
     onNavigateToEditExpense: (String, String) -> Unit = { _, _ -> }, // tripId, expenseId
     viewModel: TripDetailsViewModel = hiltViewModel()
@@ -67,31 +68,9 @@ fun TripDetailsScreen(
                     onNavigateBack = onNavigateBack,
                     onShare = { onNavigateToInvite(trip.id) },
                     onRelay = { onNavigateToRelay(trip.id) },
-                    onEdit = { /* TODO: Edit trip */ },
+                    onEdit = { onNavigateToEditTrip(trip.id) },
                     onDelete = { showDeleteDialog = true },
                     onOptimizeRoute = { viewModel.optimizeRoute() }
-                )
-            }
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = pagerState.currentPage != 1, // Hide on map tab
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
-                TrilooFab(
-                    onClick = {
-                        when (pagerState.currentPage) {
-                            0 -> uiState.days.firstOrNull()?.let { day ->
-                                onNavigateToAddPlace(tripId, day.id)
-                            }
-                            2 -> onNavigateToAddExpense(tripId)
-                        }
-                    },
-                    icon = when (pagerState.currentPage) {
-                        0 -> Icons.Rounded.AddLocation
-                        else -> Icons.Rounded.Add
-                    }
                 )
             }
         },
@@ -135,6 +114,7 @@ fun TripDetailsScreen(
                             places = uiState.places,
                             onDayClick = { /* Expand day */ },
                             onPlaceClick = { placeId -> onNavigateToPlaceDetails(placeId) },
+                            onEditPlace = { placeId -> onNavigateToEditPlace(placeId) },
                             onAddPlace = { dayId -> 
                                 onNavigateToAddPlace(tripId, dayId) 
                             },
