@@ -27,7 +27,7 @@ object RelayQrCodec {
     fun encode(
         type: RelayPayloadType,
         jsonPayload: String,
-        chunkSize: Int = 800
+        chunkSize: Int = 1200
     ): List<String> {
         val encoded = Base64.encodeToString(
             jsonPayload.toByteArray(StandardCharsets.UTF_8),

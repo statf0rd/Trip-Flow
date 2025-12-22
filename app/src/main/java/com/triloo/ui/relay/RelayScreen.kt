@@ -23,7 +23,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -35,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,7 +61,6 @@ fun RelayScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
-    var manualPayload by remember { mutableStateOf("") }
     var chunkIndex by remember { mutableIntStateOf(0) }
     val mergeResult = uiState.mergeResult
 
@@ -200,6 +197,11 @@ fun RelayScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Text(
+                                    text = "Данные разбиты на несколько QR из-за объёма",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     TrilooButton(
@@ -255,31 +257,6 @@ fun RelayScreen(
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Или вставьте QR-строку вручную",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        OutlinedTextField(
-                            value = manualPayload,
-                            onValueChange = { manualPayload = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("TRILOO|RELAY|v1|...") },
-                            minLines = 3
-                        )
-
-                        TrilooButton(
-                            text = "Импортировать из текста",
-                            onClick = {
-                                viewModel.handleRelayQrPayload(manualPayload.trim())
-                                manualPayload = ""
-                            },
-                            enabled = manualPayload.isNotBlank(),
-                            style = ButtonStyle.Ghost,
-                            modifier = Modifier.fillMaxWidth()
-                        )
                     }
                 }
             }
