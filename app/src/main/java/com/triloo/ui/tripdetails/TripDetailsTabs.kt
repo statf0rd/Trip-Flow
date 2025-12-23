@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.triloo.data.heatmap.CategoryHeatmapCalculator
+import com.triloo.data.heatmap.HeatmapConfig
 import com.triloo.data.model.*
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
@@ -28,6 +31,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 private data class DaySchedule(
     val scheduled: List<PlaceSegment> = emptyList(),
@@ -780,7 +784,12 @@ fun MapTab(
             .background(Slate100),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
                 text = "🗺️",
                 style = MaterialTheme.typography.displayLarge
@@ -813,6 +822,9 @@ fun MapTab(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HeatmapPreview(places = places)
         }
     }
 }
@@ -843,6 +855,96 @@ private fun InfoChip(
             )
         }
     }
+}
+
+@Composable
+private fun HeatmapPreview(places: List<Place>) {
+    val ratedPlaces = remember(places) { places.filter { it.rating != null } }
+    val categories = remember(ratedPlaces) {
+        ratedPlaces
+            .groupBy { it.category }
+            .entries
+            .sortedByDescending { it.value.size }
+            .map { it.key }
+    }
+    var selectedCategory by remember(ratedPlaces) {
+        mutableStateOf(categories.firstOrNull() ?: PlaceCategory.RESTAURANT)
+    }
+    val calculator = remember { CategoryHeatmapCalculator() }
+    val heatmapCells = remember(ratedPlaces, selectedCategory) {
+        calculator.buildHeatmap(
+            places = ratedPlaces,
+            category = selectedCategory,
+            config = HeatmapConfig()
+        )
+    }
+
+    TrilooCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Коэффициенты по отзывам",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Выберите категорию, чтобы увидеть зоны, где она сильнее развита",
+            style = MaterialTheme.typography.bodySmall,
+            color = Slate600
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (categories.isEmpty()) {
+            Text(
+                text = "Нет мест с рейтингами для расчёта",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate500
+            )
+            return@TrilooCard
+        }
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(categories) { category ->
+                val isSelected = category == selectedCategory
+                TrilooChip(
+                    text = category.displayName,
+                    emoji = category.emoji,
+                    color = if (isSelected) CoralSubtle else Slate100,
+                    textColor = if (isSelected) CoralPrimary else Slate600,
+                    onClick = { selectedCategory = category }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (heatmapCells.isEmpty()) {
+            Text(
+                text = "Недостаточно отзывов для коэффициентов по этой категории",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate600
+            )
+        } else {
+            val topCell = heatmapCells.first()
+            Text(
+                text = "Ячеек: ${heatmapCells.size}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Slate600
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Сильная зона: ${formatHeatmapScore(topCell.score)} • " +
+                    "${topCell.placeCount} мест • " +
+                    String.format(Locale.US, "%.1f", topCell.averageRating),
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate600
+            )
+        }
+    }
+}
+
+private fun formatHeatmapScore(score: Float): String {
+    return "${(score * 100).roundToInt()}%"
 }
 
 // EXPENSES TAB
