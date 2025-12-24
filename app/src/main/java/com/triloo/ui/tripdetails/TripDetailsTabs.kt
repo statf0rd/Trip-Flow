@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.triloo.data.heatmap.CategoryHeatmapCalculator
@@ -27,6 +28,7 @@ import com.triloo.data.heatmap.HeatmapConfig
 import com.triloo.data.model.*
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
@@ -1187,4 +1189,359 @@ private fun formatCurrency(amount: Double, currency: String): String {
         else -> currency
     }
     return "${String.format("%,.0f", amount)} $symbol"
+}
+
+private object TripDetailsPreviewData {
+    val trip = Trip(
+        id = "trip-preview",
+        name = "Новый год в Москве",
+        destination = "Москва, Россия",
+        startDate = LocalDate.of(2024, 12, 31),
+        endDate = LocalDate.of(2025, 1, 2),
+        baseCurrency = "USD",
+        isGroupTrip = true
+    )
+
+    val days = listOf(
+        TripDay(
+            id = "day-1",
+            tripId = trip.id,
+            date = trip.startDate,
+            dayNumber = 1,
+            title = "День 1"
+        ),
+        TripDay(
+            id = "day-2",
+            tripId = trip.id,
+            date = trip.startDate.plusDays(1),
+            dayNumber = 2,
+            title = "День 2"
+        )
+    )
+
+    val places = listOf(
+        Place(
+            id = "place-1",
+            tripId = trip.id,
+            tripDayId = days[0].id,
+            name = "2026",
+            address = "Праздник",
+            latitude = 55.751244,
+            longitude = 37.618423,
+            category = PlaceCategory.HOLIDAY,
+            iconEmoji = "🎉",
+            orderIndex = 0,
+            scheduledTime = "12:00",
+            estimatedDuration = 5,
+            rating = 4.9f
+        ),
+        Place(
+            id = "place-2",
+            tripId = trip.id,
+            tripDayId = days[0].id,
+            name = "New Year",
+            address = "Home",
+            latitude = 55.7522,
+            longitude = 37.6156,
+            category = PlaceCategory.ATTRACTION,
+            iconEmoji = "🌙",
+            orderIndex = 1,
+            scheduledTime = "23:00",
+            estimatedDuration = 60,
+            rating = 4.7f,
+            isVisited = true
+        ),
+        Place(
+            id = "place-3",
+            tripId = trip.id,
+            tripDayId = days[0].id,
+            name = "Кофе с видом",
+            address = "Патриаршие",
+            latitude = 55.7601,
+            longitude = 37.6136,
+            category = PlaceCategory.CAFE,
+            iconEmoji = "☕",
+            orderIndex = 2,
+            estimatedDuration = 45,
+            rating = 4.5f
+        ),
+        Place(
+            id = "place-4",
+            tripId = trip.id,
+            tripDayId = days[1].id,
+            name = "Третьяковская галерея",
+            address = "Лаврушинский 10",
+            latitude = 55.7414,
+            longitude = 37.6200,
+            category = PlaceCategory.MUSEUM,
+            iconEmoji = "🖼️",
+            orderIndex = 0,
+            scheduledTime = "10:00",
+            estimatedDuration = 120,
+            rating = 4.8f
+        )
+    )
+
+    val expenses = listOf(
+        Expense(
+            tripId = trip.id,
+            description = "Ужин на Арбате",
+            amount = 4200.0,
+            currency = "RUB",
+            amountInBaseCurrency = 45.0,
+            exchangeRate = 93.3,
+            exchangeRateDate = LocalDate.of(2024, 12, 30),
+            category = ExpenseCategory.FOOD,
+            paidByUserId = "user-1",
+            paidByName = "Аня",
+            splitType = SplitType.EQUAL,
+            date = LocalDate.of(2024, 12, 31)
+        ),
+        Expense(
+            tripId = trip.id,
+            description = "Такси до отеля",
+            amount = 18.0,
+            currency = "USD",
+            amountInBaseCurrency = 18.0,
+            exchangeRate = 1.0,
+            exchangeRateDate = LocalDate.of(2024, 12, 31),
+            category = ExpenseCategory.TRANSPORT,
+            paidByUserId = "user-2",
+            paidByName = "Кирилл",
+            splitType = SplitType.EXACT,
+            date = LocalDate.of(2024, 12, 31)
+        )
+    )
+
+    val participants = listOf(
+        Participant(
+            tripId = trip.id,
+            userId = "user-1",
+            displayName = "Аня",
+            role = ParticipantRole.ADMIN
+        ),
+        Participant(
+            tripId = trip.id,
+            userId = "user-2",
+            displayName = "Кирилл",
+            role = ParticipantRole.MEMBER,
+            isOnline = true
+        )
+    )
+
+    private val daySchedules: Map<String, DaySchedule> by lazy {
+        buildDaySchedules(days, places)
+    }
+
+    val day1Schedule: DaySchedule
+        get() = daySchedules[days.first().id] ?: DaySchedule()
+
+    val day1Segments: List<PlaceSegment>
+        get() = day1Schedule.scheduled
+
+    val day1Gap: TimelineGap
+        get() = buildTimelineItems(day1Segments).filterIsInstance<TimelineGap>().firstOrNull()
+            ?: TimelineGap(startMinutes = 12 * 60, minutes = 90)
+}
+
+private const val PreviewBackgroundColor = 0xFF0F131AL
+
+@Composable
+private fun PreviewContainer(content: @Composable () -> Unit) {
+    TrilooTheme(darkTheme = true) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(PreviewBackgroundColor)),
+            color = Color.Transparent
+        ) {
+            Box(modifier = Modifier.padding(16.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Preview(name = "Plan Tab", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun PlanTabPreview() {
+    PreviewContainer {
+        PlanTab(
+            days = TripDetailsPreviewData.days,
+            places = TripDetailsPreviewData.places,
+            onDayClick = { _ -> },
+            onPlaceClick = { _ -> },
+            onEditPlace = { _ -> },
+            onAddPlace = { _ -> },
+            onDeletePlace = { _ -> }
+        )
+    }
+}
+
+@Preview(name = "Day Card", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun DayCardPreview() {
+    PreviewContainer {
+        DayCard(
+            day = TripDetailsPreviewData.days.first(),
+            schedule = TripDetailsPreviewData.day1Schedule,
+            onDayClick = { },
+            onPlaceClick = { _ -> },
+            onEditPlace = { _ -> },
+            onAddPlace = { },
+            onDeletePlace = { _ -> }
+        )
+    }
+}
+
+@Preview(name = "Day Timeline", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun DayTimelinePreview() {
+    PreviewContainer {
+        DayTimeline(
+            segments = TripDetailsPreviewData.day1Segments,
+            unscheduled = TripDetailsPreviewData.day1Schedule.unscheduled,
+            onPlaceClick = { _ -> },
+            onEditPlace = { _ -> },
+            onDeletePlace = { _ -> }
+        )
+    }
+}
+
+@Preview(name = "Timeline Event Row", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun TimelineEventRowPreview() {
+    val segment = TripDetailsPreviewData.day1Segments.firstOrNull() ?: PlaceSegment(
+        place = TripDetailsPreviewData.places.first(),
+        startMinutes = 12 * 60,
+        durationMinutes = 60,
+        isContinuation = false,
+        timeFormat = TimeFormat.HOURS_24
+    )
+    PreviewContainer {
+        TimelineEventRow(
+            item = segment,
+            timeFormat = TimeFormat.HOURS_24,
+            blockHeight = 72.dp,
+            onClick = { },
+            onEdit = { },
+            onDelete = { }
+        )
+    }
+}
+
+@Preview(name = "Timeline Gap Row", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun TimelineGapRowPreview() {
+    PreviewContainer {
+        TimelineGapRow(
+            item = TripDetailsPreviewData.day1Gap,
+            timeFormat = TimeFormat.HOURS_24,
+            blockHeight = 96.dp
+        )
+    }
+}
+
+@Preview(name = "Timeline Rail", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun TimelineRailPreview() {
+    PreviewContainer {
+        TimelineRail(
+            startMinutes = 12 * 60,
+            timeFormat = TimeFormat.HOURS_24,
+            timeLabel = "12:00",
+            endLabel = "23:00",
+            blockMinutes = 11 * 60,
+            blockHeight = 140.dp,
+            lineColor = CoralPrimary,
+            showIntermediateTicks = true
+        )
+    }
+}
+
+@Preview(name = "Timeline Event Card", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun TimelineEventCardPreview() {
+    PreviewContainer {
+        TimelineEventCard(
+            place = TripDetailsPreviewData.places.first(),
+            timeRange = "12:00 — 13:00",
+            durationMinutes = 60,
+            onClick = { },
+            onEdit = { },
+            onDelete = { }
+        )
+    }
+}
+
+@Preview(name = "Map Tab", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun MapTabPreview() {
+    PreviewContainer {
+        MapTab(
+            trip = TripDetailsPreviewData.trip,
+            places = TripDetailsPreviewData.places,
+            participants = TripDetailsPreviewData.participants
+        )
+    }
+}
+
+@Preview(name = "Info Chip", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun InfoChipPreview() {
+    PreviewContainer {
+        InfoChip(
+            icon = Icons.Rounded.Place,
+            text = "3 места"
+        )
+    }
+}
+
+@Preview(name = "Heatmap Preview", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun HeatmapPreviewPreview() {
+    PreviewContainer {
+        HeatmapPreview(places = TripDetailsPreviewData.places)
+    }
+}
+
+@Preview(name = "Expenses Tab", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun ExpensesTabPreview() {
+    val total = TripDetailsPreviewData.expenses.sumOf { it.amountInBaseCurrency }
+    PreviewContainer {
+        ExpensesTab(
+            expenses = TripDetailsPreviewData.expenses,
+            totalAmount = total,
+            currency = TripDetailsPreviewData.trip.baseCurrency,
+            onExpenseClick = { _ -> },
+            onAddExpense = { },
+            onDeleteExpense = { _ -> }
+        )
+    }
+}
+
+@Preview(name = "Expense Summary", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun ExpenseSummaryCardPreview() {
+    PreviewContainer {
+        ExpenseSummaryCard(
+            totalAmount = 63.0,
+            currency = TripDetailsPreviewData.trip.baseCurrency,
+            expenseCount = TripDetailsPreviewData.expenses.size
+        )
+    }
+}
+
+@Preview(name = "Expense Item", showBackground = true, backgroundColor = PreviewBackgroundColor)
+@Composable
+private fun ExpenseItemPreview() {
+    PreviewContainer {
+        ExpenseItem(
+            expense = TripDetailsPreviewData.expenses.first(),
+            baseCurrency = TripDetailsPreviewData.trip.baseCurrency,
+            onClick = { },
+            onDelete = { }
+        )
+    }
 }
