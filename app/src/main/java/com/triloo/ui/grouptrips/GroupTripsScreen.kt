@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.model.Trip
@@ -45,6 +46,8 @@ import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.theme.Error
 import com.triloo.ui.theme.Slate500
 import com.triloo.ui.theme.Slate600
+import com.triloo.ui.PreviewData
+import com.triloo.ui.theme.TrilooTheme
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -75,6 +78,30 @@ fun GroupTripsScreen(
         }
     }
 
+    GroupTripsContent(
+        uiState = uiState,
+        groupTrips = groupTrips,
+        onNavigateBack = onNavigateBack,
+        onNavigateToTrip = onNavigateToTrip,
+        onScanInvite = onScanInvite,
+        onInviteCodeChange = viewModel::updateInviteCode,
+        onDisplayNameChange = viewModel::updateDisplayName,
+        onJoin = viewModel::joinByInviteCode
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GroupTripsContent(
+    uiState: GroupTripsUiState,
+    groupTrips: List<Trip>,
+    onNavigateBack: () -> Unit,
+    onNavigateToTrip: (String) -> Unit,
+    onScanInvite: () -> Unit,
+    onInviteCodeChange: (String) -> Unit,
+    onDisplayNameChange: (String) -> Unit,
+    onJoin: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -121,9 +148,9 @@ fun GroupTripsScreen(
                     inviteScanTotal = uiState.inviteScanTotal,
                     inviteScanError = uiState.inviteScanError,
                     isProcessingInvite = uiState.isProcessingInvite,
-                    onInviteCodeChange = viewModel::updateInviteCode,
-                    onDisplayNameChange = viewModel::updateDisplayName,
-                    onJoin = viewModel::joinByInviteCode,
+                    onInviteCodeChange = onInviteCodeChange,
+                    onDisplayNameChange = onDisplayNameChange,
+                    onJoin = onJoin,
                     onScanInvite = onScanInvite
                 )
             }
@@ -322,5 +349,25 @@ private fun GroupTripItem(
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun GroupTripsScreenPreview() {
+    TrilooTheme {
+        GroupTripsContent(
+            uiState = PreviewData.groupTripsState,
+            groupTrips = listOf(
+                PreviewData.trip.copy(id = "group-1", isGroupTrip = true),
+                PreviewData.secondTrip.copy(id = "group-2", isGroupTrip = true)
+            ),
+            onNavigateBack = {},
+            onNavigateToTrip = {},
+            onScanInvite = {},
+            onInviteCodeChange = {},
+            onDisplayNameChange = {},
+            onJoin = {}
+        )
     }
 }

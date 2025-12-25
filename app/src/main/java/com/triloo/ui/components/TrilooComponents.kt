@@ -30,7 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 
 /**
  * Triloo Design System Components
@@ -463,5 +465,36 @@ fun LoadingState(
             style = MaterialTheme.typography.bodyMedium,
             color = Slate600
         )
+    }
+}
+
+@Preview(name = "Triloo Components", showBackground = true, backgroundColor = 0xFFF8FAFC)
+@Composable
+private fun TrilooComponentsPreview() {
+    TrilooTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            TrilooButton(text = "Primary", onClick = {})
+            TrilooButton(text = "Secondary", onClick = {}, style = ButtonStyle.Secondary)
+            TrilooCard {
+                Text(text = "Карточка Triloo", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                TrilooChip(text = "Чип", emoji = "🌍")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ParticipantAvatar(name = "Аня")
+                AvatarStack(names = listOf("А", "Б", "В", "Г"))
+            }
+            SectionHeader(title = "Пустое состояние")
+            EmptyState(
+                emoji = "🧭",
+                title = "Ничего не найдено",
+                subtitle = "Добавьте первую запись, чтобы увидеть список"
+            )
+        }
     }
 }

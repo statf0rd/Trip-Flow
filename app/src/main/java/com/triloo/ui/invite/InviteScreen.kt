@@ -34,12 +34,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.ui.PreviewData
 import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.qr.generateQrBitmap
 import com.triloo.ui.theme.Error
+import com.triloo.ui.theme.TrilooTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +51,20 @@ fun InviteScreen(
     viewModel: InviteViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    InviteContent(
+        uiState = uiState,
+        onNavigateBack = onNavigateBack,
+        onRefreshInvite = viewModel::refreshInvite
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InviteContent(
+    uiState: InviteUiState,
+    onNavigateBack: () -> Unit,
+    onRefreshInvite: () -> Unit
+) {
     var chunkIndex by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -78,7 +95,7 @@ fun InviteScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = viewModel::refreshInvite) {
+                    IconButton(onClick = onRefreshInvite) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Обновить"
@@ -110,7 +127,7 @@ fun InviteScreen(
 
             if (uiState.error != null) {
                 Text(
-                    text = uiState.error ?: "",
+                    text = uiState.error,
                     style = MaterialTheme.typography.bodySmall,
                     color = Error
                 )
@@ -172,5 +189,17 @@ fun InviteScreen(
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun InviteScreenPreview() {
+    TrilooTheme {
+        InviteContent(
+            uiState = PreviewData.inviteState,
+            onNavigateBack = {},
+            onRefreshInvite = {}
+        )
     }
 }

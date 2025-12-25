@@ -4,7 +4,13 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -12,6 +18,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import com.triloo.ui.auth.AuthFlowScreen
 import com.triloo.ui.grouptrips.GroupTripsScreen
 import com.triloo.ui.invite.InviteScreen
@@ -25,6 +34,8 @@ import com.triloo.ui.tripdetails.PlaceDetailsScreen
 import com.triloo.ui.tripdetails.TripDetailsScreen
 import com.triloo.ui.trips.CreateTripScreen
 import com.triloo.ui.trips.TripListScreen
+import com.triloo.ui.components.TrilooButton
+import com.triloo.ui.theme.TrilooTheme
 
 /**
  * Navigation routes for Triloo
@@ -460,6 +471,42 @@ fun TrilooNavHost(
             AddExpenseScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TrilooNavHostPreview() {
+    TrilooTheme {
+        val navController = rememberNavController()
+        NavHost(
+            navController = navController,
+            startDestination = "preview"
+        ) {
+            composable("preview") {
+                Surface(modifier = Modifier.padding(20.dp)) {
+                    Column {
+                        Text(
+                            text = "Навигация Triloo",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TrilooButton(
+                            text = "Открыть второй экран",
+                            onClick = { navController.navigate("second") }
+                        )
+                    }
+                }
+            }
+            composable("second") {
+                Surface(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "Второй экран превью",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
         }
     }
 }

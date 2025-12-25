@@ -43,12 +43,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.ui.PreviewData
 import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.qr.generateQrBitmap
 import com.triloo.ui.theme.Error
+import com.triloo.ui.theme.TrilooTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +63,6 @@ fun RelayScreen(
     viewModel: RelayViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var chunkIndex by remember { mutableIntStateOf(0) }
-    val mergeResult = uiState.mergeResult
 
     LaunchedEffect(qrResult) {
         if (!qrResult.isNullOrBlank()) {
@@ -71,9 +71,31 @@ fun RelayScreen(
         }
     }
 
+    RelayContent(
+        uiState = uiState,
+        onNavigateBack = onNavigateBack,
+        onScanRelay = onScanRelay,
+        onRefreshExport = viewModel::refreshExport,
+        onClearMergeResult = viewModel::clearMergeResult
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RelayContent(
+    uiState: RelayUiState,
+    onNavigateBack: () -> Unit,
+    onScanRelay: () -> Unit,
+    onRefreshExport: () -> Unit,
+    onClearMergeResult: () -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var chunkIndex by remember { mutableIntStateOf(0) }
+    val mergeResult = uiState.mergeResult
+
     if (mergeResult != null) {
         AlertDialog(
-            onDismissRequest = viewModel::clearMergeResult,
+            onDismissRequest = onClearMergeResult,
             title = { Text("Синхронизация завершена") },
             text = {
                 Text(
@@ -83,7 +105,7 @@ fun RelayScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = viewModel::clearMergeResult) {
+                TextButton(onClick = onClearMergeResult) {
                     Text("ОК")
                 }
             }
@@ -118,7 +140,7 @@ fun RelayScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = viewModel::refreshExport) {
+                    IconButton(onClick = onRefreshExport) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Обновить"
@@ -261,5 +283,19 @@ fun RelayScreen(
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun RelayScreenPreview() {
+    TrilooTheme {
+        RelayContent(
+            uiState = PreviewData.relayState,
+            onNavigateBack = {},
+            onScanRelay = {},
+            onRefreshExport = {},
+            onClearMergeResult = {}
+        )
     }
 }

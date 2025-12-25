@@ -19,7 +19,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.settings.ThemeMode
+import androidx.compose.ui.tooling.preview.Preview
+import com.triloo.ui.PreviewData
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +34,26 @@ fun SettingsScreen(
     viewModel: AppSettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    SettingsContent(
+        uiState = uiState,
+        onNavigateBack = onNavigateBack,
+        onNavigateToGroupTrips = onNavigateToGroupTrips,
+        onNavigateToAuth = onNavigateToAuth,
+        onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
+        onThemeSelected = viewModel::setThemeMode
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsContent(
+    uiState: AppSettingsUiState,
+    onNavigateBack: () -> Unit,
+    onNavigateToGroupTrips: () -> Unit,
+    onNavigateToAuth: () -> Unit,
+    onNavigateToPrivacyPolicy: () -> Unit,
+    onThemeSelected: (ThemeMode) -> Unit
+) {
     var showThemeDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -64,7 +87,6 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Account Section
             SettingsSection(title = "Аккаунт") {
                 SettingsItem(
                     icon = Icons.Rounded.AccountCircle,
@@ -79,8 +101,7 @@ fun SettingsScreen(
                     onClick = onNavigateToGroupTrips
                 )
             }
-            
-            // Preferences Section
+
             SettingsSection(title = "Настройки") {
                 SettingsItem(
                     icon = Icons.Rounded.AttachMoney,
@@ -108,8 +129,7 @@ fun SettingsScreen(
                     onCheckedChange = { /* TODO */ }
                 )
             }
-            
-            // Data Section
+
             SettingsSection(title = "Данные") {
                 SettingsItem(
                     icon = Icons.Rounded.CloudSync,
@@ -131,8 +151,7 @@ fun SettingsScreen(
                     isDestructive = true
                 )
             }
-            
-            // About Section
+
             SettingsSection(title = "О приложении") {
                 SettingsItem(
                     icon = Icons.Rounded.Info,
@@ -157,7 +176,7 @@ fun SettingsScreen(
                     onClick = { /* TODO: Open email */ }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -173,7 +192,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.setThemeMode(mode)
+                                    onThemeSelected(mode)
                                     showThemeDialog = false
                                 }
                                 .padding(vertical = 6.dp),
@@ -182,7 +201,7 @@ fun SettingsScreen(
                             RadioButton(
                                 selected = uiState.themeMode == mode,
                                 onClick = {
-                                    viewModel.setThemeMode(mode)
+                                    onThemeSelected(mode)
                                     showThemeDialog = false
                                 }
                             )
@@ -197,6 +216,21 @@ fun SettingsScreen(
                     Text("Закрыть")
                 }
             }
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun SettingsScreenPreview() {
+    TrilooTheme {
+        SettingsContent(
+            uiState = PreviewData.settingsState.copy(themeMode = ThemeMode.DARK),
+            onNavigateBack = {},
+            onNavigateToGroupTrips = {},
+            onNavigateToAuth = {},
+            onNavigateToPrivacyPolicy = {},
+            onThemeSelected = {}
         )
     }
 }
@@ -325,5 +359,3 @@ private fun SettingsSwitchItem(
         )
     }
 }
-
-

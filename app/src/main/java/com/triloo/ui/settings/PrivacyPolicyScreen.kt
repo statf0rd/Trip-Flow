@@ -22,16 +22,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import com.triloo.R
+import com.triloo.ui.PreviewData
+import com.triloo.ui.theme.TrilooTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacyPolicyScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    policyTextOverride: String? = null
 ) {
     val context = LocalContext.current
-    val policyText = remember {
-        context.resources.openRawResource(R.raw.privacy_policy)
+    val policyText = remember(policyTextOverride) {
+        policyTextOverride ?: context.resources.openRawResource(R.raw.privacy_policy)
             .bufferedReader()
             .use { it.readText() }
     }
@@ -78,5 +82,16 @@ fun PrivacyPolicyScreen(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PrivacyPolicyScreenPreview() {
+    TrilooTheme {
+        PrivacyPolicyScreen(
+            onNavigateBack = {},
+            policyTextOverride = PreviewData.policyPlaceholder
+        )
     }
 }
