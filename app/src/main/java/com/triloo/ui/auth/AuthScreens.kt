@@ -23,11 +23,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 
 /**
  * Sign In Screen
@@ -43,12 +46,32 @@ fun SignInScreen(
     onNavigateToForgotPassword: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    val authState by viewModel.uiState.collectAsStateWithLifecycle()
+    SignInContent(
+        authState = authState,
+        onNavigateBack = onNavigateBack,
+        onSignInSuccess = onSignInSuccess,
+        onNavigateToSignUp = onNavigateToSignUp,
+        onNavigateToForgotPassword = onNavigateToForgotPassword,
+        onSignIn = { email, password -> viewModel.signIn(email, password) },
+        onClearError = viewModel::clearError
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SignInContent(
+    authState: AuthUiState,
+    onNavigateBack: () -> Unit,
+    onSignInSuccess: () -> Unit,
+    onNavigateToSignUp: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit,
+    onSignIn: (String, String) -> Unit,
+    onClearError: () -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    val authState by viewModel.uiState.collectAsStateWithLifecycle()
-    val error = authState.error
-    
     val focusManager = LocalFocusManager.current
 
     LaunchedEffect(authState.currentUser?.id) {
@@ -85,7 +108,6 @@ fun SignInScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Header
             Text(
                 text = "✈️",
                 style = MaterialTheme.typography.displayLarge
@@ -107,10 +129,9 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(40.dp))
             
-            // Email field
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it; viewModel.clearError() },
+                onValueChange = { email = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Email") },
                 leadingIcon = {
@@ -130,10 +151,9 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Password field
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it; viewModel.clearError() },
+                onValueChange = { password = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Пароль") },
                 leadingIcon = {
@@ -163,7 +183,6 @@ fun SignInScreen(
                 shape = RoundedCornerShape(14.dp)
             )
             
-            // Forgot password link
             TextButton(
                 onClick = onNavigateToForgotPassword,
                 modifier = Modifier.align(Alignment.End)
@@ -176,8 +195,7 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Error message
-            AnimatedVisibility(visible = error != null) {
+            AnimatedVisibility(visible = authState.error != null) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = ErrorLight,
@@ -195,7 +213,7 @@ fun SignInScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = error ?: "",
+                            text = authState.error ?: "",
                             style = MaterialTheme.typography.bodySmall,
                             color = Error
                         )
@@ -205,12 +223,9 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Sign in button
             TrilooButton(
                 text = "Войти",
-                onClick = {
-                    viewModel.signIn(email.trim(), password)
-                },
+                onClick = { onSignIn(email.trim(), password) },
                 enabled = email.isNotBlank() && password.isNotBlank(),
                 isLoading = authState.isLoading,
                 modifier = Modifier.fillMaxWidth()
@@ -218,7 +233,6 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Divider
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -234,16 +248,12 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Google sign in
             OutlinedButton(
-                onClick = {
-                    // TODO: Launch Google Sign-In flow
-                },
+                onClick = { /* TODO: Launch Google Sign-In flow */ },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 contentPadding = PaddingValues(vertical = 14.dp)
             ) {
-                // Google icon placeholder
                 Text(
                     text = "G",
                     style = MaterialTheme.typography.titleLarge,
@@ -259,7 +269,6 @@ fun SignInScreen(
             
             Spacer(modifier = Modifier.weight(1f))
             
-            // Sign up link
             Row(
                 modifier = Modifier.padding(vertical = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -293,14 +302,35 @@ fun SignUpScreen(
     onSignUpSuccess: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    val authState by viewModel.uiState.collectAsStateWithLifecycle()
+    SignUpContent(
+        authState = authState,
+        onNavigateBack = onNavigateBack,
+        onSignUpSuccess = onSignUpSuccess,
+        onSignUp = { name, email, password -> viewModel.signUp(name, email, password) },
+        onClearError = viewModel::clearError
+    )
+}
+
+/**
+ * Forgot Password Screen
+ * 
+ * TODO: Connect to AuthViewModel
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SignUpContent(
+    authState: AuthUiState,
+    onNavigateBack: () -> Unit,
+    onSignUpSuccess: () -> Unit,
+    onSignUp: (String, String, String) -> Unit,
+    onClearError: () -> Unit
+) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    val authState by viewModel.uiState.collectAsStateWithLifecycle()
-    val error = authState.error
-    
     val focusManager = LocalFocusManager.current
 
     LaunchedEffect(authState.currentUser?.id) {
@@ -337,7 +367,6 @@ fun SignUpScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Header
             Text(
                 text = "Создать аккаунт",
                 style = MaterialTheme.typography.headlineMedium,
@@ -352,10 +381,9 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Name field
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it; viewModel.clearError() },
+                onValueChange = { name = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Имя") },
                 leadingIcon = {
@@ -374,10 +402,9 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Email field
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it; viewModel.clearError() },
+                onValueChange = { email = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Email") },
                 leadingIcon = {
@@ -397,10 +424,9 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Password field
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it; viewModel.clearError() },
+                onValueChange = { password = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Пароль") },
                 leadingIcon = {
@@ -432,10 +458,9 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Confirm password field
             OutlinedTextField(
                 value = confirmPassword,
-                onValueChange = { confirmPassword = it; viewModel.clearError() },
+                onValueChange = { confirmPassword = it; onClearError() },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Подтвердите пароль") },
                 leadingIcon = {
@@ -465,12 +490,9 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Sign up button
             TrilooButton(
                 text = "Зарегистрироваться",
-                onClick = {
-                    viewModel.signUp(name.trim(), email.trim(), password)
-                },
+                onClick = { onSignUp(name.trim(), email.trim(), password) },
                 enabled = name.isNotBlank() && email.isNotBlank() && 
                          password.length >= 6 && password == confirmPassword,
                 isLoading = authState.isLoading,
@@ -479,8 +501,7 @@ fun SignUpScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Error message
-            if (error != null) {
+            authState.error?.let { error ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -509,7 +530,6 @@ fun SignUpScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Terms
             Text(
                 text = "Регистрируясь, вы соглашаетесь с\nУсловиями использования и Политикой конфиденциальности",
                 style = MaterialTheme.typography.bodySmall,
@@ -533,10 +553,25 @@ fun ForgotPasswordScreen(
     onNavigateBack: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    val authState by viewModel.uiState.collectAsStateWithLifecycle()
+    ForgotPasswordContent(
+        authState = authState,
+        onNavigateBack = onNavigateBack,
+        onSendReset = { email, onSuccess -> viewModel.sendPasswordReset(email, onSuccess) },
+        onClearError = viewModel::clearError
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ForgotPasswordContent(
+    authState: AuthUiState,
+    onNavigateBack: () -> Unit,
+    onSendReset: (String, () -> Unit) -> Unit,
+    onClearError: () -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var isSent by remember { mutableStateOf(false) }
-    val authState by viewModel.uiState.collectAsStateWithLifecycle()
-    val error = authState.error
     
     Scaffold(
         topBar = {
@@ -566,7 +601,6 @@ fun ForgotPasswordScreen(
             Spacer(modifier = Modifier.height(32.dp))
             
             if (isSent) {
-                // Success state
                 Icon(
                     imageVector = Icons.Rounded.MarkEmailRead,
                     contentDescription = null,
@@ -599,7 +633,6 @@ fun ForgotPasswordScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                // Input state
                 Icon(
                     imageVector = Icons.Rounded.LockReset,
                     contentDescription = null,
@@ -628,7 +661,7 @@ fun ForgotPasswordScreen(
                 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it; viewModel.clearError() },
+                    onValueChange = { email = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Email") },
                     leadingIcon = {
@@ -650,17 +683,13 @@ fun ForgotPasswordScreen(
                 
                 TrilooButton(
                     text = "Отправить",
-                    onClick = {
-                        viewModel.sendPasswordReset(email.trim()) {
-                            isSent = true
-                        }
-                    },
+                    onClick = { onSendReset(email.trim()) { isSent = true } },
                     enabled = email.isNotBlank(),
                     isLoading = authState.isLoading,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (error != null) {
+                authState.error?.let { error ->
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = error,
@@ -673,3 +702,45 @@ fun ForgotPasswordScreen(
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun SignInContentPreview() {
+    TrilooTheme {
+        SignInContent(
+            authState = PreviewData.authState.copy(error = "Неверный пароль"),
+            onNavigateBack = {},
+            onSignInSuccess = {},
+            onNavigateToSignUp = {},
+            onNavigateToForgotPassword = {},
+            onSignIn = { _, _ -> },
+            onClearError = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun SignUpContentPreview() {
+    TrilooTheme {
+        SignUpContent(
+            authState = PreviewData.authState.copy(error = "Email уже используется"),
+            onNavigateBack = {},
+            onSignUpSuccess = {},
+            onSignUp = { _, _, _ -> },
+            onClearError = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ForgotPasswordContentPreview() {
+    TrilooTheme {
+        ForgotPasswordContent(
+            authState = PreviewData.authState,
+            onNavigateBack = {},
+            onSendReset = { _, onSuccess -> onSuccess() },
+            onClearError = {}
+        )
+    }
+}
