@@ -18,12 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.model.Place
 import com.triloo.data.model.PlaceCategory
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import com.triloo.ui.PreviewData
+import com.triloo.ui.theme.TrilooTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -297,7 +300,6 @@ private fun PlaceDetailsContent(
             }
         }
         
-        // Contact info
         if (place.website != null || place.phoneNumber != null) {
             TrilooCard {
                 place.website?.let { website ->
@@ -322,7 +324,6 @@ private fun PlaceDetailsContent(
             }
         }
         
-        // Action buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -407,3 +408,13 @@ private fun getCategoryColor(category: PlaceCategory): Color {
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun PlaceDetailsScreenPreview() {
+    TrilooTheme {
+        PlaceDetailsContent(
+            place = PreviewData.places.first(),
+            onMarkVisited = {}
+        )
+    }
+}

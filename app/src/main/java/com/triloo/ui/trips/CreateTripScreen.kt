@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -24,10 +25,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.PreviewData
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -48,6 +52,36 @@ fun CreateTripScreen(
         }
     }
     
+    CreateTripContent(
+        uiState = uiState,
+        onNavigateBack = onNavigateBack,
+        onNameChange = viewModel::updateName,
+        onDestinationChange = viewModel::updateDestination,
+        onStartDateChange = viewModel::updateStartDate,
+        onEndDateChange = viewModel::updateEndDate,
+        onCurrencyChange = viewModel::updateCurrency,
+        onHotelNameChange = viewModel::updateHotelName,
+        onBudgetChange = { viewModel.updateBudget(it) },
+        onSaveTrip = viewModel::saveTrip,
+        focusManager = focusManager
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreateTripContent(
+    uiState: CreateTripUiState,
+    onNavigateBack: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onDestinationChange: (String) -> Unit,
+    onStartDateChange: (LocalDate) -> Unit,
+    onEndDateChange: (LocalDate) -> Unit,
+    onCurrencyChange: (String) -> Unit,
+    onHotelNameChange: (String) -> Unit,
+    onBudgetChange: (Double?) -> Unit,
+    onSaveTrip: () -> Unit,
+    focusManager: FocusManager = LocalFocusManager.current
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -82,10 +116,9 @@ fun CreateTripScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Trip Name
             TrilooTextField(
                 value = uiState.name,
-                onValueChange = viewModel::updateName,
+                onValueChange = onNameChange,
                 label = "Название поездки",
                 placeholder = "Отпуск в Турции",
                 leadingIcon = Icons.Rounded.FlightTakeoff,
@@ -100,10 +133,9 @@ fun CreateTripScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Destination
             TrilooTextField(
                 value = uiState.destination,
-                onValueChange = viewModel::updateDestination,
+                onValueChange = onDestinationChange,
                 label = "Город или страна",
                 placeholder = "Стамбул, Турция",
                 leadingIcon = Icons.Rounded.Place,
@@ -118,7 +150,6 @@ fun CreateTripScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Dates Section
             Text(
                 text = "Даты поездки",
                 style = MaterialTheme.typography.titleSmall,
@@ -135,20 +166,19 @@ fun CreateTripScreen(
                 DatePickerField(
                     label = "Начало",
                     date = uiState.startDate,
-                    onDateSelected = viewModel::updateStartDate,
+                    onDateSelected = onStartDateChange,
                     modifier = Modifier.weight(1f)
                 )
                 
                 DatePickerField(
                     label = "Конец",
                     date = uiState.endDate,
-                    onDateSelected = viewModel::updateEndDate,
+                    onDateSelected = onEndDateChange,
                     minDate = uiState.startDate,
                     modifier = Modifier.weight(1f)
                 )
             }
             
-            // Duration info
             if (uiState.startDate != null && uiState.endDate != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 val days = java.time.temporal.ChronoUnit.DAYS.between(
@@ -164,7 +194,6 @@ fun CreateTripScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Currency Selection
             Text(
                 text = "Базовая валюта",
                 style = MaterialTheme.typography.titleSmall,
@@ -176,15 +205,14 @@ fun CreateTripScreen(
             
             CurrencySelector(
                 selectedCurrency = uiState.baseCurrency,
-                onCurrencySelected = viewModel::updateCurrency
+                onCurrencySelected = onCurrencyChange
             )
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Hotel (Optional)
             TrilooTextField(
                 value = uiState.hotelName,
-                onValueChange = viewModel::updateHotelName,
+                onValueChange = onHotelNameChange,
                 label = "Отель (опционально)",
                 placeholder = "Название или адрес отеля",
                 leadingIcon = Icons.Rounded.Hotel,
@@ -199,10 +227,9 @@ fun CreateTripScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Budget (Optional)
             TrilooTextField(
                 value = uiState.budget?.toString() ?: "",
-                onValueChange = { viewModel.updateBudget(it.toDoubleOrNull()) },
+                onValueChange = { onBudgetChange(it.toDoubleOrNull()) },
                 label = "Бюджет (опционально)",
                 placeholder = "100000",
                 leadingIcon = Icons.Rounded.AccountBalanceWallet,
@@ -218,10 +245,9 @@ fun CreateTripScreen(
             
             Spacer(modifier = Modifier.height(40.dp))
             
-            // Create Button
             TrilooButton(
                 text = if (uiState.isEditing) "Сохранить изменения" else "Создать путешествие",
-                onClick = viewModel::saveTrip,
+                onClick = onSaveTrip,
                 enabled = uiState.isValid,
                 isLoading = uiState.isCreating,
                 icon = Icons.Rounded.Check,
@@ -414,6 +440,25 @@ private fun CurrencySelector(
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun CreateTripScreenPreview() {
+    TrilooTheme {
+        CreateTripContent(
+            uiState = PreviewData.createTripState,
+            onNavigateBack = {},
+            onNameChange = {},
+            onDestinationChange = {},
+            onStartDateChange = { _ -> },
+            onEndDateChange = { _ -> },
+            onCurrencyChange = {},
+            onHotelNameChange = {},
+            onBudgetChange = {},
+            onSaveTrip = {}
+        )
+    }
+}
+
 private fun pluralizeDays(count: Int): String {
     return when {
         count % 100 in 11..19 -> "дней"
@@ -422,6 +467,3 @@ private fun pluralizeDays(count: Int): String {
         else -> "дней"
     }
 }
-
-
-

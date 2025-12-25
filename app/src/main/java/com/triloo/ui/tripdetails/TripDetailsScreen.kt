@@ -17,11 +17,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.model.Trip
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import com.triloo.ui.PreviewData
+import com.triloo.ui.theme.TrilooTheme
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -375,6 +378,73 @@ private fun TrilooTabRow(
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Preview(showBackground = true)
+@Composable
+private fun TripDetailsScreenPreview() {
+    val uiState = PreviewData.tripDetailsState
+    val pagerState = rememberPagerState(pageCount = { 3 })
+    val tabs = listOf(
+        TabItem("План", Icons.AutoMirrored.Rounded.EventNote),
+        TabItem("Карта", Icons.Rounded.Map),
+        TabItem("Расходы", Icons.Rounded.Payments)
+    )
+    TrilooTheme {
+        Scaffold(
+            topBar = {
+                uiState.trip?.let { trip ->
+                    TripDetailsTopBar(
+                        trip = trip,
+                        onNavigateBack = {},
+                        onShare = {},
+                        onRelay = {},
+                        onEdit = {},
+                        onDelete = {},
+                        onOptimizeRoute = {}
+                    )
+                }
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                TrilooTabRow(
+                    tabs = tabs,
+                    selectedIndex = pagerState.currentPage,
+                    onTabSelected = { }
+                )
+
+                when (pagerState.currentPage) {
+                    0 -> PlanTab(
+                        days = uiState.days,
+                        places = uiState.places,
+                        onDayClick = {},
+                        onPlaceClick = {},
+                        onEditPlace = {},
+                        onAddPlace = {},
+                        onDeletePlace = {}
+                    )
+                    1 -> MapTab(
+                        trip = uiState.trip!!,
+                        places = uiState.places,
+                        participants = uiState.participants
+                    )
+                    else -> ExpensesTab(
+                        expenses = uiState.expenses,
+                        totalAmount = uiState.totalExpenses,
+                        currency = uiState.trip!!.baseCurrency,
+                        onExpenseClick = {},
+                        onAddExpense = {},
+                        onDeleteExpense = {}
+                    )
                 }
             }
         }

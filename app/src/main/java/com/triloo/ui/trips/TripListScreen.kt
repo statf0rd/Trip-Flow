@@ -23,11 +23,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.ui.PreviewData
 import com.triloo.data.model.Trip
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -777,6 +780,19 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
                     .shimmerEffect()
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun TripListScreenPreview() {
+    TrilooTheme {
+        TripListContent(
+            uiState = PreviewData.tripListState,
+            onTripClick = {},
+            onTripLongClick = {},
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 

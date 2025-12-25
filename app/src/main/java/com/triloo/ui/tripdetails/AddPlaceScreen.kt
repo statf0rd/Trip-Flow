@@ -32,12 +32,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.model.PlaceCategory
 import com.triloo.data.places.PlaceSuggestion
+import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -632,5 +635,32 @@ private fun getCategoryColor(category: PlaceCategory): Color {
         PlaceCategory.TRANSPORT -> Color(0xFF6366F1)
         PlaceCategory.VIEWPOINT -> GoldenAccent
         else -> Slate600
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun AddPlaceScreenPreview() {
+    TrilooTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Добавить место",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            CategoryCarousel(
+                selected = PreviewData.addPlaceState.category,
+                onSelected = {}
+            )
+            SuggestionItem(
+                suggestion = PreviewData.suggestions.first(),
+                onClick = {}
+            )
+        }
     }
 }

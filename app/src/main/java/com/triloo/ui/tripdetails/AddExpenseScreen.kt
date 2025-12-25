@@ -18,18 +18,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.data.model.Trip
 import com.triloo.data.model.ExpenseCategory
+import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooTheme
 import java.time.Instant
 import java.time.ZoneId
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -54,6 +60,46 @@ fun AddExpenseScreen(
             onNavigateBack()
         }
     }
+
+    AddExpenseContent(
+        uiState = uiState,
+        trip = trip,
+        onNavigateBack = onNavigateBack,
+        onAmountChange = viewModel::updateAmount,
+        onCurrencyChange = viewModel::updateCurrency,
+        onDescriptionChange = viewModel::updateDescription,
+        onCategoryChange = viewModel::updateCategory,
+        onPayerChange = viewModel::updatePayer,
+        onDateChange = viewModel::updateDate,
+        onTimeChange = viewModel::updateTime,
+        onNotesChange = viewModel::updateNotes,
+        onSave = viewModel::saveExpense,
+        focusManager = focusManager
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AddExpenseContent(
+    uiState: AddExpenseUiState,
+    trip: Trip?,
+    onNavigateBack: () -> Unit,
+    onAmountChange: (String) -> Unit,
+    onCurrencyChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onCategoryChange: (ExpenseCategory) -> Unit,
+    onPayerChange: (String) -> Unit,
+    onDateChange: (LocalDate) -> Unit,
+    onTimeChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
+    onSave: () -> Unit,
+    focusManager: FocusManager = LocalFocusManager.current
+) {
+    val scrollState = rememberScrollState()
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ru"))
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -82,7 +128,6 @@ fun AddExpenseScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Trip info
             trip?.let {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -108,7 +153,6 @@ fun AddExpenseScreen(
                 }
             }
 
-            // Amount section
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "Сумма",
@@ -124,7 +168,7 @@ fun AddExpenseScreen(
                 ) {
                     OutlinedTextField(
                         value = uiState.amount,
-                        onValueChange = viewModel::updateAmount,
+                        onValueChange = onAmountChange,
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("0", color = Slate500) },
                         leadingIcon = {
@@ -146,7 +190,6 @@ fun AddExpenseScreen(
                     )
                 }
                 
-                // Currency selector
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -155,7 +198,7 @@ fun AddExpenseScreen(
                         val isSelected = currency == uiState.currency
                         FilterChip(
                             selected = isSelected,
-                            onClick = { viewModel.updateCurrency(currency) },
+                            onClick = { onCurrencyChange(currency) },
                             label = { Text(currency) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = CoralPrimary.copy(alpha = 0.15f),
@@ -166,10 +209,9 @@ fun AddExpenseScreen(
                 }
             }
 
-            // Description field
             OutlinedTextField(
                 value = uiState.description,
-                onValueChange = viewModel::updateDescription,
+                onValueChange = onDescriptionChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Описание") },
                 placeholder = { Text("Ужин, билет, такси...", color = Slate500) },
@@ -187,7 +229,6 @@ fun AddExpenseScreen(
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Category selector
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "Категория",
@@ -204,7 +245,7 @@ fun AddExpenseScreen(
                         val isSelected = category == uiState.category
                         FilterChip(
                             selected = isSelected,
-                            onClick = { viewModel.updateCategory(category) },
+                            onClick = { onCategoryChange(category) },
                             label = {
                                 Text(
                                     text = "${category.emoji} ${category.displayName}",
@@ -230,10 +271,9 @@ fun AddExpenseScreen(
                 }
             }
 
-            // Payer field
             OutlinedTextField(
                 value = uiState.paidBy,
-                onValueChange = viewModel::updatePayer,
+                onValueChange = onPayerChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Плательщик") },
                 placeholder = { Text("Ваше имя", color = Slate500) },
@@ -251,12 +291,10 @@ fun AddExpenseScreen(
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Date and time row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Date picker
                 OutlinedTextField(
                     value = uiState.date?.format(dateFormatter) ?: "",
                     onValueChange = {},
@@ -282,10 +320,9 @@ fun AddExpenseScreen(
                     )
                 )
 
-                // Time field
                 OutlinedTextField(
                     value = uiState.time,
-                    onValueChange = viewModel::updateTime,
+                    onValueChange = onTimeChange,
                     modifier = Modifier.weight(1f),
                     label = { Text("Время") },
                     placeholder = { Text("14:30", color = Slate500) },
@@ -304,10 +341,9 @@ fun AddExpenseScreen(
                 )
             }
 
-            // Notes field
             OutlinedTextField(
                 value = uiState.notes,
-                onValueChange = viewModel::updateNotes,
+                onValueChange = onNotesChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Заметки (опционально)") },
                 placeholder = { Text("Чаевые, детали...", color = Slate500) },
@@ -324,7 +360,7 @@ fun AddExpenseScreen(
                 keyboardActions = KeyboardActions(
                     onDone = { 
                         focusManager.clearFocus()
-                        if (uiState.isValid) viewModel.saveExpense() 
+                        if (uiState.isValid) onSave()
                     }
                 ),
                 minLines = 2,
@@ -332,7 +368,6 @@ fun AddExpenseScreen(
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Error message
             uiState.error?.let { errorText ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -360,10 +395,9 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Save button
             TrilooButton(
                 text = "Сохранить расход",
-                onClick = viewModel::saveExpense,
+                onClick = onSave,
                 enabled = uiState.isValid,
                 isLoading = uiState.isSaving,
                 icon = Icons.Rounded.Check,
@@ -374,7 +408,6 @@ fun AddExpenseScreen(
         }
     }
 
-    // Date picker dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = uiState.date?.atStartOfDay(ZoneId.systemDefault())
@@ -392,7 +425,7 @@ fun AddExpenseScreen(
                             val selectedDate = Instant.ofEpochMilli(millis)
                                 .atZone(ZoneId.systemDefault())
                                 .toLocalDate()
-                            viewModel.updateDate(selectedDate)
+                            onDateChange(selectedDate)
                         }
                         showDatePicker = false
                     }
@@ -414,6 +447,27 @@ fun AddExpenseScreen(
                 )
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun AddExpenseScreenPreview() {
+    TrilooTheme {
+        AddExpenseContent(
+            uiState = PreviewData.addExpenseState,
+            trip = PreviewData.trip,
+            onNavigateBack = {},
+            onAmountChange = {},
+            onCurrencyChange = {},
+            onDescriptionChange = {},
+            onCategoryChange = {},
+            onPayerChange = {},
+            onDateChange = { _ -> },
+            onTimeChange = {},
+            onNotesChange = {},
+            onSave = {}
+        )
     }
 }
 
