@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.os.LocaleListCompat
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.data.settings.AppLanguage
 import com.triloo.data.settings.ThemeMode
 import com.triloo.ui.navigation.TrilooNavHost
 import com.triloo.ui.settings.AppSettingsViewModel
@@ -34,6 +38,16 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+            }
+            val localeTag = when (uiState.language) {
+                AppLanguage.RU -> "ru"
+                AppLanguage.EN -> "en"
+            }
+
+            LaunchedEffect(uiState.language) {
+                AppCompatDelegate.setApplicationLocales(
+                    LocaleListCompat.forLanguageTags(localeTag)
+                )
             }
 
             TrilooTheme(darkTheme = darkTheme) {

@@ -1,5 +1,11 @@
 package com.triloo.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,11 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
+import androidx.core.content.PermissionChecker.PERMISSION_GRANTED
+import kotlinx.coroutines.launch
+import com.triloo.data.settings.AppLanguage
 import com.triloo.data.settings.ThemeMode
+import com.triloo.BuildConfig
 import androidx.compose.ui.tooling.preview.Preview
 import com.triloo.ui.PreviewData
 import com.triloo.ui.theme.*
@@ -40,7 +52,13 @@ fun SettingsScreen(
         onNavigateToGroupTrips = onNavigateToGroupTrips,
         onNavigateToAuth = onNavigateToAuth,
         onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
-        onThemeSelected = viewModel::setThemeMode
+        onThemeSelected = viewModel::setThemeMode,
+        onCurrencySelected = viewModel::setDefaultCurrency,
+        onLanguageSelected = viewModel::setLanguage,
+        onNotificationsToggle = viewModel::setNotificationsEnabled,
+        onSyncToggle = viewModel::setSyncEnabled,
+        onExportData = viewModel::exportData,
+        onClearData = viewModel::clearAllData
     )
 }
 
@@ -52,9 +70,45 @@ private fun SettingsContent(
     onNavigateToGroupTrips: () -> Unit,
     onNavigateToAuth: () -> Unit,
     onNavigateToPrivacyPolicy: () -> Unit,
-    onThemeSelected: (ThemeMode) -> Unit
+    onThemeSelected: (ThemeMode) -> Unit,
+    onCurrencySelected: (String) -> Unit,
+    onLanguageSelected: (AppLanguage) -> Unit,
+    onNotificationsToggle: (Boolean) -> Unit,
+    onSyncToggle: (Boolean) -> Unit,
+    onExportData: (Uri, (Boolean) -> Unit) -> Unit,
+    onClearData: ((Boolean) -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showCurrencyDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showClearDataDialog by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        onExportData(uri) { success ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    if (success) "Экспорт завершён" else "Не удалось экспортировать данные"
+                )
+            }
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        onNotificationsToggle(granted)
+        if (!granted) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("Разрешение на уведомления не выдано")
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -79,7 +133,8 @@ private fun SettingsContent(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -106,8 +161,8 @@ private fun SettingsContent(
                 SettingsItem(
                     icon = Icons.Rounded.AttachMoney,
                     title = "Валюта по умолчанию",
-                    subtitle = "RUB — Российский рубль",
-                    onClick = { /* TODO: Currency picker */ }
+                    subtitle = uiState.defaultCurrency,
+                    onClick = { showCurrencyDialog = true }
                 )
                 SettingsItem(
                     icon = Icons.Rounded.DarkMode,
@@ -118,36 +173,49 @@ private fun SettingsContent(
                 SettingsItem(
                     icon = Icons.Rounded.Language,
                     title = "Язык",
-                    subtitle = "Русский",
-                    onClick = { /* TODO: Language picker */ }
+                    subtitle = uiState.language.displayName,
+                    onClick = { showLanguageDialog = true }
                 )
                 SettingsSwitchItem(
                     icon = Icons.Rounded.Notifications,
                     title = "Уведомления",
                     subtitle = "Утренний план, за 1 час до места, окна между событиями",
-                    checked = true,
-                    onCheckedChange = { /* TODO */ }
+                    checked = uiState.notificationsEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled && Build.VERSION.SDK_INT >= 33) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PERMISSION_GRANTED
+                            if (!granted) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                return@SettingsSwitchItem
+                            }
+                        }
+                        onNotificationsToggle(enabled)
+                    }
                 )
             }
 
             SettingsSection(title = "Данные") {
-                SettingsItem(
+                SettingsSwitchItem(
                     icon = Icons.Rounded.CloudSync,
                     title = "Синхронизация",
                     subtitle = "Автоматическое резервное копирование",
-                    onClick = { /* TODO */ }
+                    checked = uiState.syncEnabled,
+                    onCheckedChange = onSyncToggle
                 )
                 SettingsItem(
                     icon = Icons.Rounded.FileDownload,
                     title = "Экспорт данных",
                     subtitle = "Скачать все поездки и расходы",
-                    onClick = { /* TODO */ }
+                    onClick = { exportLauncher.launch("triloo-export.json") }
                 )
                 SettingsItem(
                     icon = Icons.Rounded.DeleteForever,
                     title = "Очистить данные",
                     subtitle = "Удалить все локальные данные",
-                    onClick = { /* TODO: Confirmation dialog */ },
+                    onClick = { showClearDataDialog = true },
                     isDestructive = true
                 )
             }
@@ -156,7 +224,7 @@ private fun SettingsContent(
                 SettingsItem(
                     icon = Icons.Rounded.Info,
                     title = "Версия",
-                    subtitle = "1.0.0",
+                    subtitle = BuildConfig.VERSION_NAME,
                     onClick = { }
                 )
                 SettingsItem(
@@ -167,13 +235,13 @@ private fun SettingsContent(
                 SettingsItem(
                     icon = Icons.Rounded.Star,
                     title = "Оценить приложение",
-                    onClick = { /* TODO: Open Play Store */ }
+                    onClick = { openPlayStore(context) }
                 )
                 SettingsItem(
                     icon = Icons.Rounded.Feedback,
                     title = "Обратная связь",
                     subtitle = "Сообщить о проблеме",
-                    onClick = { /* TODO: Open email */ }
+                    onClick = { openFeedbackEmail(context) }
                 )
             }
 
@@ -218,6 +286,120 @@ private fun SettingsContent(
             }
         )
     }
+
+    if (showCurrencyDialog) {
+        val currencies = buildCurrencyOptions(uiState.defaultCurrency)
+        AlertDialog(
+            onDismissRequest = { showCurrencyDialog = false },
+            title = { Text("Валюта по умолчанию") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    currencies.forEach { currency ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onCurrencySelected(currency)
+                                    showCurrencyDialog = false
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = uiState.defaultCurrency == currency,
+                                onClick = {
+                                    onCurrencySelected(currency)
+                                    showCurrencyDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = currency)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCurrencyDialog = false }) {
+                    Text("Закрыть")
+                }
+            }
+        )
+    }
+
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Язык") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppLanguage.entries.forEach { language ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onLanguageSelected(language)
+                                    showLanguageDialog = false
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = uiState.language == language,
+                                onClick = {
+                                    onLanguageSelected(language)
+                                    showLanguageDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = language.displayName)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text("Закрыть")
+                }
+            }
+        )
+    }
+
+    if (showClearDataDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDataDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteForever,
+                    contentDescription = null,
+                    tint = Error
+                )
+            },
+            title = { Text("Удалить данные?") },
+            text = { Text("Все локальные поездки и расходы будут удалены.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDataDialog = false
+                        onClearData { success ->
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (success) "Данные очищены" else "Не удалось очистить данные"
+                                )
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Error)
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDataDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
 @Preview(showBackground = true)
@@ -230,7 +412,13 @@ private fun SettingsScreenPreview() {
             onNavigateToGroupTrips = {},
             onNavigateToAuth = {},
             onNavigateToPrivacyPolicy = {},
-            onThemeSelected = {}
+            onThemeSelected = {},
+            onCurrencySelected = {},
+            onLanguageSelected = {},
+            onNotificationsToggle = {},
+            onSyncToggle = {},
+            onExportData = { _, _ -> },
+            onClearData = { _ -> }
         )
     }
 }
@@ -357,5 +545,34 @@ private fun SettingsSwitchItem(
                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
+    }
+}
+
+private fun buildCurrencyOptions(current: String?): List<String> {
+    val normalized = current?.uppercase()
+    val defaults = listOf("RUB", "USD", "EUR", "GEL", "TRY", "THB", "AED", "KZT", "JPY", "CNY")
+    return listOfNotNull(normalized) + defaults.filter { it != normalized }
+}
+
+private fun openPlayStore(context: android.content.Context) {
+    val packageName = context.packageName
+    val marketUri = Uri.parse("market://details?id=$packageName")
+    val marketIntent = Intent(Intent.ACTION_VIEW, marketUri)
+    if (marketIntent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(marketIntent)
+        return
+    }
+    val webUri = Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+    val webIntent = Intent(Intent.ACTION_VIEW, webUri)
+    if (webIntent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(webIntent)
+    }
+}
+
+private fun openFeedbackEmail(context: android.content.Context) {
+    val mailUri = Uri.parse("mailto:hello@triloo.app?subject=Triloo%20Feedback")
+    val intent = Intent(Intent.ACTION_SENDTO, mailUri)
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
     }
 }
