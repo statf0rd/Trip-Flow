@@ -12,8 +12,10 @@ import com.triloo.data.model.ExpenseSummary
 import com.triloo.data.model.RelayEntityType
 import com.triloo.data.model.SplitType
 import com.triloo.data.user.UserProfileRepository
+import com.triloo.data.remote.CurrencyApi
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
+import kotlin.math.abs
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +24,8 @@ class ExpenseRepository @Inject constructor(
     private val expenseDao: ExpenseDao,
     private val tripDao: TripDao,
     private val deletionLogDao: DeletionLogDao,
-    private val userProfileRepository: UserProfileRepository
+    private val userProfileRepository: UserProfileRepository,
+    private val currencyApi: CurrencyApi
 ) {
     
     // Expense CRUD
@@ -254,9 +257,11 @@ class ExpenseRepository @Inject constructor(
     // Currency Rates
     
     suspend fun getCurrencyRate(from: String, to: String, date: LocalDate): Double? {
-        if (from == to) return 1.0
-        return expenseDao.getCurrencyRate(from, to, date)?.rate
-            ?: expenseDao.getLatestCurrencyRate(from, to)?.rate
+        val fromCode = from.uppercase()
+        val toCode = to.uppercase()
+        if (fromCode == toCode) return 1.0
+        return expenseDao.getCurrencyRate(fromCode, toCode, date)?.rate
+            ?: expenseDao.getLatestCurrencyRate(fromCode, toCode)?.rate
     }
     
     suspend fun saveCurrencyRate(from: String, to: String, rate: Double, date: LocalDate) {
@@ -269,5 +274,40 @@ class ExpenseRepository @Inject constructor(
                 date = date
             )
         )
+    }
+
+    suspend fun getOrFetchCurrencyRate(
+        from: String,
+        to: String,
+        date: LocalDate
+    ): Double? {
+        val fromCode = from.uppercase()
+        val toCode = to.uppercase()
+        if (fromCode == toCode) return 1.0
+
+        val cached = expenseDao.getCurrencyRate(fromCode, toCode, date)
+            ?: expenseDao.getLatestCurrencyRate(fromCode, toCode)
+        if (cached != null && !isRateStale(cached)) {
+            return cached.rate
+        }
+
+        val fetched = fetchLatestRate(fromCode, toCode) ?: return cached?.rate
+        saveCurrencyRate(fromCode, toCode, fetched, date)
+        return fetched
+    }
+
+    private fun isRateStale(rate: CurrencyRate): Boolean {
+        val now = System.currentTimeMillis()
+        return abs(now - rate.fetchedAt) > RATE_MAX_AGE_MS
+    }
+
+    private suspend fun fetchLatestRate(from: String, to: String): Double? {
+        val response = runCatching { currencyApi.latestRates(from) }.getOrNull() ?: return null
+        if (response.result != "success") return null
+        return response.rates[to]
+    }
+
+    companion object {
+        private const val RATE_MAX_AGE_MS = 24 * 60 * 60 * 1000L
     }
 }
