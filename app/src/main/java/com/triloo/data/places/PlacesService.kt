@@ -1,18 +1,21 @@
 package com.triloo.data.places
 
+import com.triloo.BuildConfig
 import com.triloo.data.model.PlaceCategory
+import com.triloo.data.remote.PlaceDetailsResult
+import com.triloo.data.remote.PlacesApi
+import com.triloo.data.remote.PlacesResult
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Service for searching places (Google Places API abstraction)
- * 
- * TODO: Implement real Google Places API integration
- * For now, uses mock data for demonstration
  */
 @Singleton
-class PlacesService @Inject constructor() {
+class PlacesService @Inject constructor(
+    private val placesApi: PlacesApi
+) {
     
     /**
      * Search for places by query text
@@ -27,30 +30,62 @@ class PlacesService @Inject constructor() {
         if (query.isBlank() || query.length < 2) {
             return emptyList()
         }
-        
-        // Simulate network delay
-        delay(300)
-        
-        // TODO: Replace with real Google Places API call
-        // val request = FindAutocompletePredictionsRequest.builder()
-        //     .setQuery(query)
-        //     .setLocationBias(...)
-        //     .build()
-        
-        return getMockSuggestions(query)
+
+        if (!hasValidApiKey()) {
+            return getMockSuggestions(query)
+        }
+
+        // Small debounce to keep UI smooth on fast typing.
+        delay(150)
+
+        val location = if (latitude != null && longitude != null) {
+            "${latitude},${longitude}"
+        } else {
+            null
+        }
+        val radiusValue = if (location == null) null else radius
+
+        return runCatching {
+            placesApi.textSearch(
+                query = query,
+                location = location,
+                radius = radiusValue,
+                apiKey = BuildConfig.MAPS_API_KEY
+            )
+        }.getOrNull()?.takeIf { it.status == "OK" }?.results?.mapNotNull { result ->
+            result.toSuggestion()
+        }.orEmpty()
     }
     
     /**
      * Get place details by place ID
      */
     suspend fun getPlaceDetails(placeId: String): PlaceDetails? {
-        // Simulate network delay
-        delay(200)
-        
-        // TODO: Replace with real Google Places API call
-        // val request = FetchPlaceRequest.newInstance(placeId, placeFields)
-        
-        return mockPlaceDetails[placeId]
+        if (!hasValidApiKey()) {
+            return mockPlaceDetails[placeId]
+        }
+
+        val fields = listOf(
+            "place_id",
+            "name",
+            "formatted_address",
+            "geometry",
+            "types",
+            "rating",
+            "price_level",
+            "formatted_phone_number",
+            "website",
+            "opening_hours",
+            "photos"
+        ).joinToString(",")
+
+        return runCatching {
+            placesApi.details(
+                placeId = placeId,
+                fields = fields,
+                apiKey = BuildConfig.MAPS_API_KEY
+            )
+        }.getOrNull()?.takeIf { it.status == "OK" }?.result?.toPlaceDetails()
     }
     
     /**
@@ -62,10 +97,20 @@ class PlacesService @Inject constructor() {
         radius: Int = 1000,
         type: String? = null
     ): List<PlaceSuggestion> {
-        delay(300)
-        
-        // TODO: Replace with real Google Places API call
-        return emptyList()
+        if (!hasValidApiKey()) {
+            return emptyList()
+        }
+
+        return runCatching {
+            placesApi.nearbySearch(
+                location = "${latitude},${longitude}",
+                radius = radius,
+                type = type,
+                apiKey = BuildConfig.MAPS_API_KEY
+            )
+        }.getOrNull()?.takeIf { it.status == "OK" }?.results?.mapNotNull { result ->
+            result.toSuggestion()
+        }.orEmpty()
     }
     
     // Mock data for development
@@ -185,6 +230,48 @@ class PlacesService @Inject constructor() {
             website = "https://example.com"
         )
     }
+
+    private fun hasValidApiKey(): Boolean {
+        val apiKey = BuildConfig.MAPS_API_KEY
+        return apiKey.isNotBlank() && !apiKey.contains("YOUR_GOOGLE_MAPS_API_KEY")
+    }
+
+    private fun PlacesResult.toSuggestion(): PlaceSuggestion? {
+        val location = geometry?.location ?: return null
+        return PlaceSuggestion(
+            placeId = placeId,
+            name = name,
+            address = formattedAddress ?: vicinity.orEmpty(),
+            category = PlaceCategory.fromGoogleType(types.orEmpty()),
+            latitude = location.lat,
+            longitude = location.lng,
+            rating = rating
+        )
+    }
+
+    private fun PlaceDetailsResult.toPlaceDetails(): PlaceDetails? {
+        val location = geometry?.location ?: return null
+        return PlaceDetails(
+            placeId = placeId,
+            name = name,
+            address = formattedAddress.orEmpty(),
+            latitude = location.lat,
+            longitude = location.lng,
+            category = PlaceCategory.fromGoogleType(types.orEmpty()),
+            rating = rating,
+            priceLevel = priceLevel,
+            openingHours = openingHours?.weekdayText?.joinToString("\n"),
+            phoneNumber = phoneNumber,
+            website = website,
+            photoUrl = buildPhotoUrl(photos?.firstOrNull()?.photoReference)
+        )
+    }
+
+    private fun buildPhotoUrl(photoReference: String?): String? {
+        if (photoReference.isNullOrBlank()) return null
+        return "https://maps.googleapis.com/maps/api/place/photo" +
+            "?maxwidth=1200&photo_reference=$photoReference&key=${BuildConfig.MAPS_API_KEY}"
+    }
 }
 
 /**
@@ -217,6 +304,3 @@ data class PlaceDetails(
     val website: String? = null,
     val photoUrl: String? = null
 )
-
-
-
