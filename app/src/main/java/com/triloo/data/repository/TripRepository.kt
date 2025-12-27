@@ -26,6 +26,8 @@ class TripRepository @Inject constructor(
     // Trip Operations
     
     fun observeAllTrips(): Flow<List<Trip>> = tripDao.observeAllTrips()
+
+    suspend fun getAllTrips(): List<Trip> = tripDao.getAllTrips()
     
     fun observeTripById(tripId: String): Flow<Trip?> = tripDao.observeTripById(tripId)
     

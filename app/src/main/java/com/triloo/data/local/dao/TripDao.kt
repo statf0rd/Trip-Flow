@@ -39,6 +39,9 @@ interface TripDao {
     
     @Query("SELECT * FROM trips ORDER BY startDate DESC")
     fun observeAllTrips(): Flow<List<Trip>>
+
+    @Query("SELECT * FROM trips ORDER BY startDate DESC")
+    suspend fun getAllTrips(): List<Trip>
     
     @Query("SELECT * FROM trips WHERE status = :status ORDER BY startDate DESC")
     fun observeTripsByStatus(status: TripStatus): Flow<List<Trip>>
@@ -131,4 +134,3 @@ interface TripDao {
         timestamp: Long
     )
 }
-
