@@ -16,11 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import android.net.Uri
 import com.triloo.data.model.Place
 import com.triloo.data.model.PlaceCategory
 import com.triloo.ui.components.*
@@ -32,7 +35,7 @@ import com.triloo.ui.theme.TrilooTheme
 @Composable
 fun PlaceDetailsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToEdit: (String) -> Unit = {}, // TODO: Edit place
+    onNavigateToEdit: (String) -> Unit = {},
     viewModel: PlaceDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -147,6 +150,7 @@ private fun PlaceDetailsContent(
     onMarkVisited: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -329,7 +333,7 @@ private fun PlaceDetailsContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { /* TODO: Open in Maps */ },
+                onClick = { openInMaps(context, place) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(14.dp)
             ) {
@@ -343,7 +347,7 @@ private fun PlaceDetailsContent(
             }
             
             OutlinedButton(
-                onClick = { /* TODO: Build route */ },
+                onClick = { buildRoute(context, place) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(14.dp)
             ) {
@@ -358,6 +362,33 @@ private fun PlaceDetailsContent(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+private fun openInMaps(context: android.content.Context, place: Place) {
+    val query = Uri.encode(place.name)
+    val uri = Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}($query)")
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+    }
+}
+
+private fun buildRoute(context: android.content.Context, place: Place) {
+    val navigationUri = Uri.parse("google.navigation:q=${place.latitude},${place.longitude}")
+    val navigationIntent = Intent(Intent.ACTION_VIEW, navigationUri)
+        .setPackage("com.google.android.apps.maps")
+    if (navigationIntent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(navigationIntent)
+        return
+    }
+
+    val fallbackUri = Uri.parse(
+        "https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}"
+    )
+    val fallbackIntent = Intent(Intent.ACTION_VIEW, fallbackUri)
+    if (fallbackIntent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(fallbackIntent)
     }
 }
 

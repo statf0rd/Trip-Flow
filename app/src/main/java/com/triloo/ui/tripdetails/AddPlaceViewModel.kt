@@ -13,6 +13,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -108,7 +110,9 @@ class AddPlaceViewModel @Inject constructor(
     private suspend fun searchPlaces(query: String) {
         _uiState.update { it.copy(isSearching = true) }
         try {
-            val results = placesService.searchPlaces(query)
+            val results = withContext(Dispatchers.IO) {
+                placesService.searchPlaces(query)
+            }
             _suggestions.value = results
         } catch (e: Exception) {
             _suggestions.value = emptyList()
