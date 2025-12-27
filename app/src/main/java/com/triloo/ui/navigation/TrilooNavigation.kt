@@ -466,8 +466,6 @@ fun TrilooNavHost(
                 ) + fadeOut()
             }
         ) {
-            // TODO: Implement EditExpenseScreen
-            // For now, use AddExpenseScreen with edit mode
             AddExpenseScreen(
                 onNavigateBack = { navController.popBackStack() }
             )

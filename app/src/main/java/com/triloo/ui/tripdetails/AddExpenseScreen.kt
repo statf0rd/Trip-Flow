@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.triloo.data.model.Trip
 import com.triloo.data.model.ExpenseCategory
+import com.triloo.data.model.Participant
+import com.triloo.data.model.SplitType
+import com.triloo.data.model.Trip
 import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
@@ -47,13 +49,8 @@ fun AddExpenseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val trip by viewModel.trip.collectAsStateWithLifecycle()
-    val scrollState = rememberScrollState()
+    val participants by viewModel.participants.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
-    val dateFormatter = remember {
-        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ru"))
-    }
-
-    var showDatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
@@ -64,6 +61,7 @@ fun AddExpenseScreen(
     AddExpenseContent(
         uiState = uiState,
         trip = trip,
+        participants = participants,
         onNavigateBack = onNavigateBack,
         onAmountChange = viewModel::updateAmount,
         onCurrencyChange = viewModel::updateCurrency,
@@ -73,6 +71,8 @@ fun AddExpenseScreen(
         onDateChange = viewModel::updateDate,
         onTimeChange = viewModel::updateTime,
         onNotesChange = viewModel::updateNotes,
+        onSplitTypeChange = viewModel::updateSplitType,
+        onSplitAmountChange = viewModel::updateSplitAmount,
         onSave = viewModel::saveExpense,
         focusManager = focusManager
     )
@@ -83,6 +83,7 @@ fun AddExpenseScreen(
 private fun AddExpenseContent(
     uiState: AddExpenseUiState,
     trip: Trip?,
+    participants: List<Participant>,
     onNavigateBack: () -> Unit,
     onAmountChange: (String) -> Unit,
     onCurrencyChange: (String) -> Unit,
@@ -92,6 +93,8 @@ private fun AddExpenseContent(
     onDateChange: (LocalDate) -> Unit,
     onTimeChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
+    onSplitTypeChange: (SplitType) -> Unit,
+    onSplitAmountChange: (String, String) -> Unit,
     onSave: () -> Unit,
     focusManager: FocusManager = LocalFocusManager.current
 ) {
@@ -104,7 +107,12 @@ private fun AddExpenseContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Добавить расход", fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text(
+                        text = if (uiState.isEditing) "Редактировать расход" else "Добавить расход",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -207,6 +215,21 @@ private fun AddExpenseContent(
                         )
                     }
                 }
+
+                if (uiState.currency != (trip?.baseCurrency ?: uiState.currency)) {
+                    val rateText = if (uiState.isRateLoading) {
+                        "Обновление курса..."
+                    } else if (uiState.rateError != null) {
+                        uiState.rateError
+                    } else {
+                        "1 ${uiState.currency} ≈ ${String.format(Locale.US, "%.4f", uiState.exchangeRate)} ${trip?.baseCurrency}"
+                    }
+                    Text(
+                        text = rateText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (uiState.rateError != null) Error else Slate500
+                    )
+                }
             }
 
             OutlinedTextField(
@@ -270,6 +293,15 @@ private fun AddExpenseContent(
                     }
                 }
             }
+
+            ExpenseSplitSection(
+                splitType = uiState.splitType,
+                participants = participants,
+                amount = uiState.amount,
+                splitAmounts = uiState.splitAmounts,
+                onSplitTypeChange = onSplitTypeChange,
+                onSplitAmountChange = onSplitAmountChange
+            )
 
             OutlinedTextField(
                 value = uiState.paidBy,
@@ -396,7 +428,7 @@ private fun AddExpenseContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             TrilooButton(
-                text = "Сохранить расход",
+                text = if (uiState.isEditing) "Сохранить расход" else "Добавить расход",
                 onClick = onSave,
                 enabled = uiState.isValid,
                 isLoading = uiState.isSaving,
@@ -450,6 +482,121 @@ private fun AddExpenseContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExpenseSplitSection(
+    splitType: SplitType,
+    participants: List<Participant>,
+    amount: String,
+    splitAmounts: Map<String, String>,
+    onSplitTypeChange: (SplitType) -> Unit,
+    onSplitAmountChange: (String, String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Разделить",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = Slate700
+        )
+
+        val splitOptions = listOf(
+            SplitType.PAYER_ONLY,
+            SplitType.EQUAL,
+            SplitType.EXACT
+        )
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            splitOptions.forEach { type ->
+                FilterChip(
+                    selected = splitType == type,
+                    onClick = { onSplitTypeChange(type) },
+                    label = { Text(type.displayName) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = CoralPrimary.copy(alpha = 0.15f),
+                        selectedLabelColor = CoralPrimary
+                    )
+                )
+            }
+        }
+
+        if (splitType == SplitType.PAYER_ONLY) {
+            Text(
+                text = "Расход учитывается только для плательщика",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate600
+            )
+            return
+        }
+
+        if (participants.isEmpty()) {
+            Text(
+                text = "Добавьте участников, чтобы разделить расход",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate600
+            )
+            return
+        }
+
+        val amountValue = amount.replace(",", ".").toDoubleOrNull()
+        participants.forEach { participant ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = participant.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (splitType == SplitType.EQUAL) {
+                    val share = if (amountValue != null && amountValue > 0) {
+                        amountValue / participants.size
+                    } else null
+                    Text(
+                        text = share?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate600
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = splitAmounts[participant.userId].orEmpty(),
+                        onValueChange = { onSplitAmountChange(participant.userId, it) },
+                        modifier = Modifier.width(120.dp),
+                        placeholder = { Text("0") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+        }
+
+        if (splitType == SplitType.EXACT && amountValue != null) {
+            val splitSum = splitAmounts.values.sumOf {
+                it.replace(",", ".").toDoubleOrNull() ?: 0.0
+            }
+            val diff = amountValue - splitSum
+            val diffText = if (kotlin.math.abs(diff) < 0.01) {
+                "Сумма распределена полностью"
+            } else {
+                "Осталось распределить: ${String.format(Locale.US, "%.2f", diff)}"
+            }
+            Text(
+                text = diffText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (kotlin.math.abs(diff) < 0.01) TealDark else Slate600
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun AddExpenseScreenPreview() {
@@ -457,6 +604,7 @@ private fun AddExpenseScreenPreview() {
         AddExpenseContent(
             uiState = PreviewData.addExpenseState,
             trip = PreviewData.trip,
+            participants = emptyList(),
             onNavigateBack = {},
             onAmountChange = {},
             onCurrencyChange = {},
@@ -466,6 +614,8 @@ private fun AddExpenseScreenPreview() {
             onDateChange = { _ -> },
             onTimeChange = {},
             onNotesChange = {},
+            onSplitTypeChange = {},
+            onSplitAmountChange = { _, _ -> },
             onSave = {}
         )
     }
