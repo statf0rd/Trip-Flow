@@ -4,18 +4,25 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.triloo.data.model.*
+import com.triloo.data.route.RouteDetails
+import com.triloo.data.route.RouteOptimizer
 import com.triloo.data.repository.ExpenseRepository
 import com.triloo.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class TripDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val tripRepository: TripRepository,
-    private val expenseRepository: ExpenseRepository
+    private val expenseRepository: ExpenseRepository,
+    private val routeOptimizer: RouteOptimizer
 ) : ViewModel() {
     
     private val tripId: String = savedStateHandle.get<String>("tripId") 
@@ -47,11 +54,32 @@ class TripDetailsViewModel @Inject constructor(
         )
     }
 
+    private val balancesState: Flow<List<Balance>> =
+        expenseRepository.observeExpensesByTrip(tripId)
+            .mapLatest {
+                withContext(Dispatchers.IO) {
+                    expenseRepository.calculateBalances(tripId)
+                }
+            }
+            .catch { emit(emptyList()) }
+
+    private val routeState: Flow<RouteDetails?> = tripPlanState
+        .mapLatest { plan ->
+            val ordered = orderPlacesForRoute(plan.days, plan.places)
+            if (ordered.size < 2) return@mapLatest null
+            withContext(Dispatchers.IO) {
+                routeOptimizer.calculateRoute(ordered)
+            }
+        }
+        .catch { emit(null) }
+
     val uiState: StateFlow<TripDetailsUiState> = combine(
         tripPlanState,
         expenseState,
+        balancesState,
+        routeState,
         _isDeleted
-    ) { plan, expense, isDeleted ->
+    ) { plan, expense, balances, routeDetails, isDeleted ->
         TripDetailsUiState(
             trip = plan.trip,
             days = plan.days,
@@ -59,6 +87,8 @@ class TripDetailsViewModel @Inject constructor(
             participants = plan.participants,
             expenses = expense.expenses,
             totalExpenses = expense.totalExpenses,
+            balances = balances,
+            routeDetails = routeDetails,
             isLoading = false,
             isDeleted = isDeleted
         )
@@ -94,12 +124,38 @@ class TripDetailsViewModel @Inject constructor(
     }
     
     fun optimizeRoute() {
-        // TODO: Implement route optimization
-        // This will be implemented in RouteOptimizer service
         viewModelScope.launch {
-            // For now, just reorder places by proximity (nearest neighbor heuristic)
-            // Will be enhanced with AI/ML later
+            runCatching {
+                val trip = tripRepository.getTripById(tripId) ?: return@runCatching
+                val days = tripRepository.getTripDays(tripId)
+                val places = tripRepository.getPlacesByTrip(tripId)
+                val startLocation = trip.hotelLatitude?.let { lat ->
+                    trip.hotelLongitude?.let { lon -> com.triloo.data.route.LatLng(lat, lon) }
+                }
+
+                days.forEach { day ->
+                    val dayPlaces = places.filter { it.tripDayId == day.id }
+                    if (dayPlaces.size < 2) return@forEach
+                    val result = routeOptimizer.optimizeRoute(dayPlaces, startLocation)
+                    val orderedIds = result.optimizedPlaces.map { it.id }
+                    tripRepository.reorderPlaces(day.id, orderedIds)
+                }
+            }
         }
+    }
+
+    private fun orderPlacesForRoute(
+        days: List<TripDay>,
+        places: List<Place>
+    ): List<Place> {
+        if (places.isEmpty()) return emptyList()
+        val dayOrder = days.sortedBy { it.dayNumber }.mapIndexed { index, day ->
+            day.id to index
+        }.toMap()
+        return places.sortedWith(
+            compareBy<Place> { dayOrder[it.tripDayId] ?: Int.MAX_VALUE }
+                .thenBy { it.orderIndex }
+        )
     }
 }
 
@@ -123,6 +179,7 @@ data class TripDetailsUiState(
     val expenses: List<Expense> = emptyList(),
     val totalExpenses: Double = 0.0,
     val balances: List<Balance> = emptyList(),
+    val routeDetails: RouteDetails? = null,
     val isLoading: Boolean = false,
     val isDeleted: Boolean = false,
     val error: String? = null

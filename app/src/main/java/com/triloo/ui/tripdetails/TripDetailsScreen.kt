@@ -126,12 +126,14 @@ fun TripDetailsScreen(
                         1 -> MapTab(
                             trip = uiState.trip!!,
                             places = uiState.places,
-                            participants = uiState.participants
+                            participants = uiState.participants,
+                            routeDetails = uiState.routeDetails
                         )
                         2 -> ExpensesTab(
                             expenses = uiState.expenses,
                             totalAmount = uiState.totalExpenses,
                             currency = uiState.trip!!.baseCurrency,
+                            balances = uiState.balances,
                             onExpenseClick = { expenseId -> 
                                 onNavigateToEditExpense(tripId, expenseId) 
                             },
@@ -435,12 +437,14 @@ private fun TripDetailsScreenPreview() {
                     1 -> MapTab(
                         trip = uiState.trip!!,
                         places = uiState.places,
-                        participants = uiState.participants
+                        participants = uiState.participants,
+                        routeDetails = uiState.routeDetails
                     )
                     else -> ExpensesTab(
                         expenses = uiState.expenses,
                         totalAmount = uiState.totalExpenses,
                         currency = uiState.trip!!.baseCurrency,
+                        balances = uiState.balances,
                         onExpenseClick = {},
                         onAddExpense = {},
                         onDeleteExpense = {}
