@@ -19,13 +19,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng as MapsLatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.maps.android.PolyUtil
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.MapsComposeExperimentalApi
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.TileOverlay
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.heatmaps.HeatmapTileProvider
+import com.google.maps.android.heatmaps.WeightedLatLng
 import com.triloo.data.heatmap.CategoryHeatmapCalculator
 import com.triloo.data.heatmap.HeatmapConfig
 import com.triloo.data.model.*
+import com.triloo.data.route.RouteDetails
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import java.time.LocalDate
@@ -774,48 +793,175 @@ private fun TimelineEventCard(
 // MAP TAB
 
 @Composable
+@OptIn(MapsComposeExperimentalApi::class)
 fun MapTab(
     trip: Trip,
     places: List<Place>,
-    participants: List<Participant>
+    participants: List<Participant>,
+    routeDetails: RouteDetails? = null
 ) {
-    // Placeholder for Google Maps integration
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Slate100),
-        contentAlignment = Alignment.Center
-    ) {
+    val validPlaces = remember(places) { places.filter { it.latitude != 0.0 && it.longitude != 0.0 } }
+    val participantPoints = remember(participants) {
+        participants.filter { it.shareLocation }.mapNotNull { participant ->
+            val lat = participant.lastLatitude
+            val lon = participant.lastLongitude
+            if (lat != null && lon != null) {
+                participant to MapsLatLng(lat, lon)
+            } else null
+        }
+    }
+
+    val allPoints = remember(validPlaces, participantPoints, trip) {
+        val points = mutableListOf<MapsLatLng>()
+        validPlaces.forEach { points.add(MapsLatLng(it.latitude, it.longitude)) }
+        participantPoints.forEach { points.add(it.second) }
+        if (points.isEmpty()) {
+            val hotelLat = trip.hotelLatitude
+            val hotelLon = trip.hotelLongitude
+            if (hotelLat != null && hotelLon != null) {
+                points.add(MapsLatLng(hotelLat, hotelLon))
+            }
+        }
+        points
+    }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(
+            allPoints.firstOrNull() ?: MapsLatLng(0.0, 0.0),
+            if (allPoints.isEmpty()) 2f else 12f
+        )
+    }
+    val uiSettings = remember {
+        MapUiSettings(
+            zoomControlsEnabled = false,
+            myLocationButtonEnabled = false
+        )
+    }
+    val mapProperties = remember { MapProperties(isMyLocationEnabled = false) }
+
+    LaunchedEffect(allPoints) {
+        if (allPoints.isEmpty()) return@LaunchedEffect
+        if (allPoints.size == 1) {
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(allPoints.first(), 13f)
+            return@LaunchedEffect
+        }
+        val bounds = LatLngBounds.builder().apply {
+            allPoints.forEach { include(it) }
+        }.build()
+        runCatching {
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngBounds(bounds, 120)
+            )
+        }
+    }
+
+    val ratedPlaces = remember(validPlaces) { validPlaces.filter { it.rating != null } }
+    val categories = remember(ratedPlaces) {
+        ratedPlaces
+            .groupBy { it.category }
+            .entries
+            .sortedByDescending { it.value.size }
+            .map { it.key }
+    }
+    var selectedCategory by remember(ratedPlaces) {
+        mutableStateOf(categories.firstOrNull() ?: PlaceCategory.RESTAURANT)
+    }
+    val calculator = remember { CategoryHeatmapCalculator() }
+    val heatmapCells = remember(ratedPlaces, selectedCategory) {
+        calculator.buildHeatmap(
+            places = ratedPlaces,
+            category = selectedCategory,
+            config = HeatmapConfig()
+        )
+    }
+    val heatmapProvider = remember(heatmapCells) {
+        if (heatmapCells.isEmpty()) return@remember null
+        val weighted = heatmapCells.map {
+            WeightedLatLng(
+                MapsLatLng(it.centerLatitude, it.centerLongitude),
+                (it.score * 10f).coerceAtLeast(0.2f).toDouble()
+            )
+        }
+        HeatmapTileProvider.Builder()
+            .weightedData(weighted)
+            .radius(50)
+            .build()
+    }
+
+    val polylinePoints = remember(routeDetails, validPlaces) {
+        val encoded = routeDetails?.polylineEncoded
+        if (!encoded.isNullOrBlank()) {
+            PolyUtil.decode(encoded).map { MapsLatLng(it.latitude, it.longitude) }
+        } else {
+            validPlaces.map { MapsLatLng(it.latitude, it.longitude) }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = mapProperties,
+            uiSettings = uiSettings
+        ) {
+            heatmapProvider?.let { provider ->
+                TileOverlay(tileProvider = provider)
+            }
+
+            if (polylinePoints.size >= 2) {
+                Polyline(
+                    points = polylinePoints,
+                    color = CoralPrimary,
+                    width = 10f
+                )
+            }
+
+            validPlaces.forEach { place ->
+                Marker(
+                    state = MarkerState(position = MapsLatLng(place.latitude, place.longitude)),
+                    title = place.name,
+                    snippet = place.address
+                )
+            }
+
+            participantPoints.forEach { (participant, position) ->
+                Marker(
+                    state = MarkerState(position = position),
+                    title = participant.displayName,
+                    snippet = "Участник",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                )
+            }
+        }
+
+        if (validPlaces.isEmpty() && participantPoints.isEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(20.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White.copy(alpha = 0.9f)
+            ) {
+                Text(
+                    text = "Добавьте места, чтобы увидеть маршрут на карте",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate700,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "🗺️",
-                style = MaterialTheme.typography.displayLarge
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Карта",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Здесь будет карта с маршрутом\nи позициями участников",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate600
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Quick stats
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 InfoChip(
                     icon = Icons.Rounded.Place,
-                    text = "${places.size} мест"
+                    text = "${validPlaces.size} мест"
                 )
                 if (participants.isNotEmpty()) {
                     InfoChip(
