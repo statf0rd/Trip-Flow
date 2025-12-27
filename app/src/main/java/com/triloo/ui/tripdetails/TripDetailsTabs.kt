@@ -970,9 +970,64 @@ fun MapTab(
                     )
                 }
             }
+            routeDetails?.let { details ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Маршрут: ${(details.totalDistanceMeters / 1000.0).let { String.format(Locale.US, "%.1f", it) }} км • ${details.totalDurationMinutes} мин",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate700
+                )
+            }
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            HeatmapPreview(places = places)
+        if (categories.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = Color.White.copy(alpha = 0.95f),
+                shadowElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(14.dp)
+                        .widthIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Heatmap по отзывам",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(categories) { category ->
+                            val isSelected = category == selectedCategory
+                            TrilooChip(
+                                text = category.displayName,
+                                emoji = category.emoji,
+                                color = if (isSelected) CoralSubtle else Slate100,
+                                textColor = if (isSelected) CoralPrimary else Slate600,
+                                onClick = { selectedCategory = category }
+                            )
+                        }
+                    }
+                    if (heatmapCells.isNotEmpty()) {
+                        val topCell = heatmapCells.first()
+                        Text(
+                            text = "Сильная зона: ${formatHeatmapScore(topCell.score)} • ${topCell.placeCount} мест",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate600
+                        )
+                    } else {
+                        Text(
+                            text = "Недостаточно рейтингов для heatmap",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate600
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1627,7 +1682,8 @@ private fun MapTabPreview() {
         MapTab(
             trip = TripDetailsPreviewData.trip,
             places = TripDetailsPreviewData.places,
-            participants = TripDetailsPreviewData.participants
+            participants = TripDetailsPreviewData.participants,
+            routeDetails = null
         )
     }
 }
