@@ -80,7 +80,7 @@ app/src/main/java/com/triloo/
 │   ├── relay/           # Triloo Relay (offline sync)
 │   ├── settings/        # App settings (theme, prefs)
 │   ├── user/            # Local user profile
-│   ├── remote/          # API services
+│   ├── remote/          # API clients (Places, Directions, Currency)
 │   └── repository/      # Repository implementations
 ├── di/                  # Hilt modules
 ├── ui/
