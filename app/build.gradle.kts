@@ -63,6 +63,7 @@ secrets {
 dependencies {
     // Core Android
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -112,9 +113,11 @@ dependencies {
     // Google Maps
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
+    implementation(libs.play.services.auth)
     implementation(libs.maps.compose)
     implementation(libs.maps.compose.utils)
     implementation(libs.android.maps.utils)
+    implementation(libs.google.places)
 
     // QR / ZXing
     implementation(libs.zxing.core)
