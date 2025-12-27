@@ -10,6 +10,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.triloo.BuildConfig
 import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.components.ButtonStyle
@@ -34,8 +40,6 @@ import com.triloo.ui.theme.TrilooTheme
 
 /**
  * Sign In Screen
- * 
- * TODO: Connect to AuthViewModel and real authentication
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +51,33 @@ fun SignInScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val authState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val googleClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+    val isGoogleConfigured = remember(googleClientId) {
+        googleClientId.isNotBlank() && !googleClientId.contains("YOUR_GOOGLE_WEB_CLIENT_ID")
+    }
+    val googleSignInClient = remember(googleClientId) {
+        GoogleSignIn.getClient(
+            context,
+            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .requestIdToken(googleClientId)
+                .build()
+        )
+    }
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken.orEmpty()
+            viewModel.signInWithGoogle(idToken)
+        } catch (e: ApiException) {
+            viewModel.signInWithGoogle("")
+        }
+    }
+
     SignInContent(
         authState = authState,
         onNavigateBack = onNavigateBack,
@@ -54,6 +85,13 @@ fun SignInScreen(
         onNavigateToSignUp = onNavigateToSignUp,
         onNavigateToForgotPassword = onNavigateToForgotPassword,
         onSignIn = { email, password -> viewModel.signIn(email, password) },
+        onGoogleSignIn = {
+            if (!isGoogleConfigured) {
+                viewModel.signInWithGoogle("")
+                return@SignInContent
+            }
+            googleLauncher.launch(googleSignInClient.signInIntent)
+        },
         onClearError = viewModel::clearError
     )
 }
@@ -67,6 +105,7 @@ fun SignInContent(
     onNavigateToSignUp: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     onSignIn: (String, String) -> Unit,
+    onGoogleSignIn: () -> Unit,
     onClearError: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
@@ -249,10 +288,11 @@ fun SignInContent(
             Spacer(modifier = Modifier.height(24.dp))
             
             OutlinedButton(
-                onClick = { /* TODO: Launch Google Sign-In flow */ },
+                onClick = onGoogleSignIn,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                contentPadding = PaddingValues(vertical = 14.dp)
+                contentPadding = PaddingValues(vertical = 14.dp),
+                enabled = !authState.isLoading
             ) {
                 Text(
                     text = "G",
@@ -292,8 +332,6 @@ fun SignInContent(
 
 /**
  * Sign Up Screen
- * 
- * TODO: Connect to AuthViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -314,8 +352,6 @@ fun SignUpScreen(
 
 /**
  * Forgot Password Screen
- * 
- * TODO: Connect to AuthViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -544,8 +580,6 @@ fun SignUpContent(
 
 /**
  * Forgot Password Screen
- * 
- * TODO: Connect to AuthViewModel
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -713,6 +747,7 @@ private fun SignInContentPreview() {
             onNavigateToSignUp = {},
             onNavigateToForgotPassword = {},
             onSignIn = { _, _ -> },
+            onGoogleSignIn = {},
             onClearError = {}
         )
     }

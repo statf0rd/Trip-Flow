@@ -1,7 +1,7 @@
 package com.triloo.di
 
 import com.triloo.data.auth.AuthRepository
-import com.triloo.data.auth.FakeAuthRepository
+import com.triloo.data.auth.LocalAuthRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -15,6 +15,6 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(
-        repository: FakeAuthRepository
+        repository: LocalAuthRepository
     ): AuthRepository
 }

@@ -168,9 +168,10 @@ git clone https://github.com/statf0rd/Trip-Flow.git
 cd Trip-Flow
 ```
 
-2. Добавьте Google Maps API ключ в `local.properties`:
+2. Добавьте Google Maps API ключ и Google Web Client ID в `local.properties`:
 ```properties
 MAPS_API_KEY=YOUR_API_KEY_HERE
+GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
 3. Откройте проект в Android Studio и запустите синхронизацию Gradle
@@ -194,5 +195,7 @@ MIT License — см. [LICENSE](LICENSE)
 ## 👨‍💻 Автор
 
 **Stanislav** — [@statf0rd](https://github.com/statf0rd)
+
+
 
 

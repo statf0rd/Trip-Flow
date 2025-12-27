@@ -52,6 +52,7 @@ private fun AuthFlowScreenPreview() {
                 onNavigateToSignUp = { step = AuthStep.SignUp },
                 onNavigateToForgotPassword = { step = AuthStep.ForgotPassword },
                 onSignIn = { _, _ -> },
+                onGoogleSignIn = {},
                 onClearError = {}
             )
             AuthStep.SignUp -> SignUpContent(

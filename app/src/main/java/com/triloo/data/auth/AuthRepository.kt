@@ -1,5 +1,7 @@
 package com.triloo.data.auth
 
+import android.util.Base64
+import com.google.gson.Gson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,9 +10,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Authentication Repository Interface
- * 
- * TODO: Implement real authentication with Firebase Auth or custom backend
+ * Authentication Repository Interface.
+ * Use LocalAuthRepository by default; replace with Firebase/custom backend when ready.
  */
 interface AuthRepository {
     /** Current auth state */
@@ -42,12 +43,12 @@ interface AuthRepository {
 }
 
 /**
- * Fake implementation for development
- * 
- * TODO: Replace with real implementation (Firebase/custom backend)
+ * Local implementation backed by in-memory storage with Google ID token parsing.
+ * Replace with Firebase/custom backend when backend is ready.
  */
 @Singleton
-class FakeAuthRepository @Inject constructor() : AuthRepository {
+class LocalAuthRepository @Inject constructor() : AuthRepository {
+    private val gson = Gson()
     
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     override val authState: Flow<AuthState> = _authState.asStateFlow()
@@ -55,7 +56,7 @@ class FakeAuthRepository @Inject constructor() : AuthRepository {
     private var _currentUser: User? = null
     override val currentUser: User? get() = _currentUser
     
-    // Fake user storage for development
+    // Local user storage for development
     private val fakeUsers = mutableMapOf<String, Pair<User, String>>() // email -> (user, password)
     
     init {
@@ -142,13 +143,18 @@ class FakeAuthRepository @Inject constructor() : AuthRepository {
         // Simulate network delay
         delay(1500)
         
-        // TODO: Implement real Google Sign-In
-        // For now, create a fake Google user
+        if (idToken.isBlank()) {
+            val message = "Google Sign-In не настроен (проверьте GOOGLE_WEB_CLIENT_ID)"
+            _authState.value = AuthState.Error(message)
+            return AuthResult.Failure(AuthError.Unknown(message))
+        }
+
+        val tokenPayload = parseGoogleToken(idToken)
         val googleUser = User(
-            id = "google-user-${idToken.take(8)}",
-            email = "google.user@gmail.com",
-            displayName = "Google Пользователь",
-            avatarUrl = "https://lh3.googleusercontent.com/a/default-user"
+            id = tokenPayload?.sub ?: "google-user-${idToken.take(8)}",
+            email = tokenPayload?.email ?: "google.user@gmail.com",
+            displayName = tokenPayload?.name ?: "Google Пользователь",
+            avatarUrl = tokenPayload?.picture
         )
         
         _currentUser = googleUser
@@ -206,7 +212,24 @@ class FakeAuthRepository @Inject constructor() : AuthRepository {
     private fun isValidEmail(email: String): Boolean {
         return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
+
+    private fun parseGoogleToken(idToken: String): GoogleTokenPayload? {
+        return runCatching {
+            val parts = idToken.split(".")
+            if (parts.size < 2) return null
+            val decoded = Base64.decode(
+                parts[1],
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            )
+            val json = String(decoded, Charsets.UTF_8)
+            gson.fromJson(json, GoogleTokenPayload::class.java)
+        }.getOrNull()
+    }
 }
 
-
-
+private data class GoogleTokenPayload(
+    val sub: String?,
+    val email: String?,
+    val name: String?,
+    val picture: String?
+)
