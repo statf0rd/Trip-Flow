@@ -1157,6 +1157,7 @@ fun ExpensesTab(
     expenses: List<Expense>,
     totalAmount: Double,
     currency: String,
+    balances: List<Balance>,
     onExpenseClick: (String) -> Unit,
     onAddExpense: () -> Unit,
     onDeleteExpense: (String) -> Unit = {}
@@ -1183,6 +1184,13 @@ fun ExpensesTab(
                     expenseCount = expenses.size
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (balances.isNotEmpty()) {
+                item {
+                    BalancesCard(balances = balances)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
             
             // Expense list
@@ -1248,6 +1256,59 @@ private fun ExpenseSummaryCard(
                         text = "записей",
                         style = MaterialTheme.typography.labelSmall,
                         color = TealDark
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalancesCard(
+    balances: List<Balance>
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Slate100
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Кому сколько должен",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = Slate700
+            )
+
+            balances.forEach { balance ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${balance.fromUserName} → ${balance.toUserName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Slate800,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Закрыть переводом",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate500
+                        )
+                    }
+                    Text(
+                        text = formatCurrency(balance.amount, balance.currency),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = CoralPrimary
                     )
                 }
             }
@@ -1716,6 +1777,7 @@ private fun ExpensesTabPreview() {
             expenses = TripDetailsPreviewData.expenses,
             totalAmount = total,
             currency = TripDetailsPreviewData.trip.baseCurrency,
+            balances = emptyList(),
             onExpenseClick = { _ -> },
             onAddExpense = { },
             onDeleteExpense = { _ -> }
