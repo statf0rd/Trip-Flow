@@ -1,7 +1,9 @@
 package com.triloo.data.route
 
+import com.triloo.BuildConfig
 import com.triloo.data.model.Place
 import com.triloo.data.model.TravelMode
+import com.triloo.data.remote.DirectionsApi
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,7 +16,7 @@ import kotlin.math.*
  * Current implementation uses simple heuristics (Nearest Neighbor algorithm).
  * 
  * TODO: Integrate with AI/ML service for smarter recommendations
- * TODO: Use Google Directions API for real travel time estimation
+ * Uses Google Directions API when an API key is configured, falls back to heuristics otherwise.
  */
 interface RouteOptimizer {
     
@@ -142,7 +144,9 @@ enum class TravelStyle { RELAXED, BALANCED, ACTIVE }
  * - Call external AI service for complex optimization
  */
 @Singleton
-class NearestNeighborRouteOptimizer @Inject constructor() : RouteOptimizer {
+class NearestNeighborRouteOptimizer @Inject constructor(
+    private val directionsApi: DirectionsApi
+) : RouteOptimizer {
     
     override suspend fun optimizeRoute(
         places: List<Place>,
@@ -268,7 +272,11 @@ class NearestNeighborRouteOptimizer @Inject constructor() : RouteOptimizer {
                 totalDurationMinutes = 0
             )
         }
-        
+        val remoteDetails = fetchDirectionsRoute(places, travelMode)
+        if (remoteDetails != null) {
+            return remoteDetails
+        }
+
         val legs = places.zipWithNext().map { (from, to) ->
             val distance = haversineDistance(
                 from.latitude, from.longitude,
@@ -379,7 +387,72 @@ class NearestNeighborRouteOptimizer @Inject constructor() : RouteOptimizer {
         }
         return ceil(distanceMeters / speedMps / 60).toInt()
     }
+
+    private suspend fun fetchDirectionsRoute(
+        places: List<Place>,
+        travelMode: TravelMode
+    ): RouteDetails? {
+        if (!hasValidApiKey() || places.size < 2) return null
+
+        val origin = "${places.first().latitude},${places.first().longitude}"
+        val destination = "${places.last().latitude},${places.last().longitude}"
+        val waypoints = if (places.size > 2) {
+            places.subList(1, places.lastIndex)
+                .joinToString("|") { "${it.latitude},${it.longitude}" }
+        } else {
+            null
+        }
+
+        val response = runCatching {
+            directionsApi.getDirections(
+                origin = origin,
+                destination = destination,
+                waypoints = waypoints,
+                mode = travelMode.toDirectionsMode(),
+                apiKey = BuildConfig.MAPS_API_KEY
+            )
+        }.getOrNull() ?: return null
+
+        val route = response.routes.firstOrNull() ?: return null
+        val legs = route.legs
+        if (legs.isEmpty()) return null
+
+        val mappedLegs = places.zipWithNext().mapIndexedNotNull { index, (from, to) ->
+            val leg = legs.getOrNull(index) ?: return@mapIndexedNotNull null
+            val distance = leg.distance?.value ?: return@mapIndexedNotNull null
+            val durationSeconds = leg.durationInTraffic?.value ?: leg.duration?.value ?: 0
+            RouteLeg(
+                from = from,
+                to = to,
+                distanceMeters = distance,
+                durationMinutes = ceil(durationSeconds / 60.0).toInt(),
+                travelMode = travelMode
+            )
+        }
+
+        if (mappedLegs.isEmpty()) return null
+
+        return RouteDetails(
+            places = places,
+            legs = mappedLegs,
+            totalDistanceMeters = mappedLegs.sumOf { it.distanceMeters },
+            totalDurationMinutes = mappedLegs.sumOf { it.durationMinutes },
+            polylineEncoded = route.overviewPolyline?.points
+        )
+    }
+
+    private fun hasValidApiKey(): Boolean {
+        val apiKey = BuildConfig.MAPS_API_KEY
+        return apiKey.isNotBlank() && !apiKey.contains("YOUR_GOOGLE_MAPS_API_KEY")
+    }
+
+    private fun TravelMode.toDirectionsMode(): String {
+        return when (this) {
+            TravelMode.WALKING -> "walking"
+            TravelMode.DRIVING -> "driving"
+            TravelMode.TRANSIT -> "transit"
+            TravelMode.BICYCLING -> "bicycling"
+        }
+    }
 }
-
-
 
