@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.triloo.data.model.Expense
 import com.triloo.data.model.ExpenseCategory
+import com.triloo.data.model.Participant
 import com.triloo.data.model.SplitType
 import com.triloo.data.model.Trip
 import com.triloo.data.repository.ExpenseRepository
@@ -14,9 +15,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -29,6 +34,7 @@ class AddExpenseViewModel @Inject constructor(
 
     private val tripId: String = savedStateHandle.get<String>("tripId")
         ?: throw IllegalArgumentException("tripId is required")
+    private val expenseId: String? = savedStateHandle.get<String>("expenseId")
 
     private val _uiState = MutableStateFlow(
         AddExpenseUiState(
@@ -40,6 +46,9 @@ class AddExpenseViewModel @Inject constructor(
     private val _trip = MutableStateFlow<Trip?>(null)
     val trip: StateFlow<Trip?> = _trip.asStateFlow()
 
+    private val _participants = MutableStateFlow<List<Participant>>(emptyList())
+    val participants: StateFlow<List<Participant>> = _participants.asStateFlow()
+
     private var currentUserId: String? = null
     private var currentUserName: String? = null
 
@@ -50,6 +59,7 @@ class AddExpenseViewModel @Inject constructor(
             _uiState.update { state ->
                 state.copy(currency = currentTrip?.baseCurrency ?: state.currency)
             }
+            refreshExchangeRate()
         }
 
         viewModelScope.launch {
@@ -66,6 +76,37 @@ class AddExpenseViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            tripRepository.observeParticipants(tripId).collectLatest { list ->
+                _participants.value = list
+            }
+        }
+
+        if (expenseId != null) {
+            viewModelScope.launch {
+                val expense = expenseRepository.getExpenseById(expenseId)
+                if (expense != null) {
+                    _uiState.update { state ->
+                        state.copy(
+                            description = expense.description,
+                            amount = expense.amount.toString(),
+                            currency = expense.currency,
+                            category = expense.category,
+                            paidBy = expense.paidByName,
+                            date = expense.date,
+                            time = expense.time.orEmpty(),
+                            notes = expense.notes.orEmpty(),
+                            splitType = expense.splitType,
+                            splitAmounts = expense.splitAmounts?.mapValues { it.value.toString() }.orEmpty(),
+                            exchangeRate = expense.exchangeRate,
+                            isEditing = true
+                        )
+                    }
+                    refreshExchangeRate()
+                }
+            }
+        }
     }
 
     fun updateDescription(value: String) {
@@ -77,7 +118,8 @@ class AddExpenseViewModel @Inject constructor(
     }
 
     fun updateCurrency(value: String) {
-        _uiState.update { it.copy(currency = value) }
+        _uiState.update { it.copy(currency = value.uppercase()) }
+        refreshExchangeRate()
     }
 
     fun updatePayer(value: String) {
@@ -90,6 +132,7 @@ class AddExpenseViewModel @Inject constructor(
 
     fun updateDate(date: LocalDate) {
         _uiState.update { it.copy(date = date) }
+        refreshExchangeRate()
     }
 
     fun updateTime(value: String) {
@@ -100,6 +143,29 @@ class AddExpenseViewModel @Inject constructor(
         _uiState.update { it.copy(notes = value) }
     }
 
+    fun updateSplitType(type: SplitType) {
+        _uiState.update { state ->
+            state.copy(
+                splitType = type,
+                splitAmounts = if (type == SplitType.EXACT) state.splitAmounts else emptyMap()
+            )
+        }
+    }
+
+    fun updateSplitAmount(userId: String, value: String) {
+        _uiState.update { state ->
+            state.copy(
+                splitAmounts = state.splitAmounts.toMutableMap().apply {
+                    if (value.isBlank()) {
+                        remove(userId)
+                    } else {
+                        put(userId, value)
+                    }
+                }
+            )
+        }
+    }
+
     fun saveExpense() {
         val state = _uiState.value
         val amount = state.amount.replace(",", ".").toDoubleOrNull() ?: return
@@ -107,12 +173,12 @@ class AddExpenseViewModel @Inject constructor(
             _trip.value?.baseCurrency ?: "RUB"
         } else state.currency
         val baseCurrency = _trip.value?.baseCurrency ?: currency
-        val exchangeRate = if (currency == baseCurrency) 1.0 else 1.0 // Conversion not implemented yet
-        val amountInBase = if (currency == baseCurrency) {
-            amount
-        } else {
-            amount * exchangeRate
+        val exchangeRate = if (currency == baseCurrency) 1.0 else state.exchangeRate
+        if (currency != baseCurrency && exchangeRate <= 0.0) {
+            _uiState.update { it.copy(error = "Не удалось получить курс валют") }
+            return
         }
+        val amountInBase = amount * exchangeRate
         val payerInput = state.paidBy.trim()
         val payerName = if (payerInput.isBlank()) {
             currentUserName ?: "Вы"
@@ -125,28 +191,53 @@ class AddExpenseViewModel @Inject constructor(
             payerName.lowercase().replace(" ", "_")
         }
 
+        val splitAmounts = buildSplitAmounts(state.splitType, state.splitAmounts, amount)
+        if (state.splitType == SplitType.EXACT && splitAmounts == null) {
+            _uiState.update { it.copy(error = "Сумма по участникам не совпадает с общей") }
+            return
+        }
+
         _uiState.update { it.copy(isSaving = true, error = null) }
 
         viewModelScope.launch {
             try {
+                val resolvedRate = if (currency == baseCurrency) {
+                    1.0
+                } else {
+                    withContext(Dispatchers.IO) {
+                        expenseRepository.getOrFetchCurrencyRate(
+                            currency,
+                            baseCurrency,
+                            state.date ?: LocalDate.now()
+                        )
+                    }
+                        ?: exchangeRate
+                }
+                val resolvedAmountInBase = amount * resolvedRate
                 val expense = Expense(
+                    id = expenseId ?: UUID.randomUUID().toString(),
                     tripId = tripId,
                     description = state.description.trim(),
                     amount = amount,
                     currency = currency,
-                    amountInBaseCurrency = amountInBase,
-                    exchangeRate = exchangeRate,
+                    amountInBaseCurrency = resolvedAmountInBase,
+                    exchangeRate = resolvedRate,
                     exchangeRateDate = state.date ?: LocalDate.now(),
                     category = state.category,
                     paidByUserId = payerId,
                     paidByName = payerName,
-                    splitType = SplitType.PAYER_ONLY,
+                    splitType = state.splitType,
+                    splitAmounts = splitAmounts,
                     date = state.date ?: LocalDate.now(),
                     time = state.time.trim().ifBlank { null },
                     notes = state.notes.trim().ifBlank { null }
                 )
 
-                expenseRepository.addExpense(expense)
+                if (expenseId == null) {
+                    expenseRepository.addExpense(expense)
+                } else {
+                    expenseRepository.updateExpense(expense)
+                }
                 _uiState.update { it.copy(isSaving = false, isSaved = true) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -155,6 +246,46 @@ class AddExpenseViewModel @Inject constructor(
                         error = e.message ?: "Не удалось добавить расход"
                     )
                 }
+            }
+        }
+    }
+
+    private fun buildSplitAmounts(
+        splitType: SplitType,
+        rawAmounts: Map<String, String>,
+        totalAmount: Double
+    ): Map<String, Double>? {
+        if (splitType != SplitType.EXACT) return null
+        if (rawAmounts.isEmpty()) return null
+
+        val parsed = rawAmounts.mapValues { it.value.replace(",", ".").toDoubleOrNull() ?: 0.0 }
+        val sum = parsed.values.sum()
+        val diff = kotlin.math.abs(sum - totalAmount)
+        return if (diff <= 0.01) parsed else null
+    }
+
+    private fun refreshExchangeRate() {
+        val state = _uiState.value
+        val currency = state.currency.ifBlank { _trip.value?.baseCurrency ?: "RUB" }
+        val baseCurrency = _trip.value?.baseCurrency ?: currency
+        val date = state.date ?: LocalDate.now()
+
+        if (currency == baseCurrency) {
+            _uiState.update { it.copy(exchangeRate = 1.0, rateError = null, isRateLoading = false) }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRateLoading = true, rateError = null) }
+            val rate = withContext(Dispatchers.IO) {
+                expenseRepository.getOrFetchCurrencyRate(currency, baseCurrency, date)
+            }
+            if (rate == null) {
+                _uiState.update {
+                    it.copy(isRateLoading = false, rateError = "Не удалось получить курс валют")
+                }
+            } else {
+                _uiState.update { it.copy(exchangeRate = rate, isRateLoading = false, rateError = null) }
             }
         }
     }
@@ -169,9 +300,15 @@ data class AddExpenseUiState(
     val date: LocalDate? = null,
     val time: String = "",
     val notes: String = "",
+    val splitType: SplitType = SplitType.PAYER_ONLY,
+    val splitAmounts: Map<String, String> = emptyMap(),
+    val exchangeRate: Double = 1.0,
+    val isRateLoading: Boolean = false,
+    val rateError: String? = null,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isEditing: Boolean = false
 ) {
     val isValid: Boolean
         get() = description.isNotBlank() &&
