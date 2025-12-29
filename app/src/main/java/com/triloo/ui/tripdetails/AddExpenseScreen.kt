@@ -1,5 +1,7 @@
 package com.triloo.ui.tripdetails
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +10,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
@@ -18,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +38,7 @@ import com.triloo.data.model.Participant
 import com.triloo.data.model.SplitType
 import com.triloo.data.model.Trip
 import com.triloo.ui.PreviewData
+import com.triloo.ui.components.ParticipantAvatar
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
@@ -40,6 +47,8 @@ import java.time.ZoneId
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.absoluteValue
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -259,45 +268,19 @@ private fun AddExpenseContent(
                     fontWeight = FontWeight.SemiBold,
                     color = Slate700
                 )
-                
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ExpenseCategory.entries.forEach { category ->
-                        val isSelected = category == uiState.category
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { onCategoryChange(category) },
-                            label = {
-                                Text(
-                                    text = "${category.emoji} ${category.displayName}",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            },
-                            leadingIcon = if (isSelected) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(category.colorHex).copy(alpha = 0.15f),
-                                selectedLabelColor = Color(category.colorHex),
-                                selectedLeadingIconColor = Color(category.colorHex)
-                            )
-                        )
-                    }
-                }
+
+                ExpenseCategoryCarousel(
+                    categories = ExpenseCategory.entries.toList(),
+                    selectedCategory = uiState.category,
+                    onCategoryChange = onCategoryChange
+                )
             }
 
             ExpenseSplitSection(
                 splitType = uiState.splitType,
                 participants = participants,
                 amount = uiState.amount,
+                currency = uiState.currency,
                 splitAmounts = uiState.splitAmounts,
                 onSplitTypeChange = onSplitTypeChange,
                 onSplitAmountChange = onSplitAmountChange
@@ -482,16 +465,19 @@ private fun AddExpenseContent(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExpenseSplitSection(
     splitType: SplitType,
     participants: List<Participant>,
     amount: String,
+    currency: String,
     splitAmounts: Map<String, String>,
     onSplitTypeChange: (SplitType) -> Unit,
     onSplitAmountChange: (String, String) -> Unit
 ) {
+    val amountValue = amount.replace(",", ".").toDoubleOrNull()
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "Разделить",
@@ -500,99 +486,327 @@ private fun ExpenseSplitSection(
             color = Slate700
         )
 
-        val splitOptions = listOf(
-            SplitType.PAYER_ONLY,
-            SplitType.EQUAL,
-            SplitType.EXACT
-        )
-
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            splitOptions.forEach { type ->
-                FilterChip(
+        val splitOptions = listOf(SplitType.PAYER_ONLY, SplitType.EQUAL, SplitType.EXACT)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            splitOptions.forEachIndexed { index, type ->
+                SegmentedButton(
                     selected = splitType == type,
                     onClick = { onSplitTypeChange(type) },
-                    label = { Text(type.displayName) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = CoralPrimary.copy(alpha = 0.15f),
-                        selectedLabelColor = CoralPrimary
-                    )
-                )
-            }
-        }
-
-        if (splitType == SplitType.PAYER_ONLY) {
-            Text(
-                text = "Расход учитывается только для плательщика",
-                style = MaterialTheme.typography.bodySmall,
-                color = Slate600
-            )
-            return
-        }
-
-        if (participants.isEmpty()) {
-            Text(
-                text = "Добавьте участников, чтобы разделить расход",
-                style = MaterialTheme.typography.bodySmall,
-                color = Slate600
-            )
-            return
-        }
-
-        val amountValue = amount.replace(",", ".").toDoubleOrNull()
-        participants.forEach { participant ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = participant.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f)
-                )
-
-                if (splitType == SplitType.EQUAL) {
-                    val share = if (amountValue != null && amountValue > 0) {
-                        amountValue / participants.size
-                    } else null
-                    Text(
-                        text = share?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = splitAmounts[participant.userId].orEmpty(),
-                        onValueChange = { onSplitAmountChange(participant.userId, it) },
-                        modifier = Modifier.width(120.dp),
-                        placeholder = { Text("0") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    shape = SegmentedButtonDefaults.itemShape(index, splitOptions.size)
+                ) {
+                    Text(type.displayName)
                 }
             }
         }
 
-        if (splitType == SplitType.EXACT && amountValue != null) {
-            val splitSum = splitAmounts.values.sumOf {
-                it.replace(",", ".").toDoubleOrNull() ?: 0.0
+        when (splitType) {
+            SplitType.PAYER_ONLY -> {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Slate100
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Person,
+                            contentDescription = null,
+                            tint = Slate600
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Личный расход, не участвует в расчёте долгов",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate600
+                        )
+                    }
+                }
             }
-            val diff = amountValue - splitSum
-            val diffText = if (kotlin.math.abs(diff) < 0.01) {
-                "Сумма распределена полностью"
-            } else {
-                "Осталось распределить: ${String.format(Locale.US, "%.2f", diff)}"
+            SplitType.EQUAL -> {
+                if (participants.isEmpty()) {
+                    Text(
+                        text = "Добавьте участников, чтобы разделить расход",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate600
+                    )
+                    return
+                }
+
+                val perPerson = if (amountValue != null && amountValue > 0) {
+                    amountValue / participants.size
+                } else null
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Slate100
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Участники: ${participants.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate600
+                        )
+                        Text(
+                            text = perPerson?.let {
+                                "Каждый платит ≈ ${String.format(Locale.US, "%.2f", it)} $currency"
+                            } ?: "Введите сумму, чтобы рассчитать долю",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Slate700
+                        )
+
+                        participants.forEach { participant ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ParticipantAvatar(
+                                        name = participant.displayName,
+                                        size = 32.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = participant.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Slate800
+                                    )
+                                }
+                                Text(
+                                    text = perPerson?.let {
+                                        "${String.format(Locale.US, "%.2f", it)} $currency"
+                                    } ?: "—",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Slate600
+                                )
+                            }
+                        }
+                    }
+                }
             }
-            Text(
-                text = diffText,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (kotlin.math.abs(diff) < 0.01) TealDark else Slate600
-            )
+            SplitType.EXACT -> {
+                if (participants.isEmpty()) {
+                    Text(
+                        text = "Добавьте участников, чтобы разделить расход",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate600
+                    )
+                    return
+                }
+
+                val splitSum = splitAmounts.values.sumOf {
+                    it.replace(",", ".").toDoubleOrNull() ?: 0.0
+                }
+                val diff = if (amountValue != null) amountValue - splitSum else null
+                val diffText = when {
+                    amountValue == null -> "Введите сумму, чтобы заполнить распределение"
+                    diff != null && kotlin.math.abs(diff) < 0.01 -> "Сумма распределена полностью"
+                    diff != null && diff > 0 -> {
+                        "Осталось распределить: ${String.format(Locale.US, "%.2f", diff)} $currency"
+                    }
+                    diff != null && diff < 0 -> {
+                        "Превышение: ${String.format(Locale.US, "%.2f", kotlin.math.abs(diff))} $currency"
+                    }
+                    else -> "—"
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Slate100
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Суммы по участникам",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Slate700,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        if (amountValue == null || participants.isEmpty()) return@TextButton
+                                        val share = amountValue / participants.size
+                                        participants.forEach { participant ->
+                                            onSplitAmountChange(
+                                                participant.userId,
+                                                String.format(Locale.US, "%.2f", share)
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Text("Поровну")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        participants.forEach { participant ->
+                                            onSplitAmountChange(participant.userId, "")
+                                        }
+                                    }
+                                ) {
+                                    Text("Очистить")
+                                }
+                            }
+                        }
+
+                        participants.forEach { participant ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                ParticipantAvatar(
+                                    name = participant.displayName,
+                                    size = 32.dp
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = participant.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Slate800
+                                    )
+                                    Text(
+                                        text = "Введите сумму в $currency",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Slate500
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = splitAmounts[participant.userId].orEmpty(),
+                                    onValueChange = { onSplitAmountChange(participant.userId, it) },
+                                    modifier = Modifier.width(120.dp),
+                                    placeholder = { Text("0") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    suffix = { Text(currency) }
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = diffText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (diff != null && kotlin.math.abs(diff) < 0.01) TealDark else Slate600
+                        )
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ExpenseCategoryCarousel(
+    categories: List<ExpenseCategory>,
+    selectedCategory: ExpenseCategory,
+    onCategoryChange: (ExpenseCategory) -> Unit
+) {
+    val initialPage = categories.indexOf(selectedCategory).coerceAtLeast(0)
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { categories.size }
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState.currentPage) {
+        categories.getOrNull(pagerState.currentPage)?.let { category ->
+            if (category != selectedCategory) {
+                onCategoryChange(category)
+            }
+        }
+    }
+
+    LaunchedEffect(selectedCategory) {
+        val target = categories.indexOf(selectedCategory)
+        if (target >= 0 && target != pagerState.currentPage) {
+            pagerState.scrollToPage(target)
+        }
+    }
+
+    VerticalPager(
+        state = pagerState,
+        pageSize = PageSize.Fixed(56.dp),
+        contentPadding = PaddingValues(vertical = 20.dp),
+        beyondViewportPageCount = 2,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(240.dp)
+    ) { page ->
+        val category = categories[page]
+        val isSelected = category == selectedCategory
+        val pageOffset = (
+            (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+        ).absoluteValue
+        val scale = 0.92f + (1f - pageOffset.coerceIn(0f, 1f)) * 0.08f
+        val alpha = 0.6f + (1f - pageOffset.coerceIn(0f, 1f)) * 0.4f
+        val accent = Color(category.colorHex)
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                }
+                .clickable {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(page)
+                    }
+                },
+            shape = RoundedCornerShape(18.dp),
+            color = if (isSelected) accent.copy(alpha = 0.18f) else Slate100,
+            border = if (isSelected) BorderStroke(1.dp, accent.copy(alpha = 0.6f)) else null
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = category.emoji,
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = category.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) accent else Slate800
+                    )
+                    Text(
+                        text = if (isSelected) "Выбрано" else "Прокрутите",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Slate500
+                    )
+                }
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = accent
+                    )
+                }
+            }
         }
     }
 }
