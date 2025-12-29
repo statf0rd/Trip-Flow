@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -417,7 +416,7 @@ private fun TimelineEventRow(
             blockMinutes = item.durationMinutes,
             blockHeight = blockHeight,
             lineColor = CoralPrimary,
-            showIntermediateTicks = true
+            showIntermediateTicks = false
         )
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -515,19 +514,7 @@ private fun TimelineRail(
         modifier = Modifier.width(104.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        if (showIntermediateTicks && timeLabel.isNotBlank()) {
-            Text(
-                text = timeLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isMuted) Slate500 else Slate700,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-        } else {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             modifier = Modifier
@@ -536,30 +523,7 @@ private fun TimelineRail(
             verticalAlignment = Alignment.Top
         ) {
             // Labels column to the left of the line
-            if (blockMinutes >= 60 && showIntermediateTicks) {
-                val tickCount = blockMinutes / 60
-                Column(
-                    modifier = Modifier
-                        .width(48.dp)
-                        .fillMaxHeight(),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.End
-                ) {
-                    repeat(tickCount + 1) { idx ->
-                        Text(
-                            text = formatMinutesToTime(
-                                startMinutes + idx * 60,
-                                timeFormat
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isMuted) Slate500 else Slate700,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip
-                        )
-                    }
-                }
-            } else if (!showIntermediateTicks && endLabel != null) {
+            if (!showIntermediateTicks && endLabel != null) {
                 Column(
                     modifier = Modifier
                         .width(48.dp)
@@ -848,11 +812,9 @@ fun MapTab(
         val bounds = LatLngBounds.builder().apply {
             allPoints.forEach { include(it) }
         }.build()
-        runCatching {
-            cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngBounds(bounds, 120)
-            )
-        }
+        cameraPositionState.animate(
+            update = CameraUpdateFactory.newLatLngBounds(bounds, 120)
+        )
     }
 
     val ratedPlaces = remember(validPlaces) { validPlaces.filter { it.rating != null } }
@@ -930,24 +892,6 @@ fun MapTab(
                     title = participant.displayName,
                     snippet = "Участник",
                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                )
-            }
-        }
-
-        if (validPlaces.isEmpty() && participantPoints.isEmpty()) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(20.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White.copy(alpha = 0.9f)
-            ) {
-                Text(
-                    text = "Добавьте места, чтобы увидеть маршрут на карте",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate700,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -1441,16 +1385,17 @@ private fun ExpenseItem(
 }
 
 private fun formatCurrency(amount: Double, currency: String): String {
-    val symbol = when (currency) {
+    val currencyCode = currency.uppercase(Locale.US)
+    val symbol = when (currencyCode) {
         "RUB" -> "₽"
         "USD" -> "$"
         "EUR" -> "€"
         "TRY" -> "₺"
         "THB" -> "฿"
-        "AED" -> "د.إ"
-        else -> currency
+        "AED" -> "AED"
+        else -> currencyCode
     }
-    return "${String.format("%,.0f", amount)} $symbol"
+    return "${String.format(Locale.getDefault(), "%,.0f", amount)} $symbol"
 }
 
 private object TripDetailsPreviewData {
