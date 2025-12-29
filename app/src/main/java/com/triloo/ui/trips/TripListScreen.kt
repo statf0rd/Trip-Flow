@@ -2,6 +2,7 @@ package com.triloo.ui.trips
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -238,6 +239,7 @@ private fun TripListContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CurrentTripCard(
     trip: Trip,
@@ -487,6 +489,7 @@ private fun UpcomingTripCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PastTripCard(
     trip: Trip,
