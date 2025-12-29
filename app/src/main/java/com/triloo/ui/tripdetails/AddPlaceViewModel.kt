@@ -80,20 +80,22 @@ class AddPlaceViewModel @Inject constructor(
             val lockedFormat = existing.firstNotNullOfOrNull { place ->
                 place.scheduledTime?.let { detectTimeFormat(it) }
             }
+            if (placeId != null) {
                 if (lockedFormat != null) {
                     _uiState.update { state ->
                         state.copy(
                             timeFormat = lockedFormat,
                             lockedTimeFormat = lockedFormat,
-                            isEditing = placeId != null
+                            isEditing = true
                         )
                     }
-                } else if (placeId != null) {
+                } else {
                     _uiState.update { state ->
                         state.copy(isEditing = true)
                     }
                 }
             }
+        }
         
         // Setup search debounce
         viewModelScope.launch {
