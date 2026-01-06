@@ -23,6 +23,8 @@ hiltNavigationCompose = "1.2.0"
 
 # Coroutines
 coroutines = "1.9.0"
+coroutinesPlayServices = "1.9.0"
+firebaseBom = "33.2.0"
 
 # Retrofit & OkHttp
 retrofit = "2.11.0"
@@ -53,6 +55,7 @@ splashScreen = "1.0.1"
 # QR / ZXing
 zxingCore = "3.5.3"
 zxingEmbedded = "4.3.0"
+googleServices = "4.4.2"
 
 [libraries]
 # Core
@@ -93,6 +96,7 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 
 # Retrofit
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
@@ -116,6 +120,11 @@ maps-compose-utils = { group = "com.google.maps.android", name = "maps-compose-u
 android-maps-utils = { group = "com.google.maps.android", name = "android-maps-utils", version.ref = "mapsUtils" }
 google-places = { group = "com.google.android.libraries.places", name = "places", version.ref = "places" }
 
+# Firebase
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-auth-ktx = { group = "com.google.firebase", name = "firebase-auth-ktx" }
+firebase-firestore-ktx = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
+
 # Splash Screen
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
 
@@ -131,3 +140,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 secrets-gradle = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradle" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

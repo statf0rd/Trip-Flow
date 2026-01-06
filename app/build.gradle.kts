@@ -7,6 +7,12 @@ plugins {
     alias(libs.plugins.secrets.gradle)
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle("Firebase disabled: app/google-services.json not found.")
+}
+
 android {
     namespace = "com.triloo"
     compileSdk = 36
@@ -93,6 +99,7 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Retrofit + OkHttp
     implementation(libs.retrofit)
@@ -122,6 +129,11 @@ dependencies {
     // QR / ZXing
     implementation(libs.zxing.core)
     implementation(libs.zxing.android.embedded)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.firestore.ktx)
 
     // Testing
     testImplementation(libs.junit)
