@@ -11,7 +11,7 @@ import javax.inject.Singleton
 
 /**
  * Authentication Repository Interface.
- * Use LocalAuthRepository by default; replace with Firebase/custom backend when ready.
+ * Uses Firebase when configured, otherwise falls back to LocalAuthRepository.
  */
 interface AuthRepository {
     /** Current auth state */
@@ -44,7 +44,7 @@ interface AuthRepository {
 
 /**
  * Local implementation backed by in-memory storage with Google ID token parsing.
- * Replace with Firebase/custom backend when backend is ready.
+ * Used as a fallback when Firebase configuration is missing.
  */
 @Singleton
 class LocalAuthRepository @Inject constructor() : AuthRepository {
