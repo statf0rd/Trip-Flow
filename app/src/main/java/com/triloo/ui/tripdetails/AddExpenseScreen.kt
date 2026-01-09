@@ -207,9 +207,10 @@ private fun AddExpenseContent(
                     )
                 }
                 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     buildCurrencyList(trip?.baseCurrency).forEach { currency ->
                         val isSelected = currency == uiState.currency
