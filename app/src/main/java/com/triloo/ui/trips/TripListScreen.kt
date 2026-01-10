@@ -37,6 +37,9 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+private val UpcomingCardWidth = 280.dp
+private val UpcomingCardMinHeight = 176.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripListScreen(
@@ -209,7 +212,7 @@ private fun TripListContent(
                             onClick = { onTripClick(trip.id) },
                             onLongClick = { onTripLongClick(trip) },
                             animationDelay = index * 50,
-                            modifier = Modifier.width(280.dp)
+                            modifier = Modifier.width(UpcomingCardWidth)
                         )
                     }
                 }
@@ -412,7 +415,7 @@ private fun UpcomingTripCard(
         enter = fadeIn() + slideInHorizontally { it / 2 }
     ) {
         TrilooCard(
-            modifier = modifier,
+            modifier = modifier.heightIn(min = UpcomingCardMinHeight),
             onClick = onClick,
             onLongClick = onLongClick
         ) {
@@ -759,8 +762,8 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
                 items(3) {
                     Spacer(
                         modifier = Modifier
-                            .width(280.dp)
-                            .height(150.dp)
+                            .width(UpcomingCardWidth)
+                            .height(UpcomingCardMinHeight)
                             .clip(RoundedCornerShape(16.dp))
                             .shimmerEffect()
                     )
