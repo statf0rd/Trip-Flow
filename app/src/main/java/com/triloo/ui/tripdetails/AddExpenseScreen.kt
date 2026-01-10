@@ -1,5 +1,8 @@
 package com.triloo.ui.tripdetails
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -29,6 +32,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -488,14 +492,49 @@ private fun ExpenseSplitSection(
         )
 
         val splitOptions = listOf(SplitType.PAYER_ONLY, SplitType.EQUAL, SplitType.EXACT)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            splitOptions.forEachIndexed { index, type ->
-                SegmentedButton(
-                    selected = splitType == type,
-                    onClick = { onSplitTypeChange(type) },
-                    shape = SegmentedButtonDefaults.itemShape(index, splitOptions.size)
+        val accent = MaterialTheme.colorScheme.primary
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            splitOptions.forEach { type ->
+                val isSelected = splitType == type
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.05f else 1f,
+                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                    label = "splitTypeScale"
+                )
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .clickable { onSplitTypeChange(type) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isSelected) accent.copy(alpha = 0.14f) else Slate100,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) accent.copy(alpha = 0.6f) else Slate200
+                    )
                 ) {
-                    Text(type.displayName)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = type.displayName,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) accent else Slate700,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
