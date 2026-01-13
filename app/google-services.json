@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "246934634678",
+    "project_id": "triloo-d874c",
+    "storage_bucket": "triloo-d874c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:246934634678:android:39a7f3132762b64530a617",
+        "android_client_info": {
+          "package_name": "com.triloo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYE_RcOtBPUyDicKD4THQhFRNoAYfE3mI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

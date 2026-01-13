@@ -1,8 +1,5 @@
 package com.triloo.ui.navigation
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +32,7 @@ import com.triloo.ui.tripdetails.TripDetailsScreen
 import com.triloo.ui.trips.CreateTripScreen
 import com.triloo.ui.trips.TripListScreen
 import com.triloo.ui.components.TrilooButton
+import com.triloo.ui.theme.TrilooMotion
 import com.triloo.ui.theme.TrilooTheme
 
 /**
@@ -93,28 +91,16 @@ fun TrilooNavHost(
         startDestination = startDestination,
         modifier = modifier,
         enterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { it / 2 },
-                animationSpec = tween(400, easing = FastOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(400))
+            TrilooMotion.enterNavForward()
         },
         exitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { -it / 4 },
-                animationSpec = tween(400, easing = FastOutSlowInEasing)
-            ) + fadeOut(animationSpec = tween(200))
+            TrilooMotion.exitNavForward()
         },
         popEnterTransition = {
-            slideInHorizontally(
-                initialOffsetX = { -it / 4 },
-                animationSpec = tween(400, easing = FastOutSlowInEasing)
-            ) + fadeIn(animationSpec = tween(400))
+            TrilooMotion.enterNavBack()
         },
         popExitTransition = {
-            slideOutHorizontally(
-                targetOffsetX = { it / 2 },
-                animationSpec = tween(400, easing = FastOutSlowInEasing)
-            ) + fadeOut(animationSpec = tween(200))
+            TrilooMotion.exitNavBack()
         }
     ) {
         // Trip List (Home)
@@ -201,23 +187,14 @@ fun TrilooNavHost(
                 }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
             exitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             },
-            popEnterTransition = { fadeIn() },
+            popEnterTransition = { TrilooMotion.enterBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             CreateTripScreen(
@@ -341,16 +318,11 @@ fun TrilooNavHost(
                 navArgument("dayId") { type = NavType.StringType }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
+            exitTransition = { TrilooMotion.exitBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             AddPlaceScreen(
@@ -365,16 +337,11 @@ fun TrilooNavHost(
                 navArgument("placeId") { type = NavType.StringType }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
+            exitTransition = { TrilooMotion.exitBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             AddPlaceScreen(
@@ -389,16 +356,11 @@ fun TrilooNavHost(
                 navArgument("tripId") { type = NavType.StringType }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
+            exitTransition = { TrilooMotion.exitBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             CreateTripScreen(
@@ -429,16 +391,11 @@ fun TrilooNavHost(
                 navArgument("tripId") { type = NavType.StringType }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
+            exitTransition = { TrilooMotion.exitBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             AddExpenseScreen(
@@ -454,16 +411,11 @@ fun TrilooNavHost(
                 navArgument("expenseId") { type = NavType.StringType }
             ),
             enterTransition = {
-                slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeIn()
+                TrilooMotion.enterBottomSheet()
             },
+            exitTransition = { TrilooMotion.exitBottomSheet() },
             popExitTransition = {
-                slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(350)
-                ) + fadeOut()
+                TrilooMotion.exitBottomSheet()
             }
         ) {
             AddExpenseScreen(
