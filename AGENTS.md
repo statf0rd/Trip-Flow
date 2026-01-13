@@ -9,7 +9,7 @@
 - Настройки: язык/валюта/уведомления/синхронизация, экспорт/очистка, локализация через AppCompatDelegate; backup/data_extraction rules настроены на Room + DataStore.
 - Таймлайн: убраны дубли меток времени у вертикальных полос, места по умолчанию используют 24h формат; карта балансов/маршрутов на вкладке расходов/карты.
 - Ключи в `local.properties`: `MAPS_API_KEY=...`, `GOOGLE_WEB_CLIENT_ID=...`; пример в `local.defaults.properties`.
-- Не трогать: `nir_report.tex`, `.kotlin/`, `.idea/markdown.xml`.
+- Не трогать: `.kotlin/`, `.idea/markdown.xml`.
 - Сборка `./gradlew :app:assemble` проходила успешно после последних правок; тесты не гонялись.
 
 ## Что уже работает
