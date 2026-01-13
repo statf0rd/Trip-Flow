@@ -1,8 +1,16 @@
 package com.triloo.ui.components
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.with
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -41,6 +50,7 @@ import com.triloo.ui.theme.TrilooTheme
 
 // BUTTONS
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun TrilooButton(
     text: String,
@@ -54,8 +64,8 @@ fun TrilooButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = TrilooMotion.pressSpring,
         label = "buttonScale"
     )
     
@@ -83,26 +93,67 @@ fun TrilooButton(
         shape = RoundedCornerShape(14.dp),
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = contentColor,
-                strokeWidth = 2.dp
-            )
-        } else {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+        AnimatedContent(
+            targetState = isLoading,
+            transitionSpec = {
+                (fadeIn(
+                    animationSpec = tween(
+                        durationMillis = TrilooMotion.durationShort,
+                        easing = TrilooMotion.easingStandard
+                    )
+                ) + scaleIn(
+                    initialScale = 0.98f,
+                    animationSpec = tween(
+                        durationMillis = TrilooMotion.durationShort,
+                        easing = TrilooMotion.easingStandard
+                    )
+                )) with (fadeOut(
+                    animationSpec = tween(
+                        durationMillis = TrilooMotion.durationShort,
+                        easing = TrilooMotion.easingExit
+                    )
+                ) + scaleOut(
+                    targetScale = 0.98f,
+                    animationSpec = tween(
+                        durationMillis = TrilooMotion.durationShort,
+                        easing = TrilooMotion.easingExit
+                    )
+                ))
+            },
+            label = "buttonContent"
+        ) { loading ->
+            if (loading) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = contentColor,
+                        strokeWidth = 2.dp
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
         }
     }
 }
@@ -119,9 +170,26 @@ fun TrilooFab(
     contentDescription: String = "Add"
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = TrilooMotion.pressSpring,
+        label = "fabScale"
+    )
+    val rotation by animateFloatAsState(
+        targetValue = if (isPressed) -3f else 0f,
+        animationSpec = TrilooMotion.pressSpring,
+        label = "fabRotation"
+    )
     FloatingActionButton(
         onClick = onClick,
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                rotationZ = rotation
+            }
             .shadow(
                 elevation = 16.dp,
                 shape = RoundedCornerShape(18.dp),
@@ -130,7 +198,8 @@ fun TrilooFab(
             ),
         shape = RoundedCornerShape(18.dp),
         containerColor = colorScheme.primary,
-        contentColor = colorScheme.onPrimary
+        contentColor = colorScheme.onPrimary,
+        interactionSource = interactionSource
     ) {
         Icon(
             imageVector = icon,
@@ -153,9 +222,17 @@ fun TrilooCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessHigh),
+        targetValue = if (isPressed) 0.985f else 1f,
+        animationSpec = TrilooMotion.pressSpring,
         label = "cardScale"
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 1.dp else 4.dp,
+        animationSpec = tween(
+            durationMillis = TrilooMotion.durationShort,
+            easing = TrilooMotion.easingStandard
+        ),
+        label = "cardElevation"
     )
     val clickableModifier = if (onClick != null || onLongClick != null) {
         Modifier.combinedClickable(
@@ -174,7 +251,7 @@ fun TrilooCard(
             .then(clickableModifier),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        shadowElevation = elevation,
         tonalElevation = 1.dp
     ) {
         Column(
@@ -198,6 +275,22 @@ fun TrilooChip(
     val colorScheme = MaterialTheme.colorScheme
     val resolvedColor = color ?: colorScheme.secondaryContainer
     val resolvedTextColor = textColor ?: colorScheme.onSecondaryContainer
+    val animatedColor by animateColorAsState(
+        targetValue = resolvedColor,
+        animationSpec = tween(
+            durationMillis = TrilooMotion.durationShort,
+            easing = TrilooMotion.easingStandard
+        ),
+        label = "chipColor"
+    )
+    val animatedTextColor by animateColorAsState(
+        targetValue = resolvedTextColor,
+        animationSpec = tween(
+            durationMillis = TrilooMotion.durationShort,
+            easing = TrilooMotion.easingStandard
+        ),
+        label = "chipTextColor"
+    )
     Surface(
         modifier = modifier
             .then(
@@ -206,7 +299,7 @@ fun TrilooChip(
                 } else Modifier
             ),
         shape = RoundedCornerShape(12.dp),
-        color = resolvedColor
+        color = animatedColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -223,7 +316,7 @@ fun TrilooChip(
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium,
-                color = resolvedTextColor,
+                color = animatedTextColor,
                 fontWeight = FontWeight.Medium
             )
         }

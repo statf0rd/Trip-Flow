@@ -10,20 +10,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import com.triloo.ui.theme.Slate100
 import com.triloo.ui.theme.Slate200
 import com.triloo.ui.theme.Slate300
+import com.triloo.ui.theme.TrilooMotion
 
 fun Modifier.shimmerEffect(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmerTransition")
     val translateAnimation = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
+        initialValue = -600f,
+        targetValue = 1200f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 1200,
-                easing = { it }
+                durationMillis = TrilooMotion.shimmerDuration,
+                easing = TrilooMotion.easingStandard
             ),
             repeatMode = RepeatMode.Restart
         ),
@@ -34,13 +34,20 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         Slate200,
         Slate100,
         Slate200,
+        Slate300,
     )
 
     background(
         brush = Brush.linearGradient(
             colors = shimmerColors,
-            start = Offset(x = translateAnimation.value - 500f, y = 0f),
-            end = Offset(x = translateAnimation.value, y = 0f)
+            start = Offset(
+                x = translateAnimation.value - 500f,
+                y = translateAnimation.value - 220f
+            ),
+            end = Offset(
+                x = translateAnimation.value + 500f,
+                y = translateAnimation.value + 220f
+            )
         )
     )
 }
