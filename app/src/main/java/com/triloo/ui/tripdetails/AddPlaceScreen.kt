@@ -41,6 +41,7 @@ import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.theme.TrilooMotion
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -157,8 +158,8 @@ fun AddPlaceScreen(
                 // Suggestions dropdown
                 AnimatedVisibility(
                     visible = showSuggestions && suggestions.isNotEmpty(),
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    enter = TrilooMotion.enterExpand(),
+                    exit = TrilooMotion.exitShrink()
                 ) {
                     Surface(
                         modifier = Modifier
@@ -190,8 +191,8 @@ fun AddPlaceScreen(
             // Selected place indicator
             AnimatedVisibility(
                 visible = uiState.hasCoordinates,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = TrilooMotion.enterExpand(),
+                exit = TrilooMotion.exitShrink()
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),

@@ -1,10 +1,16 @@
 package com.triloo.ui.tripdetails
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.EventNote
@@ -13,6 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +35,7 @@ import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import com.triloo.ui.PreviewData
 import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.theme.TrilooMotion
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -354,38 +364,81 @@ private fun TrilooTabRow(
         shape = RoundedCornerShape(16.dp),
         color = Slate100
     ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp)
         ) {
-            tabs.forEachIndexed { index, tab ->
-                val isSelected = index == selectedIndex
-                
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) Color.White else Color.Transparent,
-                    shadowElevation = if (isSelected) 2.dp else 0.dp,
-                    onClick = { onTabSelected(index) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+            val tabWidth = maxWidth / tabs.size
+            val indicatorOffset by animateDpAsState(
+                targetValue = tabWidth * selectedIndex,
+                animationSpec = tween(
+                    durationMillis = TrilooMotion.durationMedium,
+                    easing = TrilooMotion.easingEmphasized
+                ),
+                label = "tabIndicatorOffset"
+            )
+            Box(
+                modifier = Modifier
+                    .offset(x = indicatorOffset)
+                    .width(tabWidth)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White)
+                    .shadow(2.dp, RoundedCornerShape(12.dp))
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                tabs.forEachIndexed { index, tab ->
+                    val isSelected = index == selectedIndex
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.05f else 1f,
+                        animationSpec = TrilooMotion.selectSpring,
+                        label = "tabIconScale$index"
+                    )
+                    val iconColor by animateColorAsState(
+                        targetValue = if (isSelected) CoralPrimary else Slate500,
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationShort,
+                            easing = TrilooMotion.easingStandard
+                        ),
+                        label = "tabIconColor$index"
+                    )
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) Slate900 else Slate600,
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationShort,
+                            easing = TrilooMotion.easingStandard
+                        ),
+                        label = "tabTextColor$index"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onTabSelected(index) }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = tab.icon,
-                            contentDescription = null,
-                            tint = if (isSelected) CoralPrimary else Slate500,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = tab.title,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isSelected) Slate900 else Slate600,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = null,
+                                tint = iconColor,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .scale(iconScale)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = tab.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = textColor,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }

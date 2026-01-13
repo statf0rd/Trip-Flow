@@ -1,8 +1,6 @@
 package com.triloo.ui.tripdetails
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -46,6 +44,7 @@ import com.triloo.ui.components.ParticipantAvatar
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.theme.TrilooMotion
 import java.time.Instant
 import java.time.ZoneId
 import java.time.LocalDate
@@ -501,7 +500,7 @@ private fun ExpenseSplitSection(
                 val isSelected = splitType == type
                 val scale by animateFloatAsState(
                     targetValue = if (isSelected) 1.05f else 1f,
-                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                    animationSpec = TrilooMotion.selectSpring,
                     label = "splitTypeScale"
                 )
                 Surface(

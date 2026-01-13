@@ -1,6 +1,7 @@
 package com.triloo.ui.tripdetails
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +48,7 @@ import com.triloo.data.model.*
 import com.triloo.data.route.RouteDetails
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooMotion
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -220,11 +223,17 @@ private fun DayCard(
                 }
             }
             
+            val rotation by animateFloatAsState(
+                targetValue = if (isExpanded) 180f else 0f,
+                animationSpec = TrilooMotion.selectSpring,
+                label = "dayExpandRotation"
+            )
             IconButton(onClick = { isExpanded = !isExpanded }) {
                 Icon(
-                    imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    imageVector = Icons.Rounded.ExpandMore,
                     contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
-                    tint = Slate500
+                    tint = Slate500,
+                    modifier = Modifier.rotate(rotation)
                 )
             }
         }
@@ -232,8 +241,8 @@ private fun DayCard(
         // Places list (expandable)
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
+            enter = TrilooMotion.enterExpand(),
+            exit = TrilooMotion.exitShrink()
         ) {
             Column {
                 Spacer(modifier = Modifier.height(16.dp))

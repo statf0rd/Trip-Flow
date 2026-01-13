@@ -1,6 +1,7 @@
 package com.triloo.ui.auth
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,8 +35,8 @@ import com.google.android.gms.common.api.ApiException
 import com.triloo.BuildConfig
 import com.triloo.ui.PreviewData
 import com.triloo.ui.components.TrilooButton
-import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.theme.*
+import com.triloo.ui.theme.TrilooMotion
 import com.triloo.ui.theme.TrilooTheme
 
 /**
@@ -234,7 +235,11 @@ fun SignInContent(
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            AnimatedVisibility(visible = authState.error != null) {
+            AnimatedVisibility(
+                visible = authState.error != null,
+                enter = TrilooMotion.enterExpand(),
+                exit = TrilooMotion.exitShrink()
+            ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = ErrorLight,
@@ -596,7 +601,7 @@ fun ForgotPasswordScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ForgotPasswordContent(
     authState: AuthUiState,
@@ -634,102 +639,132 @@ fun ForgotPasswordContent(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
             
-            if (isSent) {
-                Icon(
-                    imageVector = Icons.Rounded.MarkEmailRead,
-                    contentDescription = null,
-                    tint = TealSecondary,
-                    modifier = Modifier.size(80.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Text(
-                    text = "Проверьте почту",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Мы отправили инструкции по восстановлению пароля на $email",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Slate600,
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                TrilooButton(
-                    text = "Вернуться к входу",
-                    onClick = onNavigateBack,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.LockReset,
-                    contentDescription = null,
-                    tint = CoralPrimary,
-                    modifier = Modifier.size(80.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Text(
-                    text = "Восстановление пароля",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Введите email, и мы отправим инструкции по восстановлению",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Slate600,
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it; onClearError() },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Email") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Email,
-                            contentDescription = null,
-                            tint = Slate500
+            AnimatedContent(
+                targetState = isSent,
+                transitionSpec = {
+                    (fadeIn(
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationMedium,
+                            easing = TrilooMotion.easingEmphasized
                         )
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Done
-                    ),
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                TrilooButton(
-                    text = "Отправить",
-                    onClick = { onSendReset(email.trim()) { isSent = true } },
-                    enabled = email.isNotBlank(),
-                    isLoading = authState.isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                authState.error?.let { error ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Error
+                    ) + slideInVertically(
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationMedium,
+                            easing = TrilooMotion.easingEmphasized
+                        ),
+                        initialOffsetY = { it / 8 }
+                    )) with (fadeOut(
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationShort,
+                            easing = TrilooMotion.easingExit
+                        )
+                    ) + slideOutVertically(
+                        animationSpec = tween(
+                            durationMillis = TrilooMotion.durationShort,
+                            easing = TrilooMotion.easingExit
+                        ),
+                        targetOffsetY = { -it / 10 }
+                    ))
+                },
+                label = "resetState"
+            ) { sent ->
+                if (sent) {
+                    Icon(
+                        imageVector = Icons.Rounded.MarkEmailRead,
+                        contentDescription = null,
+                        tint = TealSecondary,
+                        modifier = Modifier.size(80.dp)
                     )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Проверьте почту",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Мы отправили инструкции по восстановлению пароля на $email",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Slate600,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    TrilooButton(
+                        text = "Вернуться к входу",
+                        onClick = onNavigateBack,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.LockReset,
+                        contentDescription = null,
+                        tint = CoralPrimary,
+                        modifier = Modifier.size(80.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Восстановление пароля",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Введите email, и мы отправим инструкции по восстановлению",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Slate600,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; onClearError() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Email") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Email,
+                                contentDescription = null,
+                                tint = Slate500
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    TrilooButton(
+                        text = "Отправить",
+                        onClick = { onSendReset(email.trim()) { isSent = true } },
+                        enabled = email.isNotBlank(),
+                        isLoading = authState.isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    authState.error?.let { error ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Error
+                        )
+                    }
                 }
             }
         }
