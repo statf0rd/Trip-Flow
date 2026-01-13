@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,6 +34,7 @@ import com.triloo.data.model.Trip
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.theme.TrilooMotion
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -89,11 +91,13 @@ fun TripListScreen(
             )
         },
         floatingActionButton = {
-            TrilooFab(
-                onClick = { showCreateTripSheet = true },
-                icon = Icons.Rounded.Add,
-                contentDescription = "Создать путешествие"
-            )
+            if (uiState.hasTrips) {
+                TrilooFab(
+                    onClick = { showCreateTripSheet = true },
+                    icon = Icons.Rounded.Add,
+                    contentDescription = "Создать путешествие"
+                )
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -412,15 +416,14 @@ private fun UpcomingTripCard(
     }
     val daysUntil = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.startDate).toInt()
     
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(animationDelay.toLong())
-        visible = true
+    val visibilityState = remember {
+        MutableTransitionState(false).apply { targetState = true }
     }
-    
+
     AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn() + slideInHorizontally { it / 2 }
+        visibleState = visibilityState,
+        enter = TrilooMotion.enterHorizontalStagger(delayMillis = animationDelay),
+        exit = TrilooMotion.exitStagger()
     ) {
         TrilooCard(
             modifier = modifier.heightIn(min = UpcomingCardMinHeight),
@@ -513,19 +516,14 @@ private fun PastTripCard(
         DateTimeFormatter.ofPattern("MMM yyyy", Locale.forLanguageTag("ru")) 
     }
 
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(animationDelay.toLong())
-        visible = true
+    val visibilityState = remember {
+        MutableTransitionState(false).apply { targetState = true }
     }
 
     AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(durationMillis = 300)) + slideInVertically(
-            initialOffsetY = { it / 2 },
-            animationSpec = tween(durationMillis = 300)
-        ),
-        exit = fadeOut(animationSpec = tween(durationMillis = 300))
+        visibleState = visibilityState,
+        enter = TrilooMotion.enterVerticalStagger(delayMillis = animationDelay),
+        exit = TrilooMotion.exitStagger()
     ) {
         Surface(
             modifier = modifier
@@ -591,12 +589,42 @@ private fun EmptyTripsState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Animated illustration
+        val floatTransition = rememberInfiniteTransition(label = "emptyTripsFloat")
+        val floatOffset by floatTransition.animateFloat(
+            initialValue = -8f,
+            targetValue = 8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = TrilooMotion.durationExtraLong,
+                    easing = TrilooMotion.easingStandard
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "emptyTripsOffset"
+        )
+        val floatScale by floatTransition.animateFloat(
+            initialValue = 0.98f,
+            targetValue = 1.02f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = TrilooMotion.durationExtraLong,
+                    easing = TrilooMotion.easingStandard
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "emptyTripsScale"
+        )
+
         Text(
             text = "✈️",
             style = MaterialTheme.typography.displayLarge.copy(
                 fontSize = MaterialTheme.typography.displayLarge.fontSize * 2
-            )
+            ),
+            modifier = Modifier.graphicsLayer {
+                translationY = floatOffset
+                scaleX = floatScale
+                scaleY = floatScale
+            }
         )
         
         Spacer(modifier = Modifier.height(32.dp))

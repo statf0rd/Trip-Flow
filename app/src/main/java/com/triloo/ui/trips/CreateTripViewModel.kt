@@ -30,11 +30,16 @@ class CreateTripViewModel @Inject constructor(
 
     private var editingTrip: Trip? = null
 
+    private val defaultStartDate = if (editTripId == null) LocalDate.now() else null
+    private val defaultEndDate = if (editTripId == null) LocalDate.now().plusDays(1) else null
+
     private val _uiState = MutableStateFlow(
         CreateTripUiState(
             isGroupTrip = initialIsGroupTrip,
             tripId = editTripId,
-            isEditing = editTripId != null
+            isEditing = editTripId != null,
+            startDate = defaultStartDate,
+            endDate = defaultEndDate
         )
     )
     val uiState: StateFlow<CreateTripUiState> = _uiState.asStateFlow()
@@ -197,5 +202,4 @@ data class CreateTripUiState(
                 endDate != null &&
                 !endDate.isBefore(startDate)
 }
-
 
