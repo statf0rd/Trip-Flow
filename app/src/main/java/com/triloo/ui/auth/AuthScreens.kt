@@ -57,13 +57,15 @@ fun SignInScreen(
     val isGoogleConfigured = remember(googleClientId) {
         googleClientId.isNotBlank() && !googleClientId.contains("YOUR_GOOGLE_WEB_CLIENT_ID")
     }
-    val googleSignInClient = remember(googleClientId) {
+    val googleSignInClient = remember(googleClientId, isGoogleConfigured) {
+        val optionsBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+        if (isGoogleConfigured) {
+            optionsBuilder.requestIdToken(googleClientId)
+        }
         GoogleSignIn.getClient(
             context,
-            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestEmail()
-                .requestIdToken(googleClientId)
-                .build()
+            optionsBuilder.build()
         )
     }
     val googleLauncher = rememberLauncherForActivityResult(

@@ -12,7 +12,20 @@
           "package_name": "com.triloo"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "246934634678-9a521mo0v10kj5pig8c6t2d1cbleavk4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.triloo",
+            "certificate_hash": "372bdf49bcceff7c6ec574d07abbc5d4b4ca9ebe"
+          }
+        },
+        {
+          "client_id": "246934634678-d2c9gmqd8va0lon9kcn2ioeqpiqlhpu2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDYE_RcOtBPUyDicKD4THQhFRNoAYfE3mI"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "246934634678-d2c9gmqd8va0lon9kcn2ioeqpiqlhpu2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
