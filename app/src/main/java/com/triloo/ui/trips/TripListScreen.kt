@@ -638,7 +638,7 @@ private fun EmptyTripsState(
         Spacer(modifier = Modifier.height(12.dp))
         
         Text(
-            text = "Создайте первую поездку и планируйте\nмаршруты, расходы и встречи с друзьями",
+            text = "Создайте первую поездку и соберите\nпланы, расходы и встречи в одном месте",
             style = MaterialTheme.typography.bodyMedium,
             color = Slate600,
             modifier = Modifier.padding(horizontal = 48.dp)
