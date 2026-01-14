@@ -25,6 +25,7 @@ hiltNavigationCompose = "1.2.0"
 coroutines = "1.9.0"
 coroutinesPlayServices = "1.9.0"
 firebaseBom = "33.2.0"
+crashlyticsGradle = "3.0.2"
 
 # Retrofit & OkHttp
 retrofit = "2.11.0"
@@ -124,6 +125,7 @@ google-places = { group = "com.google.android.libraries.places", name = "places"
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth-ktx = { group = "com.google.firebase", name = "firebase-auth-ktx" }
 firebase-firestore-ktx = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
+firebase-crashlytics-ktx = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
 
 # Splash Screen
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
@@ -141,3 +143,4 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 secrets-gradle = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradle" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsGradle" }

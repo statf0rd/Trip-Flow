@@ -7,10 +7,12 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.secrets.gradle)
+    alias(libs.plugins.firebase.crashlytics) apply false
 }
 
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 } else {
     logger.lifecycle("Firebase disabled: app/google-services.json not found.")
 }
@@ -32,8 +34,8 @@ android {
         applicationId = "com.triloo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 6
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -159,6 +161,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.crashlytics.ktx)
 
     // Testing
     testImplementation(libs.junit)
