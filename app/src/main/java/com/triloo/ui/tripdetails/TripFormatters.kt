@@ -1,5 +1,7 @@
 package com.triloo.ui.tripdetails
 
+import android.content.Context
+import android.text.format.DateFormat
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -22,8 +24,15 @@ fun formatTimeDisplay(value: String): String {
     val trimmed = value.trim()
     if (trimmed.isBlank()) return ""
     val format = detectTimeFormat(trimmed)
-    val parsed = parseTime(trimmed.uppercase(Locale.US), format) ?: return trimmed
-    return formatMinutesToTime(parsed.hour * 60 + parsed.minute, format)
+    return formatTimeDisplay(trimmed, format)
+}
+
+fun formatTimeDisplay(value: String, targetFormat: TimeFormat): String {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return ""
+    val sourceFormat = detectTimeFormat(trimmed)
+    val parsed = parseTime(trimmed.uppercase(Locale.US), sourceFormat) ?: return trimmed
+    return formatMinutesToTime(parsed.hour * 60 + parsed.minute, targetFormat)
 }
 
 fun parseTimeToMinutes(value: String): Int? {
@@ -49,6 +58,14 @@ fun detectTimeFormat(value: String): TimeFormat {
         TimeFormat.HOURS_12
     } else {
         TimeFormat.HOURS_24
+    }
+}
+
+fun resolveDeviceTimeFormat(context: Context): TimeFormat {
+    return if (DateFormat.is24HourFormat(context)) {
+        TimeFormat.HOURS_24
+    } else {
+        TimeFormat.HOURS_12
     }
 }
 

@@ -293,11 +293,8 @@ fun AddPlaceScreen(
                         suffix = {
                             Text(
                                 text = uiState.timeFormat.label,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable { viewModel.toggleTimeFormat() }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = Slate600,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 maxLines = 1
                             )
                         },
@@ -319,7 +316,7 @@ fun AddPlaceScreen(
 
                     uiState.lockedTimeFormat?.let { locked ->
                         Text(
-                            text = "Формат зафиксирован: ${locked.label}",
+                            text = "Формат времени: ${locked.label}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Slate500,
                             modifier = Modifier

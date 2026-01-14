@@ -1,5 +1,6 @@
 package com.triloo.ui.tripdetails
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,7 @@ import com.triloo.data.places.PlaceSuggestion
 import com.triloo.data.places.PlacesService
 import com.triloo.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,6 +28,7 @@ import javax.inject.Inject
 class AddPlaceViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val placesService: PlacesService,
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val placeId: String? = savedStateHandle.get<String>("placeId")
@@ -33,7 +36,8 @@ class AddPlaceViewModel @Inject constructor(
     private var dayId: String = savedStateHandle.get<String>("dayId") ?: ""
     private var editingPlace: Place? = null
 
-    private val _uiState = MutableStateFlow(AddPlaceUiState())
+    private val defaultTimeFormat = resolveDeviceTimeFormat(context)
+    private val _uiState = MutableStateFlow(AddPlaceUiState(timeFormat = defaultTimeFormat))
     val uiState: StateFlow<AddPlaceUiState> = _uiState.asStateFlow()
 
     private val _day = MutableStateFlow<TripDay?>(null)
@@ -167,24 +171,6 @@ class AddPlaceViewModel @Inject constructor(
         _uiState.update { it.copy(durationValue = value) }
     }
 
-    fun toggleTimeFormat() {
-        _uiState.update { state ->
-            state.lockedTimeFormat?.let {
-                return@update state.copy(timeFormat = it)
-            }
-            val newFormat = if (state.timeFormat == TimeFormat.HOURS_24) {
-                TimeFormat.HOURS_12
-            } else {
-                TimeFormat.HOURS_24
-            }
-            val converted = convertTimeFormat(state.time, state.timeFormat, newFormat)
-            state.copy(
-                timeFormat = newFormat,
-                time = converted ?: state.time
-            )
-        }
-    }
-
     fun toggleDurationUnit() {
         _uiState.update { state ->
             val currentValue = parseDurationValue(state.durationValue)
@@ -281,16 +267,6 @@ class AddPlaceViewModel @Inject constructor(
 
     private fun parseDurationValue(value: String): Double? {
         return value.trim().replace(',', '.').toDoubleOrNull()
-    }
-
-    private fun convertTimeFormat(
-        value: String,
-        from: TimeFormat,
-        to: TimeFormat
-    ): String? {
-        if (value.isBlank()) return null
-        val parsed = parseTime(value, from) ?: return null
-        return formatTime(parsed, to)
     }
 
     private fun normalizeTime(value: String, format: TimeFormat): String? {
