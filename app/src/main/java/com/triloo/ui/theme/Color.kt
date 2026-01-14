@@ -9,23 +9,23 @@ import androidx.compose.ui.graphics.Color
  * Inspired by: Sunset horizons, ocean depths, golden hour travel moments
  */
 
-// PRIMARY — Coral Sunrise (Energy, Excitement, Adventure)
+// PRIMARY — Coral (Core actions)
 val CoralPrimary = Color(0xFFFF6B5B)          // Main action color
-val CoralLight = Color(0xFFFF8A7A)            // Hover/pressed states
-val CoralDark = Color(0xFFE54E3D)             // Dark mode primary
-val CoralSubtle = Color(0xFFFFF0EE)           // Light backgrounds
+val CoralLight = CoralPrimary
+val CoralDark = CoralPrimary
+val CoralSubtle = CoralPrimary.copy(alpha = 0.12f)
 
-// SECONDARY — Ocean Teal (Calm, Trust, Navigation)
+// SECONDARY — Teal (Secondary actions)
 val TealSecondary = Color(0xFF2DD4BF)         // Secondary actions, success
-val TealLight = Color(0xFF5EEAD4)             // Light variant
-val TealDark = Color(0xFF14B8A6)              // Dark variant
-val TealSubtle = Color(0xFFE6FAF7)            // Subtle backgrounds
+val TealLight = TealSecondary
+val TealDark = TealSecondary
+val TealSubtle = TealSecondary.copy(alpha = 0.12f)
 
-// ACCENT — Golden Hour (Premium, Highlights, Money)
+// ACCENT — Gold (Highlights)
 val GoldenAccent = Color(0xFFFBBF24)          // Currency, premium features
-val GoldenLight = Color(0xFFFCD34D)           // Light variant
-val GoldenDark = Color(0xFFF59E0B)            // Dark variant
-val GoldenSubtle = Color(0xFFFEFCE8)          // Subtle backgrounds
+val GoldenLight = GoldenAccent
+val GoldenDark = GoldenAccent
+val GoldenSubtle = GoldenAccent.copy(alpha = 0.12f)
 
 // NEUTRAL — Slate (Text, Backgrounds, Borders)
 val Slate950 = Color(0xFF0F172A)              // Primary text (light mode)
@@ -40,30 +40,30 @@ val Slate200 = Color(0xFFF1F5F9)              // Card backgrounds
 val Slate100 = Color(0xFFF8FAFC)              // Page backgrounds
 val Slate50 = Color(0xFFFAFBFC)               // Subtle backgrounds
 
-// SEMANTIC — Status Colors
-val Success = Color(0xFF10B981)               // Emerald — Completed, Positive
-val SuccessLight = Color(0xFFD1FAE5)
-val Warning = Color(0xFFF59E0B)               // Amber — Attention needed
-val WarningLight = Color(0xFFFEF3C7)
-val Error = Color(0xFFEF4444)                 // Red — Errors, Delete
-val ErrorLight = Color(0xFFFEE2E2)
-val Info = Color(0xFF3B82F6)                  // Blue — Information
-val InfoLight = Color(0xFFDBEAFE)
+// SEMANTIC — Status Colors (aligned to 3-4 hues)
+val Success = TealSecondary                   // Completed, Positive
+val SuccessLight = TealSecondary.copy(alpha = 0.16f)
+val Warning = GoldenAccent                    // Attention needed
+val WarningLight = GoldenAccent.copy(alpha = 0.16f)
+val Error = Color(0xFFEF4444)                 // Errors, Delete
+val ErrorLight = Error.copy(alpha = 0.16f)
+val Info = CoralPrimary                       // Information
+val InfoLight = CoralPrimary.copy(alpha = 0.16f)
 
-// EXPENSE CATEGORIES — Distinct Colors for Expense Tracking
-val ExpenseFood = Color(0xFFF97316)           // Orange — Food & Dining
-val ExpenseTransport = Color(0xFF6366F1)      // Indigo — Transport
-val ExpenseAccommodation = Color(0xFF8B5CF6)  // Violet — Hotels
-val ExpenseEntertainment = Color(0xFFEC4899)  // Pink — Entertainment
-val ExpenseShopping = Color(0xFF14B8A6)       // Teal — Shopping
-val ExpenseOther = Color(0xFF64748B)          // Slate — Other
+// EXPENSE CATEGORIES — Reduced to the core palette
+val ExpenseFood = CoralPrimary
+val ExpenseTransport = TealSecondary
+val ExpenseAccommodation = GoldenAccent
+val ExpenseEntertainment = CoralPrimary
+val ExpenseShopping = TealSecondary
+val ExpenseOther = Slate600
 
-// MAP MARKERS — Distinct Marker Colors
-val MarkerHotel = Color(0xFF8B5CF6)           // Violet — Hotel/Accommodation
-val MarkerFood = Color(0xFFF97316)            // Orange — Restaurants
-val MarkerAttraction = Color(0xFFFF6B5B)      // Coral — Attractions
-val MarkerNature = Color(0xFF22C55E)          // Green — Nature spots
-val MarkerFriend = Color(0xFF3B82F6)          // Blue — Friend locations
+// MAP MARKERS — Reduced to the core palette
+val MarkerHotel = GoldenAccent
+val MarkerFood = CoralPrimary
+val MarkerAttraction = CoralPrimary
+val MarkerNature = TealSecondary
+val MarkerFriend = TealSecondary
 
 // DARK MODE — Specific Dark Theme Colors
 val DarkBackground = Color(0xFF0D1117)        // GitHub-like dark
