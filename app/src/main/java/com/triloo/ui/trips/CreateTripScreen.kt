@@ -1,15 +1,18 @@
 package com.triloo.ui.trips
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -19,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -26,14 +30,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
 import com.triloo.ui.PreviewData
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -63,13 +68,14 @@ fun CreateTripScreen(
         onEndDateChange = viewModel::updateEndDate,
         onCurrencyChange = viewModel::updateCurrency,
         onHotelNameChange = viewModel::updateHotelName,
-        onBudgetChange = { viewModel.updateBudget(it) },
+        onBudgetChange = viewModel::updateBudget,
         onSaveTrip = viewModel::saveTrip,
+        onErrorConsumed = viewModel::clearError,
         focusManager = focusManager
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateTripContent(
     uiState: CreateTripUiState,
@@ -80,10 +86,29 @@ private fun CreateTripContent(
     onEndDateChange: (LocalDate) -> Unit,
     onCurrencyChange: (String) -> Unit,
     onHotelNameChange: (String) -> Unit,
-    onBudgetChange: (Double?) -> Unit,
+    onBudgetChange: (String) -> Unit,
     onSaveTrip: () -> Unit,
-    focusManager: FocusManager = LocalFocusManager.current
+    onErrorConsumed: () -> Unit,
+    focusManager: FocusManager = LocalFocusManager.current,
+    onHotelAssist: (() -> Unit)? = null
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val handleHotelAssist: () -> Unit = onHotelAssist ?: {
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar("Подбор жилья скоро появится")
+        }
+        Unit
+    }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            onErrorConsumed()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -107,13 +132,15 @@ private fun CreateTripContent(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { focusManager.clearFocus() })
                 }
@@ -193,7 +220,7 @@ private fun CreateTripContent(
                 Text(
                     text = "📅 $days ${pluralizeDays(days)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TealSecondary
+                    color = Slate600
                 )
             }
             
@@ -221,6 +248,15 @@ private fun CreateTripContent(
                 label = "Отель (опционально)",
                 placeholder = "Название или адрес отеля",
                 leadingIcon = Icons.Rounded.Hotel,
+                trailingIcon = {
+                    IconButton(onClick = handleHotelAssist) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = "Подобрать жилье",
+                            tint = CoralPrimary
+                        )
+                    }
+                },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
                     imeAction = ImeAction.Done
@@ -233,12 +269,21 @@ private fun CreateTripContent(
             Spacer(modifier = Modifier.height(32.dp))
             
             TrilooTextField(
-                value = uiState.budget?.toString() ?: "",
-                onValueChange = { onBudgetChange(it.toDoubleOrNull()) },
+                value = uiState.budgetInput,
+                onValueChange = onBudgetChange,
                 label = "Бюджет (опционально)",
                 placeholder = "100000",
                 leadingIcon = Icons.Rounded.AccountBalanceWallet,
                 suffix = uiState.baseCurrency,
+                modifier = Modifier
+                    .bringIntoViewRequester(bringIntoViewRequester)
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            coroutineScope.launch {
+                                bringIntoViewRequester.bringIntoView()
+                            }
+                        }
+                    },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Done
@@ -274,6 +319,7 @@ private fun TrilooTextField(
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier,
     suffix: String? = null,
+    trailingIcon: (@Composable (() -> Unit))? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
@@ -290,6 +336,7 @@ private fun TrilooTextField(
                 tint = Slate500
             )
         },
+        trailingIcon = trailingIcon,
         suffix = suffix?.let {
             { Text(it, color = Slate600) }
         },
@@ -458,8 +505,9 @@ private fun CreateTripScreenPreview() {
             onEndDateChange = { _ -> },
             onCurrencyChange = {},
             onHotelNameChange = {},
-            onBudgetChange = {},
-            onSaveTrip = {}
+            onBudgetChange = { _ -> },
+            onSaveTrip = {},
+            onErrorConsumed = {}
         )
     }
 }

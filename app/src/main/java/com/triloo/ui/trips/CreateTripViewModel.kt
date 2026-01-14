@@ -57,7 +57,7 @@ class CreateTripViewModel @Inject constructor(
                         endDate = trip.endDate,
                         baseCurrency = trip.baseCurrency,
                         hotelName = trip.hotelName.orEmpty(),
-                        budget = trip.budget,
+                        budgetInput = formatBudgetInput(trip.budget),
                         isGroupTrip = trip.isGroupTrip
                     )
                 }
@@ -97,8 +97,8 @@ class CreateTripViewModel @Inject constructor(
         _uiState.update { it.copy(hotelName = name) }
     }
     
-    fun updateBudget(budget: Double?) {
-        _uiState.update { it.copy(budget = budget) }
+    fun updateBudget(input: String) {
+        _uiState.update { it.copy(budgetInput = sanitizeBudgetInput(input)) }
     }
 
     fun updateIsGroupTrip(isGroupTrip: Boolean) {
@@ -177,6 +177,21 @@ class CreateTripViewModel @Inject constructor(
             }
         }
     }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    private fun sanitizeBudgetInput(input: String): String {
+        val normalized = input.replace(',', '.')
+        val wholePart = normalized.substringBefore('.')
+        return wholePart.filter { it.isDigit() }
+    }
+
+    private fun formatBudgetInput(budget: Double?): String {
+        if (budget == null) return ""
+        return budget.toLong().toString()
+    }
 }
 
 data class CreateTripUiState(
@@ -187,7 +202,7 @@ data class CreateTripUiState(
     val endDate: LocalDate? = null,
     val baseCurrency: String = "RUB",
     val hotelName: String = "",
-    val budget: Double? = null,
+    val budgetInput: String = "",
     val isGroupTrip: Boolean = false,
     val isEditing: Boolean = false,
     
@@ -195,6 +210,9 @@ data class CreateTripUiState(
     val createdTripId: String? = null,
     val error: String? = null
 ) {
+    val budget: Double?
+        get() = budgetInput.toLongOrNull()?.toDouble()
+
     val isValid: Boolean
         get() = name.isNotBlank() && 
                 destination.isNotBlank() && 
@@ -202,4 +220,3 @@ data class CreateTripUiState(
                 endDate != null &&
                 !endDate.isBefore(startDate)
 }
-

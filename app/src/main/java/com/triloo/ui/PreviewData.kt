@@ -194,7 +194,7 @@ object PreviewData {
         endDate = trip.endDate,
         baseCurrency = trip.baseCurrency,
         hotelName = trip.hotelName.orEmpty(),
-        budget = trip.budget,
+        budgetInput = trip.budget?.toLong()?.toString().orEmpty(),
         isGroupTrip = true
     )
 
