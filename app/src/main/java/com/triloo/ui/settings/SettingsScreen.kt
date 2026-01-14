@@ -85,6 +85,13 @@ private fun SettingsContent(
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
+    val safeAction: (String, () -> Unit) -> Unit = { message, action ->
+        runCatching(action).onFailure {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -187,8 +194,10 @@ private fun SettingsContent(
                                 context,
                                 Manifest.permission.POST_NOTIFICATIONS
                             ) == PERMISSION_GRANTED
-                            if (!granted) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (!granted) {
+                                safeAction("Не удалось запросить разрешение") {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
                                 return@SettingsSwitchItem
                             }
                         }
@@ -209,7 +218,11 @@ private fun SettingsContent(
                     icon = Icons.Rounded.FileDownload,
                     title = "Экспорт данных",
                     subtitle = "Скачать все поездки и расходы",
-                    onClick = { exportLauncher.launch("triloo-export.json") }
+                    onClick = {
+                        safeAction("Не удалось открыть экспорт") {
+                            exportLauncher.launch("triloo-export.json")
+                        }
+                    }
                 )
                 SettingsItem(
                     icon = Icons.Rounded.DeleteForever,
@@ -235,13 +248,13 @@ private fun SettingsContent(
                 SettingsItem(
                     icon = Icons.Rounded.Star,
                     title = "Оценить приложение",
-                    onClick = { openPlayStore(context) }
+                    onClick = { safeAction("Не удалось открыть магазин") { openPlayStore(context) } }
                 )
                 SettingsItem(
                     icon = Icons.Rounded.Feedback,
                     title = "Обратная связь",
                     subtitle = "Сообщить о проблеме",
-                    onClick = { openFeedbackEmail(context) }
+                    onClick = { safeAction("Не удалось открыть почту") { openFeedbackEmail(context) } }
                 )
             }
 
@@ -435,7 +448,7 @@ private fun SettingsSection(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = CoralPrimary,
+            color = Slate700,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
         Surface(
