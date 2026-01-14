@@ -151,6 +151,7 @@ private fun PlaceDetailsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val deviceTimeFormat = remember(context) { resolveDeviceTimeFormat(context) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -233,7 +234,7 @@ private fun PlaceDetailsContent(
                 InfoRow(
                     icon = Icons.Rounded.Schedule,
                     label = "Запланировано",
-                    value = formatTimeDisplay(time)
+                    value = formatTimeDisplay(time, deviceTimeFormat)
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }

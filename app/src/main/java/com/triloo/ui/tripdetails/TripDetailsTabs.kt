@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -314,7 +315,8 @@ private fun DayTimeline(
     onDeletePlace: (String) -> Unit
 ) {
     val sortedScheduled = segments.sortedBy { it.startMinutes }
-    val timelineFormat = sortedScheduled.firstOrNull()?.timeFormat ?: TimeFormat.HOURS_24
+    val context = LocalContext.current
+    val displayFormat = remember(context) { resolveDeviceTimeFormat(context) }
 
     if (sortedScheduled.isNotEmpty()) {
         val items = buildTimelineItems(sortedScheduled)
@@ -333,7 +335,7 @@ private fun DayTimeline(
                 when (item) {
                     is PlaceSegment -> TimelineEventRow(
                         item = item,
-                        timeFormat = timelineFormat,
+                        displayFormat = displayFormat,
                         blockHeight = blockHeight,
                         onClick = { onPlaceClick(item.place.id) },
                         onEdit = { onEditPlace(item.place.id) },
@@ -341,7 +343,7 @@ private fun DayTimeline(
                     )
                     is TimelineGap -> TimelineGapRow(
                         item = item,
-                        timeFormat = timelineFormat,
+                        displayFormat = displayFormat,
                         blockHeight = blockHeight
                     )
                 }
@@ -403,15 +405,14 @@ private fun buildTimelineItems(events: List<PlaceSegment>): List<TimelineItem> {
 @Composable
 private fun TimelineEventRow(
     item: PlaceSegment,
-    timeFormat: TimeFormat,
+    displayFormat: TimeFormat,
     blockHeight: Dp,
     onClick: () -> Unit,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit
 ) {
-    val startLabel = formatMinutesToTime(item.startMinutes, item.timeFormat)
-    val railLabel = formatMinutesToTime(item.startMinutes, TimeFormat.HOURS_24)
-    val endLabel = formatMinutesToTime(item.startMinutes + item.durationMinutes, timeFormat)
+    val railLabel = formatMinutesToTime(item.startMinutes, displayFormat)
+    val endLabel = formatMinutesToTime(item.startMinutes + item.durationMinutes, displayFormat)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -419,9 +420,9 @@ private fun TimelineEventRow(
     ) {
         TimelineRail(
             startMinutes = item.startMinutes,
-            timeFormat = TimeFormat.HOURS_24,
+            timeFormat = displayFormat,
             timeLabel = railLabel,
-            endLabel = formatMinutesToTime(item.startMinutes + item.durationMinutes, TimeFormat.HOURS_24),
+            endLabel = endLabel,
             blockMinutes = item.durationMinutes,
             blockHeight = blockHeight,
             lineColor = CoralPrimary,
@@ -445,12 +446,12 @@ private fun TimelineEventRow(
 @Composable
 private fun TimelineGapRow(
     item: TimelineGap,
-    timeFormat: TimeFormat,
+    displayFormat: TimeFormat,
     blockHeight: Dp
 ) {
     val gapLabel = "Окно ${formatDurationLabel(item.minutes)}"
-    val railLabel = formatMinutesToTime(item.startMinutes, TimeFormat.HOURS_24)
-    val endLabel = formatMinutesToTime(item.startMinutes + item.minutes, TimeFormat.HOURS_24)
+    val railLabel = formatMinutesToTime(item.startMinutes, displayFormat)
+    val endLabel = formatMinutesToTime(item.startMinutes + item.minutes, displayFormat)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -458,7 +459,7 @@ private fun TimelineGapRow(
     ) {
         TimelineRail(
             startMinutes = item.startMinutes,
-            timeFormat = TimeFormat.HOURS_24,
+            timeFormat = displayFormat,
             timeLabel = railLabel,
             endLabel = endLabel,
             blockMinutes = item.minutes,
@@ -519,6 +520,7 @@ private fun TimelineRail(
     isMuted: Boolean = false,
     showIntermediateTicks: Boolean = true
 ) {
+    val labelWidth = 64.dp
     Column(
         modifier = Modifier.width(104.dp),
         horizontalAlignment = Alignment.Start
@@ -535,7 +537,7 @@ private fun TimelineRail(
             if (!showIntermediateTicks && endLabel != null) {
                 Column(
                     modifier = Modifier
-                        .width(48.dp)
+                        .width(labelWidth)
                         .fillMaxHeight(),
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.End
@@ -543,16 +545,22 @@ private fun TimelineRail(
                     Text(
                         text = timeLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMuted) Slate500 else Slate700
+                        color = if (isMuted) Slate500 else Slate700,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
                     )
                     Text(
                         text = endLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMuted) Slate500 else Slate700
+                        color = if (isMuted) Slate500 else Slate700,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.width(48.dp))
+                Spacer(modifier = Modifier.width(labelWidth))
             }
 
             Spacer(modifier = Modifier.width(6.dp))
@@ -1637,7 +1645,7 @@ private fun TimelineEventRowPreview() {
     PreviewContainer {
         TimelineEventRow(
             item = segment,
-            timeFormat = TimeFormat.HOURS_24,
+            displayFormat = TimeFormat.HOURS_24,
             blockHeight = 72.dp,
             onClick = { },
             onEdit = { },
@@ -1652,7 +1660,7 @@ private fun TimelineGapRowPreview() {
     PreviewContainer {
         TimelineGapRow(
             item = TripDetailsPreviewData.day1Gap,
-            timeFormat = TimeFormat.HOURS_24,
+            displayFormat = TimeFormat.HOURS_24,
             blockHeight = 96.dp
         )
     }
