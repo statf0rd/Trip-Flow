@@ -2,6 +2,7 @@ package com.triloo.ui.tripdetails
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -24,6 +25,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -357,6 +360,9 @@ private fun TrilooTabRow(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit
 ) {
+    var rowHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -382,12 +388,18 @@ private fun TrilooTabRow(
                 modifier = Modifier
                     .offset(x = indicatorOffset)
                     .width(tabWidth)
-                    .fillMaxHeight()
+                    .height(rowHeight)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White)
-                    .shadow(2.dp, RoundedCornerShape(12.dp))
+                    .border(1.dp, Slate200, RoundedCornerShape(12.dp))
             )
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { size ->
+                        rowHeight = with(density) { size.height.toDp() }
+                    }
+            ) {
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = index == selectedIndex
                     val iconScale by animateFloatAsState(
@@ -446,12 +458,11 @@ private fun TrilooTabRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
 private fun TripDetailsScreenPreview() {
     val uiState = PreviewData.tripDetailsState
-    val pagerState = rememberPagerState(pageCount = { 3 })
     val tabs = listOf(
         TabItem("План", Icons.AutoMirrored.Rounded.EventNote),
         TabItem("Карта", Icons.Rounded.Map),
@@ -480,36 +491,19 @@ private fun TripDetailsScreenPreview() {
             ) {
                 TrilooTabRow(
                     tabs = tabs,
-                    selectedIndex = pagerState.currentPage,
+                    selectedIndex = 0,
                     onTabSelected = { }
                 )
 
-                when (pagerState.currentPage) {
-                    0 -> PlanTab(
-                        days = uiState.days,
-                        places = uiState.places,
-                        onDayClick = {},
-                        onPlaceClick = {},
-                        onEditPlace = {},
-                        onAddPlace = {},
-                        onDeletePlace = {}
-                    )
-                    1 -> MapTab(
-                        trip = uiState.trip!!,
-                        places = uiState.places,
-                        participants = uiState.participants,
-                        routeDetails = uiState.routeDetails
-                    )
-                    else -> ExpensesTab(
-                        expenses = uiState.expenses,
-                        totalAmount = uiState.totalExpenses,
-                        currency = uiState.trip!!.baseCurrency,
-                        balances = uiState.balances,
-                        onExpenseClick = {},
-                        onAddExpense = {},
-                        onDeleteExpense = {}
-                    )
-                }
+                PlanTab(
+                    days = uiState.days,
+                    places = uiState.places,
+                    onDayClick = {},
+                    onPlaceClick = {},
+                    onEditPlace = {},
+                    onAddPlace = {},
+                    onDeletePlace = {}
+                )
             }
         }
     }
