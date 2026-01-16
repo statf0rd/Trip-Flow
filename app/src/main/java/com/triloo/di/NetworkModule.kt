@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.triloo.data.remote.CurrencyApi
 import com.triloo.data.remote.DirectionsApi
+import com.triloo.data.remote.OpenAiApi
 import com.triloo.data.remote.PlacesApi
 import dagger.Module
 import dagger.Provides
@@ -73,6 +74,20 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @Named("OpenAiRetrofit")
+    fun provideOpenAiRetrofit(
+        gson: Gson,
+        okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://api.openai.com/")
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(okHttpClient)
+            .build()
+    }
+
+    @Provides
+    @Singleton
     fun providePlacesApi(@Named("MapsRetrofit") retrofit: Retrofit): PlacesApi {
         return retrofit.create(PlacesApi::class.java)
     }
@@ -87,5 +102,11 @@ object NetworkModule {
     @Singleton
     fun provideCurrencyApi(@Named("CurrencyRetrofit") retrofit: Retrofit): CurrencyApi {
         return retrofit.create(CurrencyApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOpenAiApi(@Named("OpenAiRetrofit") retrofit: Retrofit): OpenAiApi {
+        return retrofit.create(OpenAiApi::class.java)
     }
 }
