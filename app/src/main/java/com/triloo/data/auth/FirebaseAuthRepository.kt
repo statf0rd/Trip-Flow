@@ -3,7 +3,6 @@ package com.triloo.data.auth
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.ktx.userProfileChangeRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +11,9 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Реальная реализация авторизации поверх Firebase Auth с поддержкой e-mail и пароля.
+ */
 @Singleton
 class FirebaseAuthRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth
@@ -64,29 +66,6 @@ class FirebaseAuthRepository @Inject constructor(
                 firebaseUser.reload().await()
             }
             val user = (firebaseAuth.currentUser ?: firebaseUser).toUser()
-            _currentUser = user
-            _authState.value = AuthState.Authenticated(user)
-            AuthResult.Success(user)
-        }.getOrElse { error ->
-            val authError = error.toAuthError()
-            _authState.value = AuthState.Error(authError.message)
-            AuthResult.Failure(authError)
-        }
-    }
-
-    override suspend fun signInWithGoogle(idToken: String): AuthResult<User> {
-        _authState.value = AuthState.Loading
-        if (idToken.isBlank()) {
-            val message = "Google Sign-In не настроен (проверьте GOOGLE_WEB_CLIENT_ID)"
-            _authState.value = AuthState.Error(message)
-            return AuthResult.Failure(AuthError.Unknown(message))
-        }
-
-        return runCatching {
-            val credential = GoogleAuthProvider.getCredential(idToken, null)
-            firebaseAuth.signInWithCredential(credential).await()
-            val user = firebaseAuth.currentUser?.toUser()
-                ?: return AuthResult.Failure(AuthError.Unknown("Не удалось получить пользователя"))
             _currentUser = user
             _authState.value = AuthState.Authenticated(user)
             AuthResult.Success(user)

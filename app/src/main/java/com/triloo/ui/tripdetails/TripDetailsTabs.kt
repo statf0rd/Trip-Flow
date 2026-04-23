@@ -20,33 +20,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng as MapsLatLng
-import com.google.android.gms.maps.model.LatLngBounds
-import com.google.maps.android.PolyUtil
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.MapsComposeExperimentalApi
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.Polyline
-import com.google.maps.android.compose.TileOverlay
-import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.heatmaps.HeatmapTileProvider
-import com.google.maps.android.heatmaps.WeightedLatLng
+import com.triloo.BuildConfig
 import com.triloo.data.heatmap.CategoryHeatmapCalculator
 import com.triloo.data.heatmap.HeatmapConfig
 import com.triloo.data.model.*
+import com.triloo.data.route.LatLng
+import com.triloo.data.route.PlaceRecommendation
+import com.triloo.data.route.RoutePlanSource
 import com.triloo.data.route.RouteDetails
+import com.triloo.data.route.RoutePlanningMode
+import com.triloo.feature.map.MapCoordinate
+import com.triloo.feature.map.MapHeatmapCell
+import com.triloo.feature.map.MapMarker
+import com.triloo.feature.map.TripYandexMapView
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooMotion
@@ -127,7 +120,7 @@ private fun buildDaySchedules(
     }
 }
 
-// PLAN TAB
+// Вкладка плана.
 
 @Composable
 fun PlanTab(
@@ -147,8 +140,8 @@ fun PlanTab(
         )
     } else {
         val sortedDays = remember(days) { days.sortedBy { it.dayNumber } }
-        val schedules by remember(days, places) {
-            mutableStateOf(buildDaySchedules(sortedDays, places))
+        val schedules = remember(sortedDays, places) {
+            buildDaySchedules(sortedDays, places)
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -187,14 +180,14 @@ private fun DayCard(
     var isExpanded by remember { mutableStateOf(true) }
     
     TrilooCard(onClick = onDayClick) {
-        // Day Header
+        // Заголовок дня.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Day number badge
+                // Бейдж с номером дня.
                 Surface(
                     shape = CircleShape,
                     color = CoralSubtle
@@ -203,7 +196,7 @@ private fun DayCard(
                         text = "${day.dayNumber}",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelLarge,
-                        color = CoralPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -219,7 +212,7 @@ private fun DayCard(
                     Text(
                         text = day.date.format(dateFormatter),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -233,13 +226,13 @@ private fun DayCard(
                 Icon(
                     imageVector = Icons.Rounded.ExpandMore,
                     contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
-                    tint = Slate500,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.rotate(rotation)
                 )
             }
         }
         
-        // Places list (expandable)
+        // Разворачиваемый список мест.
         AnimatedVisibility(
             visible = isExpanded,
             enter = TrilooMotion.enterExpand(),
@@ -249,14 +242,14 @@ private fun DayCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 if (schedule.isEmpty) {
-                    // Empty state for day
+                    // Пустое состояние дня.
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
                             .clickable(onClick = onAddPlace),
                         shape = RoundedCornerShape(12.dp),
-                        color = Slate100
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -266,14 +259,14 @@ private fun DayCard(
                             Icon(
                                 imageVector = Icons.Rounded.AddLocation,
                                 contentDescription = null,
-                                tint = Slate500,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Добавить место",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Slate600
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -286,7 +279,7 @@ private fun DayCard(
                         onDeletePlace = onDeletePlace
                     )
 
-                    // Add more button
+                    // Кнопка добавления ещё одного места.
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(
                         onClick = onAddPlace,
@@ -320,15 +313,16 @@ private fun DayTimeline(
 
     if (sortedScheduled.isNotEmpty()) {
         val items = buildTimelineItems(sortedScheduled)
-        val hourHeight = 48.dp
+        val hourHeight = 36.dp
         val minEventHeight = 44.dp
         val minGapHeight = 8.dp
+        val maxEventHeight = 140.dp
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items.forEach { item ->
                 val calculated = hourHeight * (item.minutes / 60f)
                 val blockHeight = if (item is PlaceSegment) {
-                    calculated.coerceAtLeast(minEventHeight)
+                    calculated.coerceIn(minEventHeight, maxEventHeight)
                 } else {
                     calculated.coerceIn(minGapHeight, hourHeight)
                 }
@@ -356,7 +350,7 @@ private fun DayTimeline(
         Text(
             text = "Без времени",
             style = MaterialTheme.typography.labelMedium,
-            color = Slate500
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -425,7 +419,7 @@ private fun TimelineEventRow(
             endLabel = endLabel,
             blockMinutes = item.durationMinutes,
             blockHeight = blockHeight,
-            lineColor = CoralPrimary,
+            lineColor = MaterialTheme.colorScheme.primary,
             showIntermediateTicks = false
         )
 
@@ -464,7 +458,7 @@ private fun TimelineGapRow(
             endLabel = endLabel,
             blockMinutes = item.minutes,
             blockHeight = blockHeight,
-            lineColor = Slate200,
+            lineColor = MaterialTheme.colorScheme.outlineVariant,
             isMuted = true,
             showIntermediateTicks = false
         )
@@ -476,7 +470,7 @@ private fun TimelineGapRow(
                 .fillMaxWidth()
                 .heightIn(min = blockHeight),
             shape = RoundedCornerShape(14.dp),
-            color = Slate100
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
         ) {
             Row(
                 modifier = Modifier
@@ -487,7 +481,7 @@ private fun TimelineGapRow(
                 Icon(
                     imageVector = Icons.Rounded.AccessTime,
                     contentDescription = null,
-                    tint = Slate500,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -495,12 +489,12 @@ private fun TimelineGapRow(
                     Text(
                         text = gapLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "$railLabel — $endLabel",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Slate500
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -533,7 +527,7 @@ private fun TimelineRail(
                 .height(blockHeight),
             verticalAlignment = Alignment.Top
         ) {
-            // Labels column to the left of the line
+            // Колонка временных меток слева от линии таймлайна.
             if (!showIntermediateTicks && endLabel != null) {
                 Column(
                     modifier = Modifier
@@ -545,7 +539,7 @@ private fun TimelineRail(
                     Text(
                         text = timeLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMuted) Slate500 else Slate700,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip
@@ -553,7 +547,7 @@ private fun TimelineRail(
                     Text(
                         text = endLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMuted) Slate500 else Slate700,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip
@@ -574,7 +568,13 @@ private fun TimelineRail(
                     .align(Alignment.TopCenter)
                     .width(2.dp)
                     .fillMaxHeight()
-                    .background(if (isMuted) Slate300 else lineColor)
+                    .background(
+                        if (isMuted) {
+                            MaterialTheme.colorScheme.outlineVariant
+                        } else {
+                            lineColor
+                        }
+                    )
                 Box(modifier = lineModifier)
 
                 if (!isMuted) {
@@ -620,7 +620,7 @@ private fun TimelineEventCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, Slate200)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -633,21 +633,14 @@ private fun TimelineEventCard(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                color = when (place.category) {
-                                    PlaceCategory.RESTAURANT, PlaceCategory.CAFE -> ExpenseFood.copy(alpha = 0.15f)
-                                    PlaceCategory.MUSEUM, PlaceCategory.ATTRACTION -> CoralSubtle
-                                    PlaceCategory.PARK, PlaceCategory.NATURE, PlaceCategory.BEACH -> TealSubtle
-                                    PlaceCategory.SHOPPING -> TealSecondary.copy(alpha = 0.15f)
-                                    PlaceCategory.HOLIDAY -> Color(0xFFF97316).copy(alpha = 0.18f)
-                                    else -> Slate100
-                                }
-                            ),
+                            .background(color = place.category.color.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = place.iconEmoji ?: place.category.emoji,
-                            style = MaterialTheme.typography.titleMedium
+                        Icon(
+                            imageVector = place.category.icon,
+                            contentDescription = place.category.displayName,
+                            tint = place.category.color,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -664,7 +657,7 @@ private fun TimelineEventCard(
                         Text(
                             text = place.address ?: place.category.displayName,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate600,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -679,7 +672,7 @@ private fun TimelineEventCard(
                         Icon(
                             imageVector = Icons.Rounded.Edit,
                             contentDescription = "Редактировать",
-                            tint = Slate500,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -700,7 +693,7 @@ private fun TimelineEventCard(
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Удалить",
-                            tint = Slate400,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -721,7 +714,7 @@ private fun TimelineEventCard(
                         Text(
                             text = String.format("%.1f", rating),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Slate600
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -731,14 +724,14 @@ private fun TimelineEventCard(
                         Icon(
                             imageVector = Icons.Rounded.Schedule,
                             contentDescription = null,
-                            tint = Slate500,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = formatDurationLabel(it),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Slate600
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -771,67 +764,52 @@ private fun TimelineEventCard(
     }
 }
 
-// MAP TAB
+// Вкладка карты.
 
 @Composable
-@OptIn(MapsComposeExperimentalApi::class)
 fun MapTab(
     trip: Trip,
     places: List<Place>,
     participants: List<Participant>,
-    routeDetails: RouteDetails? = null
+    routeDetails: RouteDetails? = null,
+    recommendations: List<PlaceRecommendation> = emptyList(),
+    destinationMarker: DestinationMapMarker? = null,
+    selectedTravelMode: TravelMode = TravelMode.WALKING,
+    selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
+    suggestedTravelMode: TravelMode? = null,
+    routePlanningSummary: String? = null,
+    routePlanningSource: RoutePlanSource? = null,
+    locationPermissionGranted: Boolean = false,
+    showLocationSharingPrompt: Boolean = false,
+    locationSharingActive: Boolean = false,
+    locationSharingStatus: String? = null,
+    locationSharingError: String? = null,
+    onPlanningModeSelected: (RoutePlanningMode) -> Unit = {},
+    onTravelModeSelected: (TravelMode) -> Unit = {},
+    onApplySuggestedTravelMode: () -> Unit = {},
+    onStartLocationSharing: () -> Unit = {},
+    onStopLocationSharing: () -> Unit = {},
+    onEnableLocationSharing: () -> Unit = {}
 ) {
+    val yandexMapEnabled = BuildConfig.APP_MAPKIT_VIEW_ENABLED
     val validPlaces = remember(places) { places.filter { it.latitude != 0.0 && it.longitude != 0.0 } }
     val participantPoints = remember(participants) {
         participants.filter { it.shareLocation }.mapNotNull { participant ->
             val lat = participant.lastLatitude
             val lon = participant.lastLongitude
             if (lat != null && lon != null) {
-                participant to MapsLatLng(lat, lon)
+                participant to LatLng(lat, lon)
             } else null
         }
     }
-
-    val allPoints = remember(validPlaces, participantPoints, trip) {
-        val points = mutableListOf<MapsLatLng>()
-        validPlaces.forEach { points.add(MapsLatLng(it.latitude, it.longitude)) }
-        participantPoints.forEach { points.add(it.second) }
-        if (points.isEmpty()) {
-            val hotelLat = trip.hotelLatitude
-            val hotelLon = trip.hotelLongitude
-            if (hotelLat != null && hotelLon != null) {
-                points.add(MapsLatLng(hotelLat, hotelLon))
-            }
+    val hotelPoint = remember(trip.hotelLatitude, trip.hotelLongitude) {
+        val hotelLat = trip.hotelLatitude
+        val hotelLon = trip.hotelLongitude
+        if (hotelLat != null && hotelLon != null) {
+            LatLng(hotelLat, hotelLon)
+        } else {
+            null
         }
-        points
-    }
-
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(
-            allPoints.firstOrNull() ?: MapsLatLng(0.0, 0.0),
-            if (allPoints.isEmpty()) 2f else 12f
-        )
-    }
-    val uiSettings = remember {
-        MapUiSettings(
-            zoomControlsEnabled = false,
-            myLocationButtonEnabled = false
-        )
-    }
-    val mapProperties = remember { MapProperties(isMyLocationEnabled = false) }
-
-    LaunchedEffect(allPoints) {
-        if (allPoints.isEmpty()) return@LaunchedEffect
-        if (allPoints.size == 1) {
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(allPoints.first(), 13f)
-            return@LaunchedEffect
-        }
-        val bounds = LatLngBounds.builder().apply {
-            allPoints.forEach { include(it) }
-        }.build()
-        cameraPositionState.animate(
-            update = CameraUpdateFactory.newLatLngBounds(bounds, 120)
-        )
     }
 
     val ratedPlaces = remember(validPlaces) { validPlaces.filter { it.rating != null } }
@@ -853,63 +831,185 @@ fun MapTab(
             config = HeatmapConfig()
         )
     }
-    val heatmapProvider = remember(heatmapCells) {
-        if (heatmapCells.isEmpty()) return@remember null
-        val weighted = heatmapCells.map {
-            WeightedLatLng(
-                MapsLatLng(it.centerLatitude, it.centerLongitude),
-                (it.score * 10f).coerceAtLeast(0.2f).toDouble()
+    val fallbackRoutePoints = remember(validPlaces) {
+        validPlaces.map { place -> MapCoordinate(place.latitude, place.longitude) }
+    }
+    val renderedHeatmapCells = remember(heatmapCells) {
+        heatmapCells.map { cell ->
+            MapHeatmapCell(
+                centerLatitude = cell.centerLatitude,
+                centerLongitude = cell.centerLongitude,
+                score = cell.score,
+                placeCount = cell.placeCount
             )
         }
-        HeatmapTileProvider.Builder()
-            .weightedData(weighted)
-            .radius(50)
-            .build()
     }
-
-    val polylinePoints = remember(routeDetails, validPlaces) {
-        val encoded = routeDetails?.polylineEncoded
-        if (!encoded.isNullOrBlank()) {
-            PolyUtil.decode(encoded).map { MapsLatLng(it.latitude, it.longitude) }
-        } else {
-            validPlaces.map { MapsLatLng(it.latitude, it.longitude) }
+    val mapMarkers = remember(
+        validPlaces,
+        participantPoints,
+        hotelPoint,
+        destinationMarker,
+        recommendations,
+        trip.hotelName
+    ) {
+        buildList {
+            validPlaces.forEachIndexed { index, place ->
+                add(
+                    MapMarker(
+                        latitude = place.latitude,
+                        longitude = place.longitude,
+                        label = (index + 1).toString(),
+                        colorArgb = CoralPrimary.toArgb(),
+                        scale = 0.96f,
+                        zIndex = 2f
+                    )
+                )
+            }
+            hotelPoint?.let { point ->
+                add(
+                    MapMarker(
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                        label = "H",
+                        colorArgb = Color(0xFF7C3AED).toArgb(),
+                        title = trip.hotelName ?: "Отель",
+                        scale = 1.02f,
+                        zIndex = 3f
+                    )
+                )
+            }
+            destinationMarker?.let { marker ->
+                add(
+                    MapMarker(
+                        latitude = marker.latitude,
+                        longitude = marker.longitude,
+                        label = "D",
+                        colorArgb = TealSecondary.toArgb(),
+                        title = marker.name,
+                        scale = 1.02f,
+                        zIndex = 3f
+                    )
+                )
+            }
+            participantPoints.forEachIndexed { index, (participant, point) ->
+                val label = participant.displayName.firstOrNull()?.uppercaseChar()?.toString()
+                    ?: (index + 1).toString()
+                add(
+                    MapMarker(
+                        latitude = point.latitude,
+                        longitude = point.longitude,
+                        label = label,
+                        colorArgb = Color(0xFF2563EB).toArgb(),
+                        title = participant.displayName,
+                        scale = 0.92f,
+                        zIndex = 4f
+                    )
+                )
+            }
+            recommendations.forEachIndexed { index, recommendation ->
+                add(
+                    MapMarker(
+                        latitude = recommendation.latitude,
+                        longitude = recommendation.longitude,
+                        label = "R${index + 1}",
+                        colorArgb = GoldenAccent.toArgb(),
+                        title = recommendation.name,
+                        scale = 0.88f,
+                        zIndex = 2.5f
+                    )
+                )
+            }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties,
-            uiSettings = uiSettings
+        if (yandexMapEnabled) {
+            TripYandexMapView(
+                modifier = Modifier.fillMaxSize(),
+                markers = mapMarkers,
+                routeEncodedPolyline = routeDetails?.polylineEncoded,
+                fallbackRoutePoints = fallbackRoutePoints,
+                heatmapCells = renderedHeatmapCells,
+                defaultCenter = run {
+                    val destLat = trip.destinationLatitude
+                    val destLon = trip.destinationLongitude
+                    val hotelLat = trip.hotelLatitude
+                    val hotelLon = trip.hotelLongitude
+                    when {
+                        destLat != null && destLon != null -> MapCoordinate(destLat, destLon)
+                        hotelLat != null && hotelLon != null -> MapCoordinate(hotelLat, hotelLon)
+                        else -> MapCoordinate(55.751244, 37.618423)
+                    }
+                }
+            )
+        } else {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "Настоящая карта временно отключена",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Yandex MapKit отклоняет текущий API ключ. Вкладка остаётся в безопасном режиме, чтобы приложение не падало.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (
+            validPlaces.isEmpty() &&
+            participantPoints.isEmpty() &&
+            hotelPoint == null &&
+            destinationMarker == null &&
+            recommendations.isEmpty()
         ) {
-            heatmapProvider?.let { provider ->
-                TileOverlay(tileProvider = provider)
-            }
-
-            if (polylinePoints.size >= 2) {
-                Polyline(
-                    points = polylinePoints,
-                    color = CoralPrimary,
-                    width = 10f
-                )
-            }
-
-            validPlaces.forEach { place ->
-                Marker(
-                    state = MarkerState(position = MapsLatLng(place.latitude, place.longitude)),
-                    title = place.name,
-                    snippet = place.address
-                )
-            }
-
-            participantPoints.forEach { (participant, position) ->
-                Marker(
-                    state = MarkerState(position = position),
-                    title = participant.displayName,
-                    snippet = "Участник",
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                tonalElevation = 4.dp,
+                shadowElevation = 4.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "На карте пока нет точек",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Добавьте место в план или выберите отель при создании поездки, чтобы сразу увидеть маршрут и маркеры.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -931,61 +1031,176 @@ fun MapTab(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (!routePlanningSummary.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                RoutePlanningCard(
+                    selectedTravelMode = selectedTravelMode,
+                    suggestedTravelMode = suggestedTravelMode,
+                    summary = routePlanningSummary,
+                    source = routePlanningSource,
+                    onApplySuggestedTravelMode = onApplySuggestedTravelMode
+                )
+            }
+            if (trip.isGroupTrip) {
+                val bannerText = when {
+                    showLocationSharingPrompt ->
+                        "Разрешите доступ к геопозиции, чтобы участники видели вас на карте"
+                    !locationSharingError.isNullOrBlank() ->
+                        locationSharingError
+                    !locationSharingStatus.isNullOrBlank() ->
+                        locationSharingStatus
+                    locationSharingActive ->
+                        "Геошаринг активен"
+                    locationPermissionGranted ->
+                        "Включите фоновый геошаринг, чтобы участники видели вас даже после сворачивания приложения"
+                    else ->
+                        "Разрешите доступ к геопозиции, чтобы включить геошаринг"
+                }
+
+                bannerText?.let { text ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showLocationSharingPrompt) {
+                                    Icons.Rounded.MyLocation
+                                } else {
+                                    Icons.Rounded.LocationOn
+                                },
+                                contentDescription = null,
+                                tint = if (locationSharingError.isNullOrBlank()) {
+                                    TealSecondary
+                                } else {
+                                    Error
+                                }
+                            )
+                            Text(
+                                text = text,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            when {
+                                showLocationSharingPrompt -> {
+                                    TextButton(onClick = onEnableLocationSharing) {
+                                        Text("Разрешить")
+                                    }
+                                }
+
+                                locationSharingActive -> {
+                                    TextButton(onClick = onStopLocationSharing) {
+                                        Text("Остановить")
+                                    }
+                                }
+
+                                else -> {
+                                    TextButton(onClick = onStartLocationSharing) {
+                                        Text("Включить")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             routeDetails?.let { details ->
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Маршрут: ${(details.totalDistanceMeters / 1000.0).let { String.format(Locale.US, "%.1f", it) }} км • ${details.totalDurationMinutes} мин",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate700
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                ) {
+                    Text(
+                        text = buildString {
+                            append("Маршрут: ")
+                            append((details.totalDistanceMeters / 1000.0).let { String.format(Locale.US, "%.1f", it) })
+                            append(" км • ")
+                            append(details.totalDurationMinutes)
+                            append(" мин • ")
+                            append(selectedTravelMode.displayName)
+                            if (details.isEstimated) {
+                                append(" • ")
+                                append(details.sourceLabel)
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
 
-        if (categories.isNotEmpty()) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = Color.White.copy(alpha = 0.95f),
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(14.dp)
-                        .widthIn(max = 360.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (recommendations.isNotEmpty()) {
+                RecommendationsCard(
+                    recommendations = recommendations
+                )
+            }
+            if (categories.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    shadowElevation = 8.dp
                 ) {
-                    Text(
-                        text = "Heatmap по отзывам",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(categories) { category ->
-                            val isSelected = category == selectedCategory
-                            TrilooChip(
-                                text = category.displayName,
-                                emoji = category.emoji,
-                                color = if (isSelected) CoralSubtle else Slate100,
-                                textColor = if (isSelected) CoralPrimary else Slate600,
-                                onClick = { selectedCategory = category }
+                    Column(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .widthIn(max = 360.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Heatmap по отзывам",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(categories) { category ->
+                                val isSelected = category == selectedCategory
+                                TrilooChip(
+                                    text = category.displayName,
+                                    icon = category.icon,
+                                    iconTint = if (isSelected) category.color else null,
+                                    color = if (isSelected) {
+                                        CoralSubtle
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    },
+                                    textColor = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    onClick = { selectedCategory = category }
+                                )
+                            }
+                        }
+                        if (heatmapCells.isNotEmpty()) {
+                            val topCell = heatmapCells.first()
+                            Text(
+                                text = "Сильная зона: ${formatHeatmapScore(topCell.score)} • ${topCell.placeCount} мест",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                text = "Недостаточно рейтингов для heatmap",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                    if (heatmapCells.isNotEmpty()) {
-                        val topCell = heatmapCells.first()
-                        Text(
-                            text = "Сильная зона: ${formatHeatmapScore(topCell.score)} • ${topCell.placeCount} мест",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate600
-                        )
-                    } else {
-                        Text(
-                            text = "Недостаточно рейтингов для heatmap",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate600
-                        )
                     }
                 }
             }
@@ -1000,7 +1215,7 @@ private fun InfoChip(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = Color.White
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -1009,13 +1224,228 @@ private fun InfoChip(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = CoralPrimary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlanningModeSelector(
+    selectedMode: RoutePlanningMode,
+    onPlanningModeSelected: (RoutePlanningMode) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.widthIn(max = 320.dp)
+    ) {
+        items(RoutePlanningMode.entries.toList()) { mode ->
+            FilterChip(
+                selected = mode == selectedMode,
+                onClick = { onPlanningModeSelected(mode) },
+                label = {
+                    Text(
+                        text = if (mode == RoutePlanningMode.AI_ASSISTED) {
+                            "AI план"
+                        } else {
+                            mode.displayName
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TravelModeSelector(
+    selectedMode: TravelMode,
+    onTravelModeSelected: (TravelMode) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.widthIn(max = 420.dp)
+        ) {
+            items(TravelMode.entries.toList()) { mode ->
+                FilterChip(
+                    selected = mode == selectedMode,
+                    onClick = { onTravelModeSelected(mode) },
+                    label = { Text("${mode.icon} ${mode.displayName}") },
+                    leadingIcon = if (mode == selectedMode) {
+                        {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else {
+                        null
+                    }
+                )
+            }
+        }
+
+        if (selectedMode == TravelMode.TRANSIT) {
+            Text(
+                text = "Для общественного транспорта пока показывается оценочное время без live-маршрута.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoutePlanningCard(
+    selectedTravelMode: TravelMode,
+    suggestedTravelMode: TravelMode?,
+    summary: String,
+    source: RoutePlanSource?,
+    onApplySuggestedTravelMode: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .widthIn(max = 420.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = when (source) {
+                    RoutePlanSource.AI -> "AI-планировщик"
+                    RoutePlanSource.HEURISTIC -> "Подсказка маршрута"
+                    null -> "Подсказка маршрута"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (suggestedTravelMode != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Рекомендуемый режим: ${suggestedTravelMode.icon} ${suggestedTravelMode.displayName}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (suggestedTravelMode != selectedTravelMode) {
+                        TextButton(onClick = onApplySuggestedTravelMode) {
+                            Text("Применить")
+                        }
+                    }
+                }
+                if (suggestedTravelMode == TravelMode.TRANSIT) {
+                    Text(
+                        text = "Режим общественного транспорта пока остаётся оценочным: без live-route и пересадок.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationsCard(
+    recommendations: List<PlaceRecommendation>
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(14.dp)
+                .widthIn(max = 420.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Рядом с маршрутом",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(recommendations, key = { it.placeId }) { recommendation ->
+                    RecommendationItem(recommendation = recommendation)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationItem(
+    recommendation: PlaceRecommendation
+) {
+    Surface(
+        modifier = Modifier.width(228.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = recommendation.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = recommendation.address,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = CoralSubtle
+                ) {
+                    Text(
+                        text = recommendation.category,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                recommendation.rating?.let { rating ->
+                    Text(
+                        text = "★ ${String.format(Locale.US, "%.1f", rating)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            Text(
+                text = recommendation.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = TealSecondary
             )
         }
     }
@@ -1053,7 +1483,7 @@ private fun HeatmapPreview(places: List<Place>) {
         Text(
             text = "Выберите категорию, чтобы увидеть зоны, где она сильнее развита",
             style = MaterialTheme.typography.bodySmall,
-            color = Slate600
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -1062,7 +1492,7 @@ private fun HeatmapPreview(places: List<Place>) {
             Text(
                 text = "Нет мест с рейтингами для расчёта",
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate500
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             return@TrilooCard
         }
@@ -1073,8 +1503,16 @@ private fun HeatmapPreview(places: List<Place>) {
                 TrilooChip(
                     text = category.displayName,
                     emoji = category.emoji,
-                    color = if (isSelected) CoralSubtle else Slate100,
-                    textColor = if (isSelected) CoralPrimary else Slate600,
+                    color = if (isSelected) {
+                        CoralSubtle
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                    },
+                    textColor = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     onClick = { selectedCategory = category }
                 )
             }
@@ -1086,14 +1524,14 @@ private fun HeatmapPreview(places: List<Place>) {
             Text(
                 text = "Недостаточно отзывов для коэффициентов по этой категории",
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate600
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             val topCell = heatmapCells.first()
             Text(
                 text = "Ячеек: ${heatmapCells.size}",
                 style = MaterialTheme.typography.labelMedium,
-                color = Slate600
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -1101,7 +1539,7 @@ private fun HeatmapPreview(places: List<Place>) {
                     "${topCell.placeCount} мест • " +
                     String.format(Locale.US, "%.1f", topCell.averageRating),
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate600
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -1111,7 +1549,7 @@ private fun formatHeatmapScore(score: Float): String {
     return "${(score * 100).roundToInt()}%"
 }
 
-// EXPENSES TAB
+// Вкладка расходов.
 
 @Composable
 fun ExpensesTab(
@@ -1121,6 +1559,7 @@ fun ExpensesTab(
     balances: List<Balance>,
     onExpenseClick: (String) -> Unit,
     onAddExpense: () -> Unit,
+    onToggleExpenseSettled: (String, Boolean) -> Unit = { _, _ -> },
     onDeleteExpense: (String) -> Unit = {}
 ) {
     if (expenses.isEmpty()) {
@@ -1137,7 +1576,7 @@ fun ExpensesTab(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Total summary card
+            // Итоговая карточка по расходам.
             item {
                 ExpenseSummaryCard(
                     totalAmount = totalAmount,
@@ -1154,12 +1593,15 @@ fun ExpensesTab(
                 }
             }
             
-            // Expense list
+            // Список расходов.
             items(expenses, key = { it.id }) { expense ->
                 ExpenseItem(
                     expense = expense,
                     baseCurrency = currency,
                     onClick = { onExpenseClick(expense.id) },
+                    onToggleSettled = { settled ->
+                        onToggleExpenseSettled(expense.id, settled)
+                    },
                     onDelete = { onDeleteExpense(expense.id) }
                 )
             }
@@ -1175,7 +1617,7 @@ private fun ExpenseSummaryCard(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = TealSubtle
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
             modifier = Modifier
@@ -1188,20 +1630,20 @@ private fun ExpenseSummaryCard(
                 Text(
                     text = "Всего потрачено",
                     style = MaterialTheme.typography.labelMedium,
-                    color = TealDark
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = formatCurrency(totalAmount, currency),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = TealDark
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
             
             Surface(
                 shape = CircleShape,
-                color = TealSecondary.copy(alpha = 0.2f)
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -1211,12 +1653,12 @@ private fun ExpenseSummaryCard(
                         text = "$expenseCount",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = TealDark
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Text(
                         text = "записей",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TealDark
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
@@ -1230,7 +1672,7 @@ private fun BalancesCard(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Slate100
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     ) {
         Column(
             modifier = Modifier
@@ -1242,7 +1684,7 @@ private fun BalancesCard(
                 text = "Кому сколько должен",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = Slate700
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             balances.forEach { balance ->
@@ -1255,21 +1697,21 @@ private fun BalancesCard(
                         Text(
                             text = "${balance.fromUserName} → ${balance.toUserName}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Slate800,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Закрыть переводом",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Slate500
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Text(
                         text = formatCurrency(balance.amount, balance.currency),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = CoralPrimary
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -1282,6 +1724,7 @@ private fun ExpenseItem(
     expense: Expense,
     baseCurrency: String,
     onClick: () -> Unit,
+    onToggleSettled: (Boolean) -> Unit,
     onDelete: () -> Unit
 ) {
     val dateFormatter = remember { 
@@ -1299,7 +1742,7 @@ private fun ExpenseItem(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Category icon
+            // Иконка категории.
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -1307,9 +1750,11 @@ private fun ExpenseItem(
                     .background(Color(expense.category.colorHex).copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = expense.category.emoji,
-                    style = MaterialTheme.typography.titleMedium
+                Icon(
+                    imageVector = expense.category.icon,
+                    contentDescription = expense.category.displayName,
+                    tint = Color(expense.category.colorHex),
+                    modifier = Modifier.size(22.dp)
                 )
             }
             
@@ -1328,17 +1773,39 @@ private fun ExpenseItem(
                     Text(
                         text = expense.paidByName,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = " • ",
-                        color = Slate400
+                        color = MaterialTheme.colorScheme.outline
                     )
                     Text(
                         text = expense.date.format(dateFormatter),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (expense.splitType != SplitType.PAYER_ONLY) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (expense.isSettled) {
+                            TealSecondary.copy(alpha = 0.14f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ) {
+                        Text(
+                            text = if (expense.isSettled) "Долг закрыт" else "Ожидает закрытия",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (expense.isSettled) {
+                                TealSecondary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
             
@@ -1353,14 +1820,32 @@ private fun ExpenseItem(
                     Text(
                         text = "${expense.amount} ${expense.currency}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Slate500
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (expense.splitType != SplitType.PAYER_ONLY) {
+                    TextButton(
+                        onClick = { onToggleSettled(!expense.isSettled) },
+                        contentPadding = PaddingValues(top = 4.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (expense.isSettled) {
+                                Icons.Rounded.RestartAlt
+                            } else {
+                                Icons.Rounded.CheckCircle
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (expense.isSettled) "Вернуть" else "Закрыть")
+                    }
                 }
             }
             
             Spacer(modifier = Modifier.width(8.dp))
             
-            // Delete button
+            // Кнопка удаления.
             IconButton(
                 onClick = { showDeleteDialog = true },
                 modifier = Modifier.size(32.dp)
@@ -1368,14 +1853,14 @@ private fun ExpenseItem(
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Удалить",
-                    tint = Slate400,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
     
-    // Delete confirmation dialog
+    // Диалог подтверждения удаления.
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -1677,7 +2162,7 @@ private fun TimelineRailPreview() {
             endLabel = "23:00",
             blockMinutes = 11 * 60,
             blockHeight = 140.dp,
-            lineColor = CoralPrimary,
+            lineColor = MaterialTheme.colorScheme.primary,
             showIntermediateTicks = true
         )
     }
@@ -1742,6 +2227,7 @@ private fun ExpensesTabPreview() {
             balances = emptyList(),
             onExpenseClick = { _ -> },
             onAddExpense = { },
+            onToggleExpenseSettled = { _, _ -> },
             onDeleteExpense = { _ -> }
         )
     }
@@ -1767,6 +2253,7 @@ private fun ExpenseItemPreview() {
             expense = TripDetailsPreviewData.expenses.first(),
             baseCurrency = TripDetailsPreviewData.trip.baseCurrency,
             onClick = { },
+            onToggleSettled = { },
             onDelete = { }
         )
     }

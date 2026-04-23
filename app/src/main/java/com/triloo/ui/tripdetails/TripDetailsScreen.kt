@@ -1,5 +1,6 @@
 package com.triloo.ui.tripdetails
 
+import android.Manifest
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,8 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material.icons.Icons
@@ -27,13 +30,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.PermissionChecker.PERMISSION_GRANTED
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.data.model.Trip
+import com.triloo.data.route.RoutePlanningMode
 import com.triloo.ui.components.*
 import com.triloo.ui.theme.*
 import com.triloo.ui.PreviewData
@@ -61,8 +70,28 @@ fun TripDetailsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var pendingLocationSharingStart by remember { mutableStateOf(false) }
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PERMISSION_GRANTED
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasLocationPermission = granted
+        if (granted && pendingLocationSharingStart) {
+            viewModel.startLocationSharing()
+        }
+        pendingLocationSharingStart = false
+    }
     
     val tabs = listOf(
         TabItem("План", Icons.AutoMirrored.Rounded.EventNote),
@@ -70,10 +99,27 @@ fun TripDetailsScreen(
         TabItem("Расходы", Icons.Rounded.Payments)
     )
     
-    // Handle trip deletion
+    // После удаления поездки закрываем экран.
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
             onNavigateBack()
+        }
+    }
+
+    LaunchedEffect(uiState.error) {
+        val message = uiState.error ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearError()
+    }
+
+    LaunchedEffect(pagerState.currentPage, uiState.trip?.isGroupTrip) {
+        val isMapTab = pagerState.currentPage == 1 && uiState.trip?.isGroupTrip == true
+        viewModel.setMapVisible(isMapTab)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.setMapVisible(false)
         }
     }
     
@@ -90,6 +136,9 @@ fun TripDetailsScreen(
                     onOptimizeRoute = { viewModel.optimizeRoute() }
                 )
             }
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -109,7 +158,7 @@ fun TripDetailsScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                // Custom Tab Row
+                // Кастомная строка табов.
                 TrilooTabRow(
                     tabs = tabs,
                     selectedIndex = pagerState.currentPage,
@@ -120,9 +169,10 @@ fun TripDetailsScreen(
                     }
                 )
                 
-                // Pager Content
+                // Содержимое pager-а.
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = pagerState.currentPage != 1,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -131,7 +181,7 @@ fun TripDetailsScreen(
                         0 -> PlanTab(
                             days = uiState.days,
                             places = uiState.places,
-                            onDayClick = { /* Expand day */ },
+                            onDayClick = { /* Разворачивание дня обрабатывается внутри карточки. */ },
                             onPlaceClick = { placeId -> onNavigateToPlaceDetails(placeId) },
                             onEditPlace = { placeId -> onNavigateToEditPlace(placeId) },
                             onAddPlace = { dayId -> 
@@ -143,7 +193,35 @@ fun TripDetailsScreen(
                             trip = uiState.trip!!,
                             places = uiState.places,
                             participants = uiState.participants,
-                            routeDetails = uiState.routeDetails
+                            routeDetails = uiState.routeDetails,
+                            recommendations = uiState.recommendations,
+                            destinationMarker = uiState.destinationMarker,
+                            selectedTravelMode = uiState.selectedTravelMode,
+                            selectedPlanningMode = uiState.selectedPlanningMode,
+                            suggestedTravelMode = uiState.suggestedTravelMode,
+                            routePlanningSummary = uiState.routePlanningSummary,
+                            routePlanningSource = uiState.routePlanningSource,
+                            locationPermissionGranted = hasLocationPermission,
+                            showLocationSharingPrompt = uiState.trip!!.isGroupTrip && !hasLocationPermission,
+                            locationSharingActive = uiState.isLocationSharingActive,
+                            locationSharingStatus = uiState.locationSharingStatus,
+                            locationSharingError = uiState.locationSharingError,
+                            onPlanningModeSelected = viewModel::setPlanningMode,
+                            onTravelModeSelected = viewModel::setTravelMode,
+                            onApplySuggestedTravelMode = viewModel::applySuggestedTravelMode,
+                            onStartLocationSharing = {
+                                if (hasLocationPermission) {
+                                    viewModel.startLocationSharing()
+                                } else {
+                                    pendingLocationSharingStart = true
+                                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                }
+                            },
+                            onStopLocationSharing = viewModel::stopLocationSharing,
+                            onEnableLocationSharing = {
+                                pendingLocationSharingStart = true
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
                         )
                         2 -> ExpensesTab(
                             expenses = uiState.expenses,
@@ -154,6 +232,7 @@ fun TripDetailsScreen(
                                 onNavigateToEditExpense(tripId, expenseId) 
                             },
                             onAddExpense = { onNavigateToAddExpense(tripId) },
+                            onToggleExpenseSettled = viewModel::toggleExpenseSettled,
                             onDeleteExpense = { expenseId -> viewModel.deleteExpense(expenseId) }
                         )
                     }
@@ -162,7 +241,7 @@ fun TripDetailsScreen(
         }
     }
     
-    // Delete trip confirmation dialog
+    // Диалог подтверждения удаления поездки.
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -229,7 +308,7 @@ private fun TripDetailsTopBar(
                 Text(
                     text = "${trip.destination} • ${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate600,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -296,7 +375,7 @@ private fun TripDetailsTopBar(
                     
                     if (trip.isGroupTrip) {
                         DropdownMenuItem(
-                            text = { Text("Triloo Relay") },
+                            text = { Text("Bluetooth-синхронизация") },
                             onClick = {
                                 showMenu = false
                                 onRelay()
@@ -368,7 +447,7 @@ private fun TrilooTabRow(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        color = Slate100
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     ) {
         BoxWithConstraints(
             modifier = Modifier
@@ -378,9 +457,9 @@ private fun TrilooTabRow(
             val tabWidth = maxWidth / tabs.size
             val indicatorOffset by animateDpAsState(
                 targetValue = tabWidth * selectedIndex,
-                animationSpec = tween(
-                    durationMillis = TrilooMotion.durationMedium,
-                    easing = TrilooMotion.easingEmphasized
+                animationSpec = spring(
+                    dampingRatio = 0.8f,
+                    stiffness = Spring.StiffnessMediumLow
                 ),
                 label = "tabIndicatorOffset"
             )
@@ -390,8 +469,12 @@ private fun TrilooTabRow(
                     .width(tabWidth)
                     .height(rowHeight)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
-                    .border(1.dp, Slate200, RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(12.dp)
+                    )
             )
             Row(
                 modifier = Modifier
@@ -408,7 +491,11 @@ private fun TrilooTabRow(
                         label = "tabIconScale$index"
                     )
                     val iconColor by animateColorAsState(
-                        targetValue = if (isSelected) CoralPrimary else Slate500,
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         animationSpec = tween(
                             durationMillis = TrilooMotion.durationShort,
                             easing = TrilooMotion.easingStandard
@@ -416,7 +503,11 @@ private fun TrilooTabRow(
                         label = "tabIconColor$index"
                     )
                     val textColor by animateColorAsState(
-                        targetValue = if (isSelected) Slate900 else Slate600,
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         animationSpec = tween(
                             durationMillis = TrilooMotion.durationShort,
                             easing = TrilooMotion.easingStandard

@@ -9,6 +9,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.triloo.ui.PreviewData
 import com.triloo.ui.theme.TrilooTheme
 
+/**
+ * Небольшой роутер между входом, регистрацией и восстановлением пароля.
+ */
 @Composable
 fun AuthFlowScreen(
     onNavigateBack: () -> Unit,
@@ -52,7 +55,6 @@ private fun AuthFlowScreenPreview() {
                 onNavigateToSignUp = { step = AuthStep.SignUp },
                 onNavigateToForgotPassword = { step = AuthStep.ForgotPassword },
                 onSignIn = { _, _ -> },
-                onGoogleSignIn = {},
                 onClearError = {}
             )
             AuthStep.SignUp -> SignUpContent(

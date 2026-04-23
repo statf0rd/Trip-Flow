@@ -30,8 +30,8 @@ class PlaceDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                // Note: In a real app, we'd observe this from Room
-                // For now, we'll do a one-time load
+                // В полноценном приложении тут был бы Flow из Room.
+                // Пока достаточно однократной загрузки.
                 val place = tripRepository.getPlaceById(placeId)
                 _uiState.update { 
                     it.copy(
@@ -53,10 +53,14 @@ class PlaceDetailsViewModel @Inject constructor(
     fun toggleVisited() {
         val place = _uiState.value.place ?: return
         viewModelScope.launch {
-            tripRepository.markPlaceVisited(place.id, !place.isVisited)
-            // Update local state
-            _uiState.update { 
-                it.copy(place = place.copy(isVisited = !place.isVisited)) 
+            runCatching {
+                tripRepository.markPlaceVisited(place.id, !place.isVisited)
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(place = place.copy(isVisited = !place.isVisited))
+                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message) }
             }
         }
     }
@@ -80,6 +84,4 @@ data class PlaceDetailsUiState(
     val isDeleted: Boolean = false,
     val error: String? = null
 )
-
-
 

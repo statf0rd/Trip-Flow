@@ -3,9 +3,9 @@ package com.triloo.data.auth
 import java.util.UUID
 
 /**
- * User model for Triloo
- * 
- * TODO: Extend with additional fields when backend is implemented
+ * Модель пользователя в текущем слое авторизации.
+ *
+ * TODO: Расширить дополнительными полями после появления backend.
  */
 data class User(
     val id: String = UUID.randomUUID().toString(),
@@ -19,24 +19,24 @@ data class User(
 )
 
 /**
- * Authentication state
+ * Состояние процесса авторизации.
  */
 sealed class AuthState {
-    /** User is not authenticated */
+    /** Пользователь не авторизован. */
     object Unauthenticated : AuthState()
     
-    /** Authentication is in progress */
+    /** Авторизация выполняется. */
     object Loading : AuthState()
     
-    /** User is authenticated */
+    /** Пользователь успешно авторизован. */
     data class Authenticated(val user: User) : AuthState()
     
-    /** Authentication failed */
+    /** Во время авторизации произошла ошибка. */
     data class Error(val message: String) : AuthState()
 }
 
 /**
- * Sign in credentials
+ * Данные для входа по e-mail и паролю.
  */
 data class SignInCredentials(
     val email: String,
@@ -44,7 +44,7 @@ data class SignInCredentials(
 )
 
 /**
- * Sign up data
+ * Данные для регистрации нового пользователя.
  */
 data class SignUpData(
     val email: String,
@@ -53,16 +53,14 @@ data class SignUpData(
 )
 
 /**
- * Auth provider types
+ * Поддерживаемые провайдеры авторизации.
  */
 enum class AuthProvider {
-    EMAIL,
-    GOOGLE,
-    APPLE // TODO: Implement later
+    EMAIL
 }
 
 /**
- * Result wrapper for auth operations
+ * Обёртка результата операций авторизации.
  */
 sealed class AuthResult<out T> {
     data class Success<T>(val data: T) : AuthResult<T>()
@@ -70,7 +68,7 @@ sealed class AuthResult<out T> {
 }
 
 /**
- * Auth error types
+ * Типы ошибок авторизации.
  */
 sealed class AuthError(val message: String) {
     object InvalidEmail : AuthError("Неверный формат email")
@@ -81,6 +79,4 @@ sealed class AuthError(val message: String) {
     object NetworkError : AuthError("Ошибка сети. Проверьте соединение")
     data class Unknown(val cause: String?) : AuthError(cause ?: "Неизвестная ошибка")
 }
-
-
 

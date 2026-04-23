@@ -19,12 +19,63 @@ if (file("google-services.json").exists()) {
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
-val hasReleaseKeystore = keystorePropertiesFile.exists()
-if (hasReleaseKeystore) {
+if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 } else {
     logger.lifecycle("Release signing disabled: keystore.properties not found.")
 }
+val releaseKeystoreFile = keystoreProperties
+    .getProperty("storeFile")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?.let { configuredPath -> rootProject.file(configuredPath) }
+    ?.takeIf { it.exists() }
+val hasReleaseKeystore = releaseKeystoreFile != null
+if (keystorePropertiesFile.exists() && !hasReleaseKeystore) {
+    logger.lifecycle("Release signing disabled: keystore file from keystore.properties was not found.")
+}
+
+val localProperties = Properties().apply {
+    val source = rootProject.file("local.properties")
+    if (source.exists()) {
+        source.inputStream().use { load(it) }
+    }
+}
+
+fun readLocalProperty(name: String, defaultValue: String): String {
+    return localProperties.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() } ?: defaultValue
+}
+
+val trilooBackendUrl = readLocalProperty(
+    name = "TRILOO_BACKEND_URL",
+    defaultValue = "http://5.129.193.245:8091/"
+).let { value ->
+    if (value.endsWith("/")) value else "$value/"
+}
+val mapkitApiKey = readLocalProperty(
+    name = "MAPKIT_API_KEY",
+    defaultValue = ""
+)
+val mapkitMapEnabled = readLocalProperty(
+    name = "MAPKIT_MAP_ENABLED",
+    defaultValue = "false"
+).equals("true", ignoreCase = true)
+val geosuggestApiKey = readLocalProperty(
+    name = "GEOSUGGEST_API_KEY",
+    defaultValue = ""
+)
+val geoapifyApiKey = readLocalProperty(
+    name = "GEOAPIFY_API_KEY",
+    defaultValue = ""
+)
+val geminiApiKeys = readLocalProperty(
+    name = "GEMINI_API_KEYS",
+    defaultValue = ""
+)
+val openRouteServiceApiKey = readLocalProperty(
+    name = "OPENROUTESERVICE_API_KEY",
+    defaultValue = ""
+)
 
 android {
     namespace = "com.triloo"
@@ -36,6 +87,13 @@ android {
         targetSdk = 36
         versionCode = 6
         versionName = "1.0.5"
+        buildConfigField("String", "APP_TRILOO_BACKEND_URL", "\"$trilooBackendUrl\"")
+        buildConfigField("String", "APP_MAPKIT_API_KEY", "\"$mapkitApiKey\"")
+        buildConfigField("boolean", "APP_MAPKIT_VIEW_ENABLED", mapkitMapEnabled.toString())
+        buildConfigField("String", "APP_GEOSUGGEST_API_KEY", "\"$geosuggestApiKey\"")
+        buildConfigField("String", "APP_GEOAPIFY_API_KEY", "\"$geoapifyApiKey\"")
+        buildConfigField("String", "APP_GEMINI_API_KEYS", "\"$geminiApiKeys\"")
+        buildConfigField("String", "APP_OPENROUTESERVICE_API_KEY", "\"$openRouteServiceApiKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -48,7 +106,7 @@ android {
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storeFile = releaseKeystoreFile
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
@@ -137,6 +195,7 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Coil (images)
     implementation(libs.coil.compose)
@@ -144,14 +203,13 @@ dependencies {
     // Splash Screen
     implementation(libs.androidx.splashscreen)
 
-    // Google Maps
-    implementation(libs.play.services.maps)
+    // Location / OCR
     implementation(libs.play.services.location)
-    implementation(libs.play.services.auth)
-    implementation(libs.maps.compose)
-    implementation(libs.maps.compose.utils)
-    implementation(libs.android.maps.utils)
-    implementation(libs.google.places)
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.yandex.mapkit)
+
+    // Feature modules
+    implementation(project(":feature-map"))
 
     // QR / ZXing
     implementation(libs.zxing.core)
@@ -165,6 +223,9 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.work.testing)
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

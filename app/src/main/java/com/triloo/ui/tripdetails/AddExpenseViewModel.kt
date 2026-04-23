@@ -3,6 +3,8 @@ package com.triloo.ui.tripdetails
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.triloo.data.ocr.ParsedReceiptData
+import com.triloo.data.ocr.ReceiptOcrService
 import com.triloo.data.model.Expense
 import com.triloo.data.model.ExpenseCategory
 import com.triloo.data.model.Participant
@@ -21,13 +23,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
+/**
+ * Управляет формой расхода, курсами валют и подготовкой данных для сохранения.
+ */
 @HiltViewModel
 class AddExpenseViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val tripRepository: TripRepository,
+    private val receiptOcrService: ReceiptOcrService,
     private val userProfileRepository: UserProfileRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -100,6 +107,8 @@ class AddExpenseViewModel @Inject constructor(
                             splitType = expense.splitType,
                             splitAmounts = expense.splitAmounts?.mapValues { it.value.toString() }.orEmpty(),
                             exchangeRate = expense.exchangeRate,
+                            receiptImageUri = expense.receiptImageUrl,
+                            isSettled = expense.isSettled,
                             isEditing = true
                         )
                     }
@@ -143,11 +152,59 @@ class AddExpenseViewModel @Inject constructor(
         _uiState.update { it.copy(notes = value) }
     }
 
+    fun updateSettled(value: Boolean) {
+        _uiState.update { it.copy(isSettled = value) }
+    }
+
+    fun importReceipt(imageUri: String) {
+        _uiState.update {
+            it.copy(
+                receiptImageUri = imageUri,
+                isReceiptProcessing = true,
+                receiptSummary = null,
+                receiptError = null
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    receiptOcrService.analyzeReceipt(
+                        imageUri = imageUri,
+                        fallbackCurrency = _trip.value?.baseCurrency ?: _uiState.value.currency
+                    )
+                }
+                applyParsedReceipt(result.parsed, imageUri)
+                refreshExchangeRate()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isReceiptProcessing = false,
+                        receiptImageUri = imageUri,
+                        receiptError = e.message ?: "Не удалось распознать чек"
+                    )
+                }
+            }
+        }
+    }
+
+    fun removeReceipt() {
+        _uiState.update {
+            it.copy(
+                receiptImageUri = null,
+                isReceiptProcessing = false,
+                receiptSummary = null,
+                receiptError = null
+            )
+        }
+    }
+
     fun updateSplitType(type: SplitType) {
         _uiState.update { state ->
             state.copy(
                 splitType = type,
-                splitAmounts = if (type == SplitType.EXACT) state.splitAmounts else emptyMap()
+                splitAmounts = if (type == SplitType.EXACT) state.splitAmounts else emptyMap(),
+                isSettled = if (type == SplitType.PAYER_ONLY) false else state.isSettled
             )
         }
     }
@@ -230,7 +287,9 @@ class AddExpenseViewModel @Inject constructor(
                     splitAmounts = splitAmounts,
                     date = state.date ?: LocalDate.now(),
                     time = state.time.trim().ifBlank { null },
-                    notes = state.notes.trim().ifBlank { null }
+                    receiptImageUrl = state.receiptImageUri,
+                    notes = state.notes.trim().ifBlank { null },
+                    isSettled = state.isSettled && state.splitType != SplitType.PAYER_ONLY
                 )
 
                 if (expenseId == null) {
@@ -289,8 +348,54 @@ class AddExpenseViewModel @Inject constructor(
             }
         }
     }
+
+    private fun applyParsedReceipt(parsed: ParsedReceiptData, imageUri: String) {
+        val summary = buildReceiptSummary(parsed)
+        _uiState.update { state ->
+            state.copy(
+                description = parsed.merchantName ?: state.description,
+                amount = parsed.totalAmount?.let(::formatAmountForInput) ?: state.amount,
+                currency = parsed.currency ?: state.currency,
+                date = parsed.purchaseDate ?: state.date,
+                time = parsed.purchaseTime ?: state.time,
+                receiptImageUri = imageUri,
+                isReceiptProcessing = false,
+                receiptSummary = summary,
+                receiptError = if (summary == null) "Не удалось извлечь данные из чека" else null
+            )
+        }
+    }
+
+    private fun buildReceiptSummary(parsed: ParsedReceiptData): String? {
+        val parts = buildList {
+            parsed.merchantName?.let { add(it) }
+            parsed.totalAmount?.let { amount ->
+                add("${formatAmountForInput(amount)} ${parsed.currency ?: ""}".trim())
+            }
+            parsed.purchaseDate?.let { date ->
+                add(date.toString())
+            }
+            parsed.purchaseTime?.let { time ->
+                add(time)
+            }
+        }.filter { it.isNotBlank() }
+
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+    }
+
+    private fun formatAmountForInput(amount: Double): String {
+        val rounded = kotlin.math.round(amount * 100) / 100
+        return if (rounded % 1.0 == 0.0) {
+            rounded.toInt().toString()
+        } else {
+            String.format(Locale.US, "%.2f", rounded)
+        }
+    }
 }
 
+/**
+ * Состояние формы расхода, которое редактируется экраном AddExpense.
+ */
 data class AddExpenseUiState(
     val description: String = "",
     val amount: String = "",
@@ -300,9 +405,14 @@ data class AddExpenseUiState(
     val date: LocalDate? = null,
     val time: String = "",
     val notes: String = "",
+    val isSettled: Boolean = false,
     val splitType: SplitType = SplitType.PAYER_ONLY,
     val splitAmounts: Map<String, String> = emptyMap(),
     val exchangeRate: Double = 1.0,
+    val receiptImageUri: String? = null,
+    val isReceiptProcessing: Boolean = false,
+    val receiptSummary: String? = null,
+    val receiptError: String? = null,
     val isRateLoading: Boolean = false,
     val rateError: String? = null,
     val isSaving: Boolean = false,

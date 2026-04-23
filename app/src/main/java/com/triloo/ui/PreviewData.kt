@@ -25,6 +25,9 @@ import com.triloo.ui.trips.CreateTripUiState
 import com.triloo.ui.trips.TripListUiState
 import java.time.LocalDate
 
+/**
+ * Набор фикстур для Compose Preview и локальной проверки экранов без запуска приложения.
+ */
 object PreviewData {
     private val startDate = LocalDate.of(2025, 5, 18)
 
@@ -259,9 +262,23 @@ object PreviewData {
 
     val relayState: RelayUiState = RelayUiState(
         trip = trip,
-        exportChunks = listOf("relay-1", "relay-2"),
-        scanProgress = 1,
-        scanTotal = 3
+        isBluetoothSupported = true,
+        isBluetoothEnabled = true,
+        isHosting = true,
+        localDeviceName = "Pixel 8 Pro",
+        statusMessage = "Ожидание подключения по Bluetooth...",
+        devices = listOf(
+            com.triloo.data.relay.BluetoothRelayDevice(
+                name = "Galaxy S24",
+                address = "00:11:22:33:44:55",
+                isBonded = true
+            ),
+            com.triloo.data.relay.BluetoothRelayDevice(
+                name = "iPad test",
+                address = "11:22:33:44:55:66",
+                isBonded = false
+            )
+        )
     )
 
     val authState: AuthUiState = AuthUiState()

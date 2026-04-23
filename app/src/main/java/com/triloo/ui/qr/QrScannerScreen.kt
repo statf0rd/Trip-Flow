@@ -41,6 +41,9 @@ import com.journeyapps.barcodescanner.DefaultDecoderFactory
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.theme.TrilooTheme
 
+/**
+ * Универсальный экран сканирования QR, который запрашивает доступ к камере и отдаёт считанный текст.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QrScannerScreen(

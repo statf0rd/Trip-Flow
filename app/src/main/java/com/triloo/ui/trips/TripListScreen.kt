@@ -183,7 +183,7 @@ private fun TripListContent(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
-        // Current Trip (Hero Card)
+        // Текущая поездка в главной акцентной карточке.
         uiState.currentTrip?.let { trip ->
             item {
                 SectionHeader(title = "Сейчас в поездке")
@@ -197,13 +197,13 @@ private fun TripListContent(
             }
         }
         
-        // Upcoming Trips
+        // Ближайшие поездки.
         if (uiState.upcomingTrips.isNotEmpty()) {
             item {
                 SectionHeader(
                     title = "Предстоящие",
                     action = if (uiState.upcomingTrips.size > 3) "Все" else null,
-                    onAction = { /* Show all */ }
+                    onAction = { /* Показать все. */ }
                 )
             }
             
@@ -226,7 +226,7 @@ private fun TripListContent(
             }
         }
         
-        // Past Trips
+        // Прошедшие поездки.
         if (uiState.pastTrips.isNotEmpty()) {
             item {
                 SectionHeader(title = "Прошедшие")
@@ -302,7 +302,7 @@ private fun CurrentTripCard(
                         )
                     }
                     
-                    // Days counter
+                    // Счётчик оставшихся дней.
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color.White.copy(alpha = 0.2f)
@@ -328,7 +328,7 @@ private fun CurrentTripCard(
                 
                 Spacer(modifier = Modifier.height(20.dp))
                 
-                // Quick stats
+                // Быстрая сводка по поездке.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -539,7 +539,7 @@ private fun PastTripCard(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Emoji placeholder for cover
+                // Emoji-заглушка для обложки.
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -771,7 +771,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(bottom = 100.dp),
         userScrollEnabled = false
     ) {
-        // Current Trip Skeleton
+        // Скелетон текущей поездки.
         item {
             SectionHeader(title = "Сейчас в поездке")
             Spacer(
@@ -785,7 +785,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Upcoming Trips Skeleton
+        // Скелетон ближайших поездок.
         item {
             SectionHeader(title = "Предстоящие")
         }
@@ -808,7 +808,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Past Trips Skeleton
+        // Скелетон прошедших поездок.
         item {
             SectionHeader(title = "Прошедшие")
         }

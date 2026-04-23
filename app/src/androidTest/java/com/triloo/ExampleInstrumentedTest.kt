@@ -9,15 +9,15 @@ import org.junit.runner.RunWith
 import org.junit.Assert.*
 
 /**
- * Instrumented test, which will execute on an Android device.
+ * Пример инструментального теста, который выполняется на Android-устройстве.
  *
- * See [testing documentation](http://d.android.com/tools/testing).
+ * Подробнее: [документация по тестированию](http://d.android.com/tools/testing).
  */
 @RunWith(AndroidJUnit4::class)
 class ExampleInstrumentedTest {
     @Test
     fun useAppContext() {
-        // Context of the app under test.
+        // Получаем context тестируемого приложения.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals("com.triloo", appContext.packageName)
     }

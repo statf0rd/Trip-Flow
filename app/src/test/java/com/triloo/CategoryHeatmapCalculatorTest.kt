@@ -6,6 +6,9 @@ import com.triloo.data.model.PlaceCategory
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Базовые проверки генерации тепловой карты по местам одной категории.
+ */
 class CategoryHeatmapCalculatorTest {
 
     @Test

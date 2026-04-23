@@ -51,6 +51,9 @@ import com.triloo.ui.theme.TrilooTheme
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/**
+ * Экран групповых поездок со списком общих маршрутов и формой входа по коду или QR.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupTripsScreen(

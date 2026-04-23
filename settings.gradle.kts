@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Triloo"
 include(":app")
+include(":feature-map")
  

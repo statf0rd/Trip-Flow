@@ -16,7 +16,7 @@ import java.time.LocalDate
 @Dao
 interface ExpenseDao {
     
-    // Expense CRUD
+    // CRUD-операции для расходов.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense)
@@ -36,7 +36,7 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE tripId = :tripId")
     suspend fun deleteAllExpenses(tripId: String)
     
-    // Expense Queries
+    // Запросы по расходам.
     
     @Query("SELECT * FROM expenses WHERE id = :expenseId")
     suspend fun getExpenseById(expenseId: String): Expense?
@@ -56,7 +56,7 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE tripId = :tripId AND paidByUserId = :userId ORDER BY date DESC")
     fun observeExpensesByPayer(tripId: String, userId: String): Flow<List<Expense>>
     
-    // Aggregations
+    // Агрегации.
     
     @Query("SELECT SUM(amountInBaseCurrency) FROM expenses WHERE tripId = :tripId")
     fun observeTotalExpenses(tripId: String): Flow<Double?>
@@ -85,7 +85,7 @@ interface ExpenseDao {
     """)
     suspend fun getExpenseSumByCategory(tripId: String): List<CategorySum>
     
-    // ExpenseSplit CRUD
+    // CRUD-операции для долей расхода.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpenseSplit(split: ExpenseSplit)
@@ -109,7 +109,7 @@ interface ExpenseDao {
     """)
     suspend fun getSplitsForTrip(tripId: String): List<ExpenseSplit>
     
-    // Currency Rates
+    // Валютные курсы.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCurrencyRate(rate: CurrencyRate)
@@ -140,5 +140,4 @@ data class CategorySum(
     val category: ExpenseCategory,
     val total: Double
 )
-
 

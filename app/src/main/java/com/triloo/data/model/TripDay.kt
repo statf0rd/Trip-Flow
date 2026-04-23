@@ -8,7 +8,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 /**
- * TripDay — Represents a single day within a trip's itinerary
+ * TripDay — один день маршрута внутри поездки.
  */
 @Entity(
     tableName = "trip_days",
@@ -28,12 +28,12 @@ data class TripDay(
     
     val tripId: String,
     val date: LocalDate,
-    val dayNumber: Int,                         // Day 1, Day 2, etc.
+    val dayNumber: Int,                         // Номер дня: 1, 2 и далее.
     
-    val title: String? = null,                  // Optional: "Museum Day", "Beach Day"
-    val notes: String? = null,                  // Free-form notes for the day
+    val title: String? = null,                  // Необязательное название, например "День музеев".
+    val notes: String? = null,                  // Произвольные заметки на день.
     
-    val weatherForecast: String? = null,        // Cached weather info
+    val weatherForecast: String? = null,        // Закешированная информация о погоде.
     val temperatureHigh: Int? = null,
     val temperatureLow: Int? = null,
     
@@ -42,7 +42,7 @@ data class TripDay(
 )
 
 /**
- * Place — A point of interest within a trip day
+ * Place — точка маршрута или место интереса внутри конкретного дня поездки.
  */
 @Entity(
     tableName = "places",
@@ -60,34 +60,34 @@ data class Place(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     
-    val tripId: String,                         // Denormalized for easier queries
+    val tripId: String,                         // Денормализован для упрощения запросов.
     val tripDayId: String,
     
     val name: String,
     val address: String? = null,
-    val placeId: String? = null,                // Google Place ID
+    val placeId: String? = null,                // Идентификатор места в Google Places.
     
     val latitude: Double,
     val longitude: Double,
     
     val category: PlaceCategory = PlaceCategory.ATTRACTION,
-    val iconEmoji: String? = null,              // Optional emoji icon
+    val iconEmoji: String? = null,              // Необязательная emoji-иконка.
     
-    val orderIndex: Int = 0,                    // Order within the day
+    val orderIndex: Int = 0,                    // Порядок внутри дня.
     
-    val scheduledTime: String? = null,          // "09:00" format
-    val estimatedDuration: Int? = null,         // Minutes
+    val scheduledTime: String? = null,          // Время в формате "09:00".
+    val estimatedDuration: Int? = null,         // Оценка длительности в минутах.
     
-    val openingHours: String? = null,           // Cached from Places API
-    val rating: Float? = null,                  // Google rating
-    val priceLevel: Int? = null,                // 0-4 price level
-    val photoUrl: String? = null,               // Photo reference
+    val openingHours: String? = null,           // Данные о часах работы из Places API.
+    val rating: Float? = null,                  // Рейтинг Google.
+    val priceLevel: Int? = null,                // Уровень цен от 0 до 4.
+    val photoUrl: String? = null,               // Ссылка или reference на фото.
     
     val website: String? = null,
     val phoneNumber: String? = null,
     
-    val notes: String? = null,                  // User notes
-    val isVisited: Boolean = false,             // Mark as visited
+    val notes: String? = null,                  // Пользовательские заметки.
+    val isVisited: Boolean = false,             // Было ли место посещено.
     
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -133,7 +133,7 @@ enum class PlaceCategory(val emoji: String, val displayName: String) {
 }
 
 /**
- * Route between two places
+ * Route — участок маршрута между двумя местами.
  */
 data class Route(
     val originPlaceId: String,
@@ -145,9 +145,9 @@ data class Route(
     
     val travelMode: TravelMode = TravelMode.DRIVING,
     
-    val polylineEncoded: String? = null,        // Encoded polyline for map
+    val polylineEncoded: String? = null,        // Encoded polyline для отрисовки на карте.
     
-    val fare: Double? = null,                   // Transit fare if available
+    val fare: Double? = null,                   // Стоимость проезда, если доступна.
     val fareCurrency: String? = null
 )
 
@@ -157,5 +157,4 @@ enum class TravelMode(val displayName: String, val icon: String) {
     TRANSIT("Общ. транспорт", "🚇"),
     BICYCLING("На велосипеде", "🚴")
 }
-
 

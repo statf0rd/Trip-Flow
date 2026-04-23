@@ -7,6 +7,9 @@ import androidx.room.Query
 import com.triloo.data.model.DeletionLog
 import com.triloo.data.model.RelayEntityType
 
+/**
+ * DAO для журнала удалений, который нужен relay-модулю при слиянии офлайн-изменений.
+ */
 @Dao
 interface DeletionLogDao {
 

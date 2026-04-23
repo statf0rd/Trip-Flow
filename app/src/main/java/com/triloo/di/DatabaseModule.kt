@@ -2,6 +2,7 @@ package com.triloo.di
 
 import android.content.Context
 import androidx.room.Room
+import com.triloo.data.local.DatabaseMigrations
 import com.triloo.data.local.TrilooDatabase
 import com.triloo.data.local.dao.DeletionLogDao
 import com.triloo.data.local.dao.ExpenseDao
@@ -14,6 +15,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/**
+ * Hilt-провайдеры Room-базы и DAO, используемых основными репозиториями приложения.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -28,7 +32,7 @@ object DatabaseModule {
             TrilooDatabase::class.java,
             TrilooDatabase.DATABASE_NAME
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3)
             .build()
     }
     
@@ -56,5 +60,3 @@ object DatabaseModule {
         return database.deletionLogDao()
     }
 }
-
-

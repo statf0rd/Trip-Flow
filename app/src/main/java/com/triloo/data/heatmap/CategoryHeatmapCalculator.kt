@@ -5,6 +5,9 @@ import com.triloo.data.model.PlaceCategory
 import kotlin.math.cos
 import kotlin.math.floor
 
+/**
+ * Параметры дискретизации и весов при построении тепловой карты по местам.
+ */
 data class HeatmapConfig(
     val cellSizeMeters: Int = 600,
     val minRating: Float = 3.5f,
@@ -13,6 +16,9 @@ data class HeatmapConfig(
     val minPlacesPerCell: Int = 1
 )
 
+/**
+ * Итоговая ячейка тепловой карты с центром, категорией и рассчитанным score.
+ */
 data class HeatmapCell(
     val centerLatitude: Double,
     val centerLongitude: Double,
@@ -22,6 +28,9 @@ data class HeatmapCell(
     val placeCount: Int
 )
 
+/**
+ * Группирует места по сетке и оценивает плотность/рейтинг для рендера heatmap на карте.
+ */
 class CategoryHeatmapCalculator {
 
     fun buildHeatmap(

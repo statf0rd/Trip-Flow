@@ -36,7 +36,7 @@ import com.triloo.ui.theme.TrilooMotion
 import com.triloo.ui.theme.TrilooTheme
 
 /**
- * Navigation routes for Triloo
+ * Навигационные маршруты приложения Triloo.
  */
 sealed class Screen(val route: String) {
     object TripList : Screen("trips")
@@ -80,6 +80,28 @@ sealed class Screen(val route: String) {
     }
 }
 
+private enum class ScreenPresentation {
+    PUSH,
+    OVERLAY
+}
+
+private val overlayRoutes = setOf(
+    Screen.CreateTrip.route,
+    Screen.EditTrip.route,
+    Screen.AddPlace.route,
+    Screen.EditPlace.route,
+    Screen.AddExpense.route,
+    Screen.EditExpense.route
+)
+
+private fun String?.presentation(): ScreenPresentation {
+    return if (this != null && this in overlayRoutes) {
+        ScreenPresentation.OVERLAY
+    } else {
+        ScreenPresentation.PUSH
+    }
+}
+
 @Composable
 fun TrilooNavHost(
     modifier: Modifier = Modifier,
@@ -91,19 +113,43 @@ fun TrilooNavHost(
         startDestination = startDestination,
         modifier = modifier,
         enterTransition = {
-            TrilooMotion.enterNavForward()
+            val initialPresentation = initialState.destination.route.presentation()
+            val targetPresentation = targetState.destination.route.presentation()
+            when {
+                targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterBottomSheet()
+                initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterNavFromOverlay()
+                else -> TrilooMotion.enterNavForward()
+            }
         },
         exitTransition = {
-            TrilooMotion.exitNavForward()
+            val initialPresentation = initialState.destination.route.presentation()
+            val targetPresentation = targetState.destination.route.presentation()
+            when {
+                targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitNavForOverlay()
+                initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitBottomSheet()
+                else -> TrilooMotion.exitNavForward()
+            }
         },
         popEnterTransition = {
-            TrilooMotion.enterNavBack()
+            val initialPresentation = initialState.destination.route.presentation()
+            val targetPresentation = targetState.destination.route.presentation()
+            when {
+                initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterNavUnderOverlay()
+                targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterBottomSheet()
+                else -> TrilooMotion.enterNavBack()
+            }
         },
         popExitTransition = {
-            TrilooMotion.exitNavBack()
+            val initialPresentation = initialState.destination.route.presentation()
+            val targetPresentation = targetState.destination.route.presentation()
+            when {
+                initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitBottomSheet()
+                targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitNavForOverlay()
+                else -> TrilooMotion.exitNavBack()
+            }
         }
     ) {
-        // Trip List (Home)
+        // Список поездок на домашнем экране.
         composable(Screen.TripList.route) {
             TripListScreen(
                 onNavigateToTrip = { tripId ->
@@ -121,7 +167,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Settings
+        // Настройки.
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onNavigateBack = {
@@ -145,7 +191,7 @@ fun TrilooNavHost(
             )
         }
 
-        // Auth
+        // Авторизация.
         composable(Screen.Auth.route) {
             AuthFlowScreen(
                 onNavigateBack = { navController.popBackStack() },
@@ -153,7 +199,7 @@ fun TrilooNavHost(
             )
         }
 
-        // Group Trips
+        // Групповые поездки.
         composable(Screen.GroupTrips.route) {
             val qrResultFlow = navController.currentBackStackEntry
                 ?.savedStateHandle
@@ -177,7 +223,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Create Trip
+        // Создание поездки.
         composable(
             route = Screen.CreateTrip.route,
             arguments = listOf(
@@ -209,7 +255,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Trip Details
+        // Детали поездки.
         composable(
             route = Screen.TripDetails.route,
             arguments = listOf(
@@ -250,7 +296,7 @@ fun TrilooNavHost(
             )
         }
 
-        // Invite
+        // Приглашение.
         composable(
             route = Screen.Invite.route,
             arguments = listOf(navArgument("tripId") { type = NavType.StringType })
@@ -260,29 +306,17 @@ fun TrilooNavHost(
             )
         }
 
-        // Relay
+        // Relay sync.
         composable(
             route = Screen.Relay.route,
             arguments = listOf(navArgument("tripId") { type = NavType.StringType })
         ) {
-            val qrResultFlow = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getStateFlow("qr_result", null)
-            val qrResult = qrResultFlow?.collectAsStateWithLifecycle()?.value
-
             RelayScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onScanRelay = { navController.navigate(Screen.QrScanner.createRoute("relay")) },
-                qrResult = qrResult,
-                onConsumeQrResult = {
-                    navController.currentBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("qr_result", null)
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // QR Scanner
+        // QR-сканер.
         composable(
             route = Screen.QrScanner.route,
             arguments = listOf(
@@ -295,7 +329,7 @@ fun TrilooNavHost(
             val mode = backStackEntry.arguments?.getString("mode") ?: "relay"
             val title = when (mode) {
                 "invite" -> "Сканировать приглашение"
-                else -> "Сканировать Relay QR"
+                else -> "Сканировать QR"
             }
 
             QrScannerScreen(
@@ -310,7 +344,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Add Place
+        // Добавление места.
         composable(
             route = Screen.AddPlace.route,
             arguments = listOf(
@@ -330,7 +364,7 @@ fun TrilooNavHost(
             )
         }
 
-        // Edit Place
+        // Редактирование места.
         composable(
             route = Screen.EditPlace.route,
             arguments = listOf(
@@ -349,7 +383,7 @@ fun TrilooNavHost(
             )
         }
 
-        // Edit Trip
+        // Редактирование поездки.
         composable(
             route = Screen.EditTrip.route,
             arguments = listOf(
@@ -369,7 +403,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Place Details
+        // Детали места.
         composable(
             route = Screen.PlaceDetails.route,
             arguments = listOf(
@@ -384,7 +418,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Add Expense
+        // Добавление расхода.
         composable(
             route = Screen.AddExpense.route,
             arguments = listOf(
@@ -403,7 +437,7 @@ fun TrilooNavHost(
             )
         }
         
-        // Edit Expense
+        // Редактирование расхода.
         composable(
             route = Screen.EditExpense.route,
             arguments = listOf(

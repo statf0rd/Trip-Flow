@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TripDao {
     
-    // Trip CRUD
+    // CRUD-операции для поездок.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrip(trip: Trip)
@@ -29,7 +29,7 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :tripId")
     suspend fun deleteTripById(tripId: String)
     
-    // Trip Queries
+    // Запросы по поездкам.
     
     @Query("SELECT * FROM trips WHERE id = :tripId")
     suspend fun getTripById(tripId: String): Trip?
@@ -74,7 +74,7 @@ interface TripDao {
     @Query("SELECT COUNT(*) FROM trips")
     suspend fun getTripCount(): Int
     
-    // Participant CRUD
+    // CRUD-операции для участников.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertParticipant(participant: Participant)
@@ -94,7 +94,7 @@ interface TripDao {
     @Query("DELETE FROM participants WHERE tripId = :tripId")
     suspend fun deleteParticipantsByTrip(tripId: String)
     
-    // Participant Queries
+    // Запросы по участникам.
     
     @Query("SELECT * FROM participants WHERE tripId = :tripId")
     fun observeParticipants(tripId: String): Flow<List<Participant>>

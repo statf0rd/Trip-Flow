@@ -5,12 +5,15 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
+import com.triloo.data.auth.ServerSessionRepository
 import com.triloo.data.local.TrilooDatabase
+import com.triloo.data.notifications.TripNotificationScheduler
 import com.triloo.data.settings.AppSettingsRepository
 import com.triloo.data.settings.AppLanguage
 import com.triloo.data.settings.ThemeMode
 import com.triloo.data.repository.ExpenseRepository
 import com.triloo.data.repository.TripRepository
+import com.triloo.data.sync.OnlineSyncRepository
 import com.triloo.data.user.UserProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,13 +26,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/**
+ * Готовит состояние настроек и запускает экспорт/очистку локальных данных пользователя.
+ */
 @HiltViewModel
 class AppSettingsViewModel @Inject constructor(
     private val repository: AppSettingsRepository,
     private val tripRepository: TripRepository,
     private val expenseRepository: ExpenseRepository,
     private val database: TrilooDatabase,
+    private val tripNotificationScheduler: TripNotificationScheduler,
+    private val onlineSyncRepository: OnlineSyncRepository,
     private val userProfileRepository: UserProfileRepository,
+    private val serverSessionRepository: ServerSessionRepository,
     private val gson: Gson,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -71,12 +80,20 @@ class AppSettingsViewModel @Inject constructor(
     fun setNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.setNotificationsEnabled(enabled)
+            if (enabled) {
+                tripNotificationScheduler.syncAllTrips()
+            } else {
+                tripNotificationScheduler.cancelAll()
+            }
         }
     }
 
     fun setSyncEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.setSyncEnabled(enabled)
+            if (enabled) {
+                onlineSyncRepository.bootstrapSync()
+            }
         }
     }
 
@@ -116,13 +133,18 @@ class AppSettingsViewModel @Inject constructor(
                 withContext(Dispatchers.IO) {
                     database.clearAllTables()
                 }
+                tripNotificationScheduler.cancelAll()
                 userProfileRepository.signOut()
+                serverSessionRepository.clearSession()
             }
             onResult(result.isSuccess)
         }
     }
 }
 
+/**
+ * Состояние экрана настроек приложения.
+ */
 data class AppSettingsUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val defaultCurrency: String = "RUB",

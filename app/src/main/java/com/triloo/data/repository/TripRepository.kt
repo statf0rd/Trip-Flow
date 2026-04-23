@@ -5,11 +5,14 @@ import com.triloo.data.local.dao.PlaceDao
 import com.triloo.data.local.dao.TripDao
 import com.triloo.data.model.DeletionLog
 import com.triloo.data.model.Participant
+import com.triloo.data.model.ParticipantRole
 import com.triloo.data.model.Place
 import com.triloo.data.model.RelayEntityType
 import com.triloo.data.model.Trip
 import com.triloo.data.model.TripDay
 import com.triloo.data.model.TripStatus
+import com.triloo.data.notifications.TripNotificationScheduler
+import com.triloo.data.sync.OnlineSyncRepository
 import com.triloo.data.user.UserProfileRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -20,10 +23,12 @@ class TripRepository @Inject constructor(
     private val tripDao: TripDao,
     private val placeDao: PlaceDao,
     private val deletionLogDao: DeletionLogDao,
-    private val userProfileRepository: UserProfileRepository
+    private val userProfileRepository: UserProfileRepository,
+    private val tripNotificationScheduler: TripNotificationScheduler,
+    private val onlineSyncRepository: OnlineSyncRepository
 ) {
     
-    // Trip Operations
+    // Операции с поездками.
     
     fun observeAllTrips(): Flow<List<Trip>> = tripDao.observeAllTrips()
 
@@ -43,24 +48,34 @@ class TripRepository @Inject constructor(
     
     suspend fun createTrip(trip: Trip): String {
         tripDao.insertTrip(trip)
-        // Auto-create trip days based on date range
+        // Автоматически создаём дни поездки по диапазону дат.
         createTripDays(trip)
+        tripNotificationScheduler.syncTrip(trip.id)
+        onlineSyncRepository.syncTripAsync(trip.id)
         return trip.id
     }
     
     suspend fun updateTrip(trip: Trip) {
+        requireTripManagementPermission(trip.id, "изменять поездку")
         tripDao.updateTrip(trip.copy(updatedAt = System.currentTimeMillis()))
+        tripNotificationScheduler.syncTrip(trip.id)
+        onlineSyncRepository.syncTripAsync(trip.id)
     }
     
     suspend fun deleteTrip(tripId: String) {
+        requireTripManagementPermission(tripId, "удалять поездку")
         logDeletion(tripId, RelayEntityType.TRIP, tripId)
         tripDao.deleteTripById(tripId)
         tripDao.deleteParticipantsByTrip(tripId)
+        tripNotificationScheduler.cancelTrip(tripId)
     }
     
     suspend fun updateTripStatus(tripId: String, status: TripStatus) {
+        requireTripManagementPermission(tripId, "менять статус поездки")
         tripDao.getTripById(tripId)?.let { trip ->
             tripDao.updateTrip(trip.copy(status = status, updatedAt = System.currentTimeMillis()))
+            tripNotificationScheduler.syncTrip(tripId)
+            onlineSyncRepository.syncTripAsync(tripId)
         }
     }
     
@@ -84,7 +99,7 @@ class TripRepository @Inject constructor(
         placeDao.insertTripDays(days)
     }
     
-    // Participant Operations
+    // Операции с участниками.
     
     fun observeParticipants(tripId: String): Flow<List<Participant>> =
         tripDao.observeParticipants(tripId)
@@ -93,8 +108,19 @@ class TripRepository @Inject constructor(
         tripDao.getParticipants(tripId)
     
     suspend fun addParticipant(participant: Participant) {
+        val trip = tripDao.getTripById(participant.tripId)
+            ?: throw IllegalStateException("Поездка не найдена")
+        val currentUserId = userProfileRepository.getProfile().userId
+        val canBootstrapOwner = participant.userId == currentUserId &&
+            trip.ownerId == currentUserId &&
+            tripDao.getParticipantCount(participant.tripId) == 0
+        val canSelfJoinByInvite = participant.userId == currentUserId &&
+            tripDao.getParticipant(participant.tripId, currentUserId) == null
+        if (!canBootstrapOwner && !canSelfJoinByInvite) {
+            requireParticipantManagementPermission(participant.tripId, "добавлять участников")
+        }
         tripDao.insertParticipant(participant)
-        // Mark trip as group trip
+        // Помечаем поездку как групповую.
         tripDao.getTripById(participant.tripId)?.let { trip ->
             if (!trip.isGroupTrip) {
                 tripDao.updateTrip(
@@ -105,11 +131,14 @@ class TripRepository @Inject constructor(
                 )
             }
         }
+        onlineSyncRepository.syncTripAsync(participant.tripId)
     }
     
     suspend fun removeParticipant(tripId: String, userId: String) {
+        requireParticipantManagementPermission(tripId, "удалять участников")
         logDeletion(tripId, RelayEntityType.PARTICIPANT, userId)
         tripDao.removeParticipant(tripId, userId)
+        onlineSyncRepository.syncTripAsync(tripId)
     }
     
     suspend fun updateParticipantLocation(
@@ -118,6 +147,10 @@ class TripRepository @Inject constructor(
         latitude: Double,
         longitude: Double
     ) {
+        val currentUserId = userProfileRepository.getProfile().userId
+        if (currentUserId != userId) {
+            requireParticipantManagementPermission(tripId, "изменять местоположение участника")
+        }
         tripDao.updateParticipantLocation(
             tripId = tripId,
             userId = userId,
@@ -126,8 +159,25 @@ class TripRepository @Inject constructor(
             timestamp = System.currentTimeMillis()
         )
     }
+
+    suspend fun updateParticipantOnlineStatus(
+        tripId: String,
+        userId: String,
+        isOnline: Boolean
+    ) {
+        val currentUserId = userProfileRepository.getProfile().userId
+        if (currentUserId != userId) {
+            requireParticipantManagementPermission(tripId, "менять online-статус участника")
+        }
+        tripDao.updateParticipantOnlineStatus(
+            tripId = tripId,
+            userId = userId,
+            isOnline = isOnline,
+            timestamp = System.currentTimeMillis()
+        )
+    }
     
-    // TripDay Operations
+    // Операции с днями поездки.
     
     fun observeTripDays(tripId: String): Flow<List<TripDay>> =
         placeDao.observeTripDays(tripId)
@@ -139,10 +189,12 @@ class TripRepository @Inject constructor(
         placeDao.getTripDayById(dayId)
     
     suspend fun updateTripDay(tripDay: TripDay) {
+        requireItineraryPermission(tripDay.tripId, "изменять день поездки")
         placeDao.updateTripDay(tripDay.copy(updatedAt = System.currentTimeMillis()))
+        onlineSyncRepository.syncTripAsync(tripDay.tripId)
     }
     
-    // Place Operations
+    // Операции с местами.
     
     fun observePlacesByDay(tripDayId: String): Flow<List<Place>> =
         placeDao.observePlacesByDay(tripDayId)
@@ -160,31 +212,54 @@ class TripRepository @Inject constructor(
         placeDao.getPlaceById(placeId)
     
     suspend fun addPlace(place: Place) {
+        requireItineraryPermission(place.tripId, "добавлять места")
         val maxOrder = placeDao.getMaxOrderIndex(place.tripDayId) ?: -1
         placeDao.insertPlace(place.copy(orderIndex = maxOrder + 1))
+        tripNotificationScheduler.syncTrip(place.tripId)
+        onlineSyncRepository.syncTripAsync(place.tripId)
     }
     
     suspend fun updatePlace(place: Place) {
+        requireItineraryPermission(place.tripId, "редактировать места")
         placeDao.updatePlace(place.copy(updatedAt = System.currentTimeMillis()))
+        tripNotificationScheduler.syncTrip(place.tripId)
+        onlineSyncRepository.syncTripAsync(place.tripId)
     }
     
     suspend fun deletePlace(placeId: String) {
+        var tripIdForRefresh: String? = null
         placeDao.getPlaceById(placeId)?.let { place ->
+            requireItineraryPermission(place.tripId, "удалять места")
             logDeletion(place.tripId, RelayEntityType.PLACE, placeId)
+            tripIdForRefresh = place.tripId
         }
         placeDao.deletePlaceById(placeId)
+        tripIdForRefresh?.let {
+            tripNotificationScheduler.syncTrip(it)
+            onlineSyncRepository.syncTripAsync(it)
+        }
     }
     
     suspend fun reorderPlaces(tripDayId: String, orderedPlaceIds: List<String>) {
-        placeDao.reorderPlaces(tripDayId, orderedPlaceIds)
+        placeDao.getTripDayById(tripDayId)?.tripId?.let {
+            requireItineraryPermission(it, "менять порядок мест")
+            placeDao.reorderPlaces(tripDayId, orderedPlaceIds)
+            tripNotificationScheduler.syncTrip(it)
+            onlineSyncRepository.syncTripAsync(it)
+        }
     }
     
     suspend fun markPlaceVisited(placeId: String, visited: Boolean) {
-        placeDao.updatePlaceVisited(placeId, visited)
+        placeDao.getPlaceById(placeId)?.tripId?.let {
+            requireItineraryPermission(it, "отмечать места как посещённые")
+            placeDao.updatePlaceVisited(placeId, visited)
+            tripNotificationScheduler.syncTrip(it)
+            onlineSyncRepository.syncTripAsync(it)
+        }
     }
 
     private suspend fun logDeletion(tripId: String, type: RelayEntityType, entityId: String) {
-        val deviceId = userProfileRepository.getOrCreateUserId()
+        val deviceId = userProfileRepository.getOrCreateDeviceId()
         deletionLogDao.insertDeletion(
             DeletionLog(
                 tripId = tripId,
@@ -193,5 +268,33 @@ class TripRepository @Inject constructor(
                 deviceId = deviceId
             )
         )
+    }
+
+    private suspend fun requireTripManagementPermission(tripId: String, action: String) {
+        requireRole(tripId, setOf(ParticipantRole.OWNER, ParticipantRole.ADMIN), action)
+    }
+
+    private suspend fun requireParticipantManagementPermission(tripId: String, action: String) {
+        requireRole(tripId, setOf(ParticipantRole.OWNER, ParticipantRole.ADMIN), action)
+    }
+
+    private suspend fun requireItineraryPermission(tripId: String, action: String) {
+        requireRole(tripId, setOf(ParticipantRole.OWNER, ParticipantRole.ADMIN), action)
+    }
+
+    private suspend fun requireRole(
+        tripId: String,
+        allowedRoles: Set<ParticipantRole>,
+        action: String
+    ) {
+        val trip = tripDao.getTripById(tripId) ?: return
+        if (!trip.isGroupTrip) return
+
+        val currentUserId = userProfileRepository.getProfile().userId
+        val role = tripDao.getParticipant(tripId, currentUserId)?.role
+            ?: throw IllegalStateException("Недостаточно прав: вы не участник поездки")
+        if (role !in allowedRoles) {
+            throw IllegalStateException("Недостаточно прав, чтобы $action")
+        }
     }
 }

@@ -15,17 +15,26 @@ import javax.inject.Singleton
 
 private val Context.settingsDataStore by preferencesDataStore(name = "app_settings")
 
+/**
+ * Доступные режимы оформления приложения.
+ */
 enum class ThemeMode(val displayName: String) {
     SYSTEM("Системная"),
     LIGHT("Светлая"),
     DARK("Темная")
 }
 
+/**
+ * Поддерживаемые языки интерфейса и их теги локали.
+ */
 enum class AppLanguage(val displayName: String, val localeTag: String) {
     RU("Русский", "ru"),
     EN("English", "en")
 }
 
+/**
+ * Снимок пользовательских настроек, используемый во ViewModel и UI.
+ */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val defaultCurrency: String = "RUB",
@@ -34,6 +43,9 @@ data class AppSettings(
     val syncEnabled: Boolean = true
 )
 
+/**
+ * Репозиторий настроек на DataStore: тема, валюта, язык и флаги системных возможностей.
+ */
 @Singleton
 class AppSettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context

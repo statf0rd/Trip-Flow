@@ -4,11 +4,17 @@ import android.util.Base64
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
+/**
+ * Тип полезной нагрузки, закодированной в Triloo QR.
+ */
 enum class RelayPayloadType {
     INVITE,
     RELAY
 }
 
+/**
+ * Разобранный фрагмент QR-пакета с индексом и общей длиной.
+ */
 data class RelayQrChunk(
     val type: RelayPayloadType,
     val version: Int,
@@ -18,6 +24,9 @@ data class RelayQrChunk(
     val data: String
 )
 
+/**
+ * Кодирует JSON в последовательность QR-строк и собирает их обратно в исходный payload.
+ */
 object RelayQrCodec {
     private const val PREFIX = "TRILOO"
     private const val VERSION = 1

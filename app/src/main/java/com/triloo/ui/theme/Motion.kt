@@ -18,6 +18,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 
+/**
+ * Централизованные кривые, длительности и переходы анимации дизайн-системы Triloo.
+ */
 object TrilooMotion {
     val easingStandard = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     val easingEmphasized = CubicBezierEasing(0.2f, 0.9f, 0.1f, 1f)
@@ -137,19 +140,19 @@ object TrilooMotion {
     fun enterNavForward(): EnterTransition =
         fadeIn(
             animationSpec = tween(
-                durationMillis = durationMedium,
-                easing = easingEmphasized
+                durationMillis = durationLong,
+                easing = easingStandard
             )
         ) + slideInHorizontally(
             animationSpec = tween(
                 durationMillis = durationLong,
                 easing = easingEmphasized
             ),
-            initialOffsetX = { it / 3 }
+            initialOffsetX = { it / 10 }
         ) + scaleIn(
-            initialScale = 0.98f,
+            initialScale = 0.992f,
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingEmphasized
             )
         )
@@ -157,19 +160,19 @@ object TrilooMotion {
     fun exitNavForward(): ExitTransition =
         fadeOut(
             animationSpec = tween(
-                durationMillis = durationShort,
+                durationMillis = durationMedium,
                 easing = easingExit
             )
         ) + slideOutHorizontally(
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingExit
             ),
-            targetOffsetX = { -it / 5 }
+            targetOffsetX = { -it / 12 }
         ) + scaleOut(
-            targetScale = 0.98f,
+            targetScale = 0.992f,
             animationSpec = tween(
-                durationMillis = durationShort,
+                durationMillis = durationMedium,
                 easing = easingExit
             )
         )
@@ -177,19 +180,19 @@ object TrilooMotion {
     fun enterNavBack(): EnterTransition =
         fadeIn(
             animationSpec = tween(
-                durationMillis = durationMedium,
-                easing = easingEmphasized
+                durationMillis = durationLong,
+                easing = easingStandard
             )
         ) + slideInHorizontally(
             animationSpec = tween(
                 durationMillis = durationLong,
                 easing = easingEmphasized
             ),
-            initialOffsetX = { -it / 5 }
+            initialOffsetX = { -it / 10 }
         ) + scaleIn(
-            initialScale = 0.99f,
+            initialScale = 0.994f,
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingEmphasized
             )
         )
@@ -197,19 +200,19 @@ object TrilooMotion {
     fun exitNavBack(): ExitTransition =
         fadeOut(
             animationSpec = tween(
-                durationMillis = durationShort,
+                durationMillis = durationMedium,
                 easing = easingExit
             )
         ) + slideOutHorizontally(
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingExit
             ),
-            targetOffsetX = { it / 4 }
+            targetOffsetX = { it / 12 }
         ) + scaleOut(
-            targetScale = 0.98f,
+            targetScale = 0.992f,
             animationSpec = tween(
-                durationMillis = durationShort,
+                durationMillis = durationMedium,
                 easing = easingExit
             )
         )
@@ -217,19 +220,19 @@ object TrilooMotion {
     fun enterBottomSheet(): EnterTransition =
         fadeIn(
             animationSpec = tween(
-                durationMillis = durationMedium,
-                easing = easingEmphasized
+                durationMillis = durationLong,
+                easing = easingStandard
             )
         ) + slideInVertically(
             animationSpec = tween(
                 durationMillis = durationLong,
                 easing = easingEmphasized
             ),
-            initialOffsetY = { it / 2 }
+            initialOffsetY = { it / 5 }
         ) + scaleIn(
-            initialScale = 0.98f,
+            initialScale = 0.994f,
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingEmphasized
             )
         )
@@ -237,14 +240,56 @@ object TrilooMotion {
     fun exitBottomSheet(): ExitTransition =
         fadeOut(
             animationSpec = tween(
-                durationMillis = durationShort,
+                durationMillis = durationMedium,
                 easing = easingExit
             )
         ) + slideOutVertically(
             animationSpec = tween(
-                durationMillis = durationMedium,
+                durationMillis = durationLong,
                 easing = easingExit
             ),
-            targetOffsetY = { it / 4 }
+            targetOffsetY = { it / 6 }
+        )
+
+    fun enterNavFromOverlay(): EnterTransition =
+        fadeIn(
+            animationSpec = tween(
+                durationMillis = durationLong,
+                easing = easingStandard
+            )
+        ) + scaleIn(
+            initialScale = 0.996f,
+            animationSpec = tween(
+                durationMillis = durationLong,
+                easing = easingEmphasized
+            )
+        )
+
+    fun enterNavUnderOverlay(): EnterTransition =
+        fadeIn(
+            animationSpec = tween(
+                durationMillis = durationMedium,
+                easing = easingStandard
+            )
+        ) + scaleIn(
+            initialScale = 0.998f,
+            animationSpec = tween(
+                durationMillis = durationMedium,
+                easing = easingStandard
+            )
+        )
+
+    fun exitNavForOverlay(): ExitTransition =
+        fadeOut(
+            animationSpec = tween(
+                durationMillis = durationMedium,
+                easing = easingExit
+            )
+        ) + scaleOut(
+            targetScale = 0.996f,
+            animationSpec = tween(
+                durationMillis = durationMedium,
+                easing = easingExit
+            )
         )
 }

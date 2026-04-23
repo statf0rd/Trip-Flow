@@ -1,5 +1,7 @@
 package com.triloo.ui.tripdetails
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -33,8 +35,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.triloo.data.model.ExpenseCategory
 import com.triloo.data.model.Participant
 import com.triloo.data.model.SplitType
@@ -52,7 +57,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 
+/**
+ * Экран добавления и редактирования расхода с выбором категории, валюты и плательщика.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddExpenseScreen(
@@ -63,6 +72,19 @@ fun AddExpenseScreen(
     val trip by viewModel.trip.collectAsStateWithLifecycle()
     val participants by viewModel.participants.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+    val receiptPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        viewModel.importReceipt(uri.toString())
+    }
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
@@ -83,8 +105,11 @@ fun AddExpenseScreen(
         onDateChange = viewModel::updateDate,
         onTimeChange = viewModel::updateTime,
         onNotesChange = viewModel::updateNotes,
+        onSettledChange = viewModel::updateSettled,
         onSplitTypeChange = viewModel::updateSplitType,
         onSplitAmountChange = viewModel::updateSplitAmount,
+        onPickReceipt = { receiptPickerLauncher.launch(arrayOf("image/*")) },
+        onRemoveReceipt = viewModel::removeReceipt,
         onSave = viewModel::saveExpense,
         focusManager = focusManager
     )
@@ -105,8 +130,11 @@ private fun AddExpenseContent(
     onDateChange: (LocalDate) -> Unit,
     onTimeChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
+    onSettledChange: (Boolean) -> Unit,
     onSplitTypeChange: (SplitType) -> Unit,
     onSplitAmountChange: (String, String) -> Unit,
+    onPickReceipt: () -> Unit,
+    onRemoveReceipt: () -> Unit,
     onSave: () -> Unit,
     focusManager: FocusManager = LocalFocusManager.current
 ) {
@@ -145,6 +173,7 @@ private fun AddExpenseContent(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(scrollState)
+                .imePadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -195,7 +224,7 @@ private fun AddExpenseContent(
                             Icon(
                                 imageVector = Icons.Rounded.Payments,
                                 contentDescription = null,
-                                tint = CoralPrimary
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         },
                         keyboardOptions = KeyboardOptions(
@@ -222,8 +251,8 @@ private fun AddExpenseContent(
                             onClick = { onCurrencyChange(currency) },
                             label = { Text(currency) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = CoralPrimary.copy(alpha = 0.15f),
-                                selectedLabelColor = CoralPrimary
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary
                             )
                         )
                     }
@@ -265,6 +294,15 @@ private fun AddExpenseContent(
                 shape = RoundedCornerShape(14.dp)
             )
 
+            ReceiptSection(
+                receiptImageUri = uiState.receiptImageUri,
+                isProcessing = uiState.isReceiptProcessing,
+                summary = uiState.receiptSummary,
+                error = uiState.receiptError,
+                onPickReceipt = onPickReceipt,
+                onRemoveReceipt = onRemoveReceipt
+            )
+
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "Категория",
@@ -289,6 +327,43 @@ private fun AddExpenseContent(
                 onSplitTypeChange = onSplitTypeChange,
                 onSplitAmountChange = onSplitAmountChange
             )
+
+            if (uiState.splitType != SplitType.PAYER_ONLY) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Долг уже закрыт",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Slate700
+                            )
+                            Text(
+                                text = "Закрытые расходы не участвуют в балансе между участниками",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = uiState.isSettled,
+                            onCheckedChange = onSettledChange
+                        )
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = uiState.paidBy,
@@ -449,7 +524,7 @@ private fun AddExpenseContent(
                         showDatePicker = false
                     }
                 ) {
-                    Text("ОК", color = CoralPrimary)
+                    Text("ОК", color = MaterialTheme.colorScheme.primary)
                 }
             },
             dismissButton = {
@@ -461,10 +536,125 @@ private fun AddExpenseContent(
             DatePicker(
                 state = datePickerState,
                 colors = DatePickerDefaults.colors(
-                    selectedDayContainerColor = CoralPrimary,
-                    todayDateBorderColor = CoralPrimary
+                    selectedDayContainerColor = MaterialTheme.colorScheme.primary,
+                    todayDateBorderColor = MaterialTheme.colorScheme.primary
                 )
             )
+        }
+    }
+}
+
+@Composable
+private fun ReceiptSection(
+    receiptImageUri: String?,
+    isProcessing: Boolean,
+    summary: String?,
+    error: String?,
+    onPickReceipt: () -> Unit,
+    onRemoveReceipt: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Чек",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Slate700
+                    )
+                    Text(
+                        text = "Загрузите фото чека, и Triloo попробует заполнить сумму, дату и описание автоматически.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                AssistChip(
+                    onClick = onPickReceipt,
+                    label = { Text(if (receiptImageUri == null) "Загрузить" else "Заменить") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.ReceiptLong,
+                            contentDescription = null
+                        )
+                    }
+                )
+            }
+
+            receiptImageUri?.let { uriString ->
+                AsyncImage(
+                    model = Uri.parse(uriString),
+                    contentDescription = "Чек",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                )
+            }
+
+            if (isProcessing) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text(
+                        text = "Распознаём чек и ищем сумму...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+            }
+
+            summary?.let { summaryText ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = TealSubtle
+                ) {
+                    Text(
+                        text = "Распознано: $summaryText",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TealDark
+                    )
+                }
+            }
+
+            error?.let { errorText ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = ErrorLight
+                ) {
+                    Text(
+                        text = errorText,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Error
+                    )
+                }
+            }
+
+            if (receiptImageUri != null) {
+                TextButton(
+                    onClick = onRemoveReceipt,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Удалить чек")
+                }
+            }
         }
     }
 }
@@ -821,9 +1011,11 @@ private fun ExpenseCategoryCarousel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = category.emoji,
-                    style = MaterialTheme.typography.titleLarge
+                Icon(
+                    imageVector = category.icon,
+                    contentDescription = category.displayName,
+                    tint = Color(category.colorHex),
+                    modifier = Modifier.size(28.dp)
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -867,8 +1059,11 @@ private fun AddExpenseScreenPreview() {
             onDateChange = { _ -> },
             onTimeChange = {},
             onNotesChange = {},
+            onSettledChange = {},
             onSplitTypeChange = {},
             onSplitAmountChange = { _, _ -> },
+            onPickReceipt = {},
+            onRemoveReceipt = {},
             onSave = {}
         )
     }

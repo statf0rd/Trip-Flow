@@ -20,12 +20,13 @@ import com.triloo.data.settings.ThemeMode
 import com.triloo.ui.navigation.TrilooNavHost
 import com.triloo.ui.settings.AppSettingsViewModel
 import com.triloo.ui.theme.TrilooTheme
+import com.yandex.mapkit.MapKitFactory
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install splash screen before super.onCreate
+        // Подключаем splash screen до вызова super.onCreate, как требует AndroidX API.
         installSplashScreen()
         
         super.onCreate(savedInstanceState)
@@ -59,5 +60,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (BuildConfig.APP_MAPKIT_VIEW_ENABLED && BuildConfig.APP_MAPKIT_API_KEY.isNotBlank()) {
+            MapKitFactory.getInstance().onStart()
+        }
+    }
+
+    override fun onStop() {
+        if (BuildConfig.APP_MAPKIT_VIEW_ENABLED && BuildConfig.APP_MAPKIT_API_KEY.isNotBlank()) {
+            MapKitFactory.getInstance().onStop()
+        }
+        super.onStop()
     }
 }

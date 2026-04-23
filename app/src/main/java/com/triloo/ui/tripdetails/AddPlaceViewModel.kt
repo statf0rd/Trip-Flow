@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.triloo.data.model.Place
 import com.triloo.data.model.PlaceCategory
 import com.triloo.data.model.TripDay
+import com.triloo.data.places.PlaceDetails
 import com.triloo.data.places.PlaceSuggestion
 import com.triloo.data.places.PlacesService
 import com.triloo.data.repository.TripRepository
@@ -15,8 +16,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -50,7 +49,7 @@ class AddPlaceViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // If editing, load place first
+            // Если редактируем место, сначала подтягиваем его текущие данные.
             placeId?.let { id ->
                 val place = tripRepository.getPlaceById(id)
                 if (place != null) {
@@ -71,13 +70,18 @@ class AddPlaceViewModel @Inject constructor(
                             durationUnit = DurationUnit.MINUTES,
                             notes = place.notes.orEmpty(),
                             rating = place.rating,
-                            selectedPlaceId = place.placeId
+                            selectedPlaceId = place.placeId,
+                            openingHours = place.openingHours,
+                            priceLevel = place.priceLevel,
+                            photoUrl = place.photoUrl,
+                            website = place.website,
+                            phoneNumber = place.phoneNumber
                         )
                     }
                 }
             }
 
-            // Preload day info for header
+            // Заранее загружаем информацию о дне для заголовка экрана.
             _day.value = tripRepository.getTripDayById(dayId)
 
             val existing = tripRepository.getPlacesByDay(dayId)
@@ -101,14 +105,18 @@ class AddPlaceViewModel @Inject constructor(
             }
         }
         
-        // Setup search debounce
+        // Настраиваем debounce для поискового запроса.
         viewModelScope.launch {
             _searchQuery
                 .debounce(300)
-                .filter { it.length >= 2 }
                 .distinctUntilChanged()
-                .collect { query ->
-                    searchPlaces(query)
+                .collectLatest { query ->
+                    if (query.length < 2) {
+                        _suggestions.value = emptyList()
+                        _uiState.update { it.copy(isSearching = false) }
+                    } else {
+                        searchPlaces(query)
+                    }
                 }
         }
     }
@@ -116,9 +124,7 @@ class AddPlaceViewModel @Inject constructor(
     private suspend fun searchPlaces(query: String) {
         _uiState.update { it.copy(isSearching = true) }
         try {
-            val results = withContext(Dispatchers.IO) {
-                placesService.searchPlaces(query)
-            }
+            val results = placesService.searchPlaces(query)
             _suggestions.value = results
         } catch (e: Exception) {
             _suggestions.value = emptyList()
@@ -131,7 +137,7 @@ class AddPlaceViewModel @Inject constructor(
         _uiState.update { it.copy(name = value) }
         _searchQuery.value = value
         
-        // If user clears the field, clear suggestions
+        // Если пользователь очистил поле, убираем подсказки.
         if (value.isBlank()) {
             _suggestions.value = emptyList()
         }
@@ -146,12 +152,20 @@ class AddPlaceViewModel @Inject constructor(
                 longitude = suggestion.longitude,
                 category = suggestion.category,
                 rating = suggestion.rating,
-                selectedPlaceId = suggestion.placeId
+                selectedPlaceId = suggestion.placeId,
+                openingHours = null,
+                priceLevel = null,
+                photoUrl = null,
+                website = null,
+                phoneNumber = null
             )
         }
-        // Clear suggestions after selection
+        // После выбора очищаем подсказки.
         _suggestions.value = emptyList()
         _searchQuery.value = ""
+        viewModelScope.launch {
+            fetchAndApplyPlaceDetails(suggestion.placeId)
+        }
     }
     
     fun clearSuggestions() {
@@ -160,6 +174,10 @@ class AddPlaceViewModel @Inject constructor(
 
     fun updateAddress(value: String) {
         _uiState.update { it.copy(address = value) }
+    }
+
+    fun updateCoordinates(latitude: Double, longitude: Double) {
+        _uiState.update { it.copy(latitude = latitude, longitude = longitude) }
     }
 
     fun updateTime(value: String) {
@@ -202,29 +220,35 @@ class AddPlaceViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val durationMinutes = parseDurationValue(state.durationValue)?.let { value ->
-                    if (state.durationUnit == DurationUnit.MINUTES) {
+                val resolvedState = resolvePlaceDetails(state)
+                val durationMinutes = parseDurationValue(resolvedState.durationValue)?.let { value ->
+                    if (resolvedState.durationUnit == DurationUnit.MINUTES) {
                         value
                     } else {
                         value * 60.0
                     }
                 }
-                val normalizedTime = normalizeTime(state.time, state.timeFormat)
+                val normalizedTime = normalizeTime(resolvedState.time, resolvedState.timeFormat)
                 if (placeId == null) {
                     val place = Place(
                         tripId = tripId,
                         tripDayId = dayId,
-                        name = state.name.trim(),
-                        address = state.address.trim().ifBlank { null },
-                        placeId = state.selectedPlaceId,
-                        latitude = state.latitude,
-                        longitude = state.longitude,
-                        category = state.category,
-                        iconEmoji = state.category.emoji,
-                        scheduledTime = normalizedTime ?: state.time.trim().ifBlank { null },
+                        name = resolvedState.name.trim(),
+                        address = resolvedState.address.trim().ifBlank { null },
+                        placeId = resolvedState.selectedPlaceId,
+                        latitude = resolvedState.latitude,
+                        longitude = resolvedState.longitude,
+                        category = resolvedState.category,
+                        iconEmoji = resolvedState.category.emoji,
+                        scheduledTime = normalizedTime ?: resolvedState.time.trim().ifBlank { null },
                         estimatedDuration = durationMinutes?.roundToInt(),
-                        rating = state.rating,
-                        notes = state.notes.trim().ifBlank { null }
+                        openingHours = resolvedState.openingHours,
+                        rating = resolvedState.rating,
+                        priceLevel = resolvedState.priceLevel,
+                        photoUrl = resolvedState.photoUrl,
+                        website = resolvedState.website,
+                        phoneNumber = resolvedState.phoneNumber,
+                        notes = resolvedState.notes.trim().ifBlank { null }
                     )
                     tripRepository.addPlace(place)
                 } else {
@@ -233,22 +257,27 @@ class AddPlaceViewModel @Inject constructor(
                         id = placeId,
                         tripId = tripId,
                         tripDayId = dayId,
-                        name = state.name.trim(),
-                        latitude = state.latitude,
-                        longitude = state.longitude,
-                        category = state.category
+                        name = resolvedState.name.trim(),
+                        latitude = resolvedState.latitude,
+                        longitude = resolvedState.longitude,
+                        category = resolvedState.category
                     )).copy(
-                        name = state.name.trim(),
-                        address = state.address.trim().ifBlank { null },
-                        placeId = state.selectedPlaceId,
-                        latitude = state.latitude,
-                        longitude = state.longitude,
-                        category = state.category,
-                        iconEmoji = state.category.emoji,
-                        scheduledTime = normalizedTime ?: state.time.trim().ifBlank { null },
+                        name = resolvedState.name.trim(),
+                        address = resolvedState.address.trim().ifBlank { null },
+                        placeId = resolvedState.selectedPlaceId,
+                        latitude = resolvedState.latitude,
+                        longitude = resolvedState.longitude,
+                        category = resolvedState.category,
+                        iconEmoji = resolvedState.category.emoji,
+                        scheduledTime = normalizedTime ?: resolvedState.time.trim().ifBlank { null },
                         estimatedDuration = durationMinutes?.roundToInt(),
-                        rating = state.rating,
-                        notes = state.notes.trim().ifBlank { null },
+                        openingHours = resolvedState.openingHours,
+                        rating = resolvedState.rating,
+                        priceLevel = resolvedState.priceLevel,
+                        photoUrl = resolvedState.photoUrl,
+                        website = resolvedState.website,
+                        phoneNumber = resolvedState.phoneNumber,
+                        notes = resolvedState.notes.trim().ifBlank { null },
                         updatedAt = System.currentTimeMillis()
                     )
                     tripRepository.updatePlace(updated)
@@ -263,6 +292,58 @@ class AddPlaceViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun resolvePlaceDetails(state: AddPlaceUiState): AddPlaceUiState {
+        if (state.selectedPlaceId.isNullOrBlank()) return state
+        val hasDetails = state.openingHours != null ||
+            state.priceLevel != null ||
+            state.photoUrl != null ||
+            state.website != null ||
+            state.phoneNumber != null
+        if (hasDetails) return state
+
+        val details = placesService.getPlaceDetails(state.selectedPlaceId)
+            ?: return state
+
+        val resolved = state.applyDetails(details)
+        _uiState.update { current ->
+            if (current.selectedPlaceId == details.placeId) resolved else current
+        }
+        return resolved
+    }
+
+    private suspend fun fetchAndApplyPlaceDetails(placeId: String) {
+        _uiState.update { it.copy(isLoadingDetails = true) }
+        val details = runCatching {
+            placesService.getPlaceDetails(placeId)
+        }.getOrNull()
+
+        _uiState.update { state ->
+            if (state.selectedPlaceId != placeId) {
+                state
+            } else {
+                state.applyDetails(details).copy(isLoadingDetails = false)
+            }
+        }
+    }
+
+    private fun AddPlaceUiState.applyDetails(details: PlaceDetails?): AddPlaceUiState {
+        if (details == null) return copy(isLoadingDetails = false)
+        return copy(
+            name = if (name.isBlank()) details.name else name,
+            address = if (address.isBlank()) details.address else address,
+            latitude = details.latitude,
+            longitude = details.longitude,
+            category = details.category,
+            rating = details.rating ?: rating,
+            openingHours = details.openingHours,
+            priceLevel = details.priceLevel,
+            photoUrl = details.photoUrl,
+            website = details.website,
+            phoneNumber = details.phoneNumber,
+            isLoadingDetails = false
+        )
     }
 
     private fun parseDurationValue(value: String): Double? {
@@ -309,7 +390,7 @@ class AddPlaceViewModel @Inject constructor(
             candidate = "$trimmed:"
         }
 
-        // Ensure AM/PM is separated by space
+        // Добавляем пробел перед AM/PM, чтобы формат оставался читаемым.
         val hasAmPm = candidate.contains("AM") || candidate.contains("PM")
         if (hasAmPm) {
             candidate = candidate.replace("AM", " AM").replace("PM", " PM").replace("  ", " ")
@@ -347,7 +428,13 @@ data class AddPlaceUiState(
     val notes: String = "",
     val rating: Float? = null,
     val selectedPlaceId: String? = null,
+    val openingHours: String? = null,
+    val priceLevel: Int? = null,
+    val photoUrl: String? = null,
+    val website: String? = null,
+    val phoneNumber: String? = null,
     val isSearching: Boolean = false,
+    val isLoadingDetails: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val error: String? = null,

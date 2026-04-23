@@ -27,6 +27,9 @@ import com.triloo.R
 import com.triloo.ui.PreviewData
 import com.triloo.ui.theme.TrilooTheme
 
+/**
+ * Экран чтения политики конфиденциальности из локального ресурса.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacyPolicyScreen(

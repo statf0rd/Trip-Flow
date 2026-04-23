@@ -15,7 +15,7 @@ import java.time.LocalDate
 @Dao
 interface PlaceDao {
     
-    // TripDay CRUD
+    // CRUD-операции для дней поездки.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTripDay(tripDay: TripDay)
@@ -32,7 +32,7 @@ interface PlaceDao {
     @Query("DELETE FROM trip_days WHERE tripId = :tripId")
     suspend fun deleteAllTripDays(tripId: String)
     
-    // TripDay Queries
+    // Запросы по дням поездки.
     
     @Query("SELECT * FROM trip_days WHERE id = :dayId")
     suspend fun getTripDayById(dayId: String): TripDay?
@@ -49,7 +49,7 @@ interface PlaceDao {
     @Query("SELECT COUNT(*) FROM trip_days WHERE tripId = :tripId")
     suspend fun getTripDayCount(tripId: String): Int
     
-    // Place CRUD
+    // CRUD-операции для мест.
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlace(place: Place)
@@ -69,7 +69,7 @@ interface PlaceDao {
     @Query("DELETE FROM places WHERE tripDayId = :tripDayId")
     suspend fun deletePlacesByDayId(tripDayId: String)
     
-    // Place Queries
+    // Запросы по местам.
     
     @Query("SELECT * FROM places WHERE id = :placeId")
     suspend fun getPlaceById(placeId: String): Place?
@@ -108,5 +108,4 @@ interface PlaceDao {
         }
     }
 }
-
 

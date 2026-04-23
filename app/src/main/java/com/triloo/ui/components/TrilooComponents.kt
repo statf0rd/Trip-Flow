@@ -45,10 +45,10 @@ import com.triloo.ui.theme.*
 import com.triloo.ui.theme.TrilooTheme
 
 /**
- * Triloo Design System Components
+ * Базовые компоненты дизайн-системы Triloo.
  */
 
-// BUTTONS
+// Кнопки.
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -160,7 +160,7 @@ fun TrilooButton(
 
 enum class ButtonStyle { Primary, Secondary, Tertiary, Ghost }
 
-// FAB
+// Плавающая action-кнопка.
 
 @Composable
 fun TrilooFab(
@@ -209,7 +209,7 @@ fun TrilooFab(
     }
 }
 
-// CARDS
+// Карточки.
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -261,13 +261,15 @@ fun TrilooCard(
     }
 }
 
-// CHIPS & BADGES
+// Чипы и бейджи.
 
 @Composable
 fun TrilooChip(
     text: String,
     modifier: Modifier = Modifier,
     emoji: String? = null,
+    icon: ImageVector? = null,
+    iconTint: Color? = null,
     color: Color? = null,
     textColor: Color? = null,
     onClick: (() -> Unit)? = null
@@ -306,7 +308,15 @@ fun TrilooChip(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (emoji != null) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint ?: animatedTextColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            } else if (emoji != null) {
                 Text(
                     text = emoji,
                     style = MaterialTheme.typography.bodyMedium
@@ -344,7 +354,7 @@ fun StatusBadge(
     }
 }
 
-// AVATARS
+// Аватары.
 
 @Composable
 fun ParticipantAvatar(
@@ -355,7 +365,7 @@ fun ParticipantAvatar(
     imageUrl: String? = null
 ) {
     Box(modifier = modifier) {
-        // Avatar circle with gradient
+        // Круг аватара с мягким градиентом.
         Box(
             modifier = Modifier
                 .size(size)
@@ -375,7 +385,7 @@ fun ParticipantAvatar(
             )
         }
         
-        // Online indicator
+        // Индикатор онлайна.
         if (isOnline) {
             Box(
                 modifier = Modifier
@@ -448,7 +458,7 @@ fun AvatarStack(
     }
 }
 
-// SECTION HEADER
+// Заголовки секций.
 
 @Composable
 fun SectionHeader(
@@ -476,14 +486,14 @@ fun SectionHeader(
                 Text(
                     text = action,
                     style = MaterialTheme.typography.labelLarge,
-                    color = CoralPrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
     }
 }
 
-// EMPTY STATE
+// Пустые состояния.
 
 @Composable
 fun EmptyState(
@@ -536,7 +546,7 @@ fun EmptyState(
     }
 }
 
-// LOADING STATE
+// Состояния загрузки.
 
 @Composable
 fun LoadingState(
@@ -549,7 +559,7 @@ fun LoadingState(
         verticalArrangement = Arrangement.Center
     ) {
         CircularProgressIndicator(
-            color = CoralPrimary,
+            color = MaterialTheme.colorScheme.primary,
             strokeWidth = 3.dp
         )
         

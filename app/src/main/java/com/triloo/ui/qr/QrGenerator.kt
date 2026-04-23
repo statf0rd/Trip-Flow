@@ -8,6 +8,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 
+/**
+ * Строит bitmap QR-кода для показа в Compose.
+ */
 fun generateQrBitmap(
     content: String,
     sizePx: Int = 640

@@ -4,6 +4,9 @@ import com.google.gson.annotations.SerializedName
 import retrofit2.http.GET
 import retrofit2.http.Path
 
+/**
+ * Retrofit-контракт для получения актуальных валютных курсов.
+ */
 interface CurrencyApi {
     @GET("v6/latest/{base}")
     suspend fun latestRates(
@@ -11,6 +14,9 @@ interface CurrencyApi {
     ): CurrencyRatesResponse
 }
 
+/**
+ * Ответ сервиса курсов валют с базовой валютой, таблицей rates и служебными полями.
+ */
 data class CurrencyRatesResponse(
     val result: String? = null,
     @SerializedName("base_code") val baseCode: String? = null,

@@ -9,6 +9,7 @@ import com.triloo.data.relay.RelayQrCollector
 import com.triloo.data.relay.RelayPayloadType
 import com.triloo.data.relay.RelayRepository
 import com.triloo.data.repository.TripRepository
+import com.triloo.data.sync.RemoteTripInviteRepository
 import com.triloo.data.user.UserProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,11 +22,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Управляет входом в групповые поездки и собирает QR-приглашения из нескольких чанков.
+ */
 @HiltViewModel
 class GroupTripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val userProfileRepository: UserProfileRepository,
-    private val relayRepository: RelayRepository
+    private val relayRepository: RelayRepository,
+    private val remoteTripInviteRepository: RemoteTripInviteRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupTripsUiState())
@@ -88,27 +93,31 @@ class GroupTripsViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val localUserId = userProfileRepository.getOrCreateUserId()
+                val profile = userProfileRepository.getProfile()
+                val localUserId = profile.userId
                 val trip = tripRepository.getTripByInviteCode(code)
-                if (trip == null) {
-                    _uiState.update { it.copy(isJoining = false, error = "Поездка по коду не найдена") }
-                    return@launch
-                }
-
-                tripRepository.addParticipant(
-                    Participant(
-                        tripId = trip.id,
-                        userId = localUserId,
-                        displayName = name
+                val joinedTripId = if (trip != null) {
+                    tripRepository.addParticipant(
+                        Participant(
+                            tripId = trip.id,
+                            userId = localUserId,
+                            displayName = name
+                        )
                     )
-                )
+                    trip.id
+                } else {
+                    remoteTripInviteRepository.joinByInviteCode(code, name)
+                        .getOrElse { error ->
+                            throw error
+                        }
+                }
 
                 userProfileRepository.updateDisplayName(name)
 
                 _uiState.update {
                     it.copy(
                         isJoining = false,
-                        joinedTripId = trip.id
+                        joinedTripId = joinedTripId
                     )
                 }
             } catch (e: Exception) {
@@ -201,6 +210,9 @@ class GroupTripsViewModel @Inject constructor(
     }
 }
 
+/**
+ * Состояние экрана присоединения к групповой поездке.
+ */
 data class GroupTripsUiState(
     val inviteCode: String = "",
     val displayName: String = "",

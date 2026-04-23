@@ -1,11 +1,16 @@
 package com.triloo.di
 
+import com.triloo.BuildConfig
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.triloo.data.remote.BackendAuthApi
+import com.triloo.data.remote.BackendTripApi
 import com.triloo.data.remote.CurrencyApi
-import com.triloo.data.remote.DirectionsApi
+import com.triloo.data.remote.GeoapifyApi
+import com.triloo.data.remote.GeosuggestApi
 import com.triloo.data.remote.OpenAiApi
-import com.triloo.data.remote.PlacesApi
+import com.triloo.data.remote.OpenRouteServiceApi
+import com.triloo.data.remote.OnlineSyncApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,20 +51,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    @Named("MapsRetrofit")
-    fun provideMapsRetrofit(
-        gson: Gson,
-        okHttpClient: OkHttpClient
-    ): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("https://maps.googleapis.com/")
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .client(okHttpClient)
-            .build()
-    }
-
-    @Provides
-    @Singleton
     @Named("CurrencyRetrofit")
     fun provideCurrencyRetrofit(
         gson: Gson,
@@ -74,13 +65,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    @Named("OpenAiRetrofit")
-    fun provideOpenAiRetrofit(
+    @Named("GeoapifyRetrofit")
+    fun provideGeoapifyRetrofit(
         gson: Gson,
         okHttpClient: OkHttpClient
     ): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://api.openai.com/")
+            .baseUrl("https://api.geoapify.com/")
             .addConverterFactory(GsonConverterFactory.create(gson))
             .client(okHttpClient)
             .build()
@@ -88,14 +79,78 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun providePlacesApi(@Named("MapsRetrofit") retrofit: Retrofit): PlacesApi {
-        return retrofit.create(PlacesApi::class.java)
+    @Named("GeosuggestRetrofit")
+    fun provideGeosuggestRetrofit(
+        gson: Gson,
+        okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://suggest-maps.yandex.ru/")
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(okHttpClient)
+            .build()
     }
 
     @Provides
     @Singleton
-    fun provideDirectionsApi(@Named("MapsRetrofit") retrofit: Retrofit): DirectionsApi {
-        return retrofit.create(DirectionsApi::class.java)
+    @Named("OpenRouteServiceRetrofit")
+    fun provideOpenRouteServiceRetrofit(
+        gson: Gson,
+        okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://api.openrouteservice.org/")
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(okHttpClient)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("OpenAiRetrofit")
+    fun provideOpenAiRetrofit(
+        gson: Gson,
+        okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://generativelanguage.googleapis.com/")
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(okHttpClient)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("BackendRetrofit")
+    fun provideBackendRetrofit(
+        gson: Gson,
+        okHttpClient: OkHttpClient
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.APP_TRILOO_BACKEND_URL)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .client(okHttpClient)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeoapifyApi(@Named("GeoapifyRetrofit") retrofit: Retrofit): GeoapifyApi {
+        return retrofit.create(GeoapifyApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeosuggestApi(@Named("GeosuggestRetrofit") retrofit: Retrofit): GeosuggestApi {
+        return retrofit.create(GeosuggestApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOpenRouteServiceApi(
+        @Named("OpenRouteServiceRetrofit") retrofit: Retrofit
+    ): OpenRouteServiceApi {
+        return retrofit.create(OpenRouteServiceApi::class.java)
     }
 
     @Provides
@@ -108,5 +163,23 @@ object NetworkModule {
     @Singleton
     fun provideOpenAiApi(@Named("OpenAiRetrofit") retrofit: Retrofit): OpenAiApi {
         return retrofit.create(OpenAiApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBackendAuthApi(@Named("BackendRetrofit") retrofit: Retrofit): BackendAuthApi {
+        return retrofit.create(BackendAuthApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBackendTripApi(@Named("BackendRetrofit") retrofit: Retrofit): BackendTripApi {
+        return retrofit.create(BackendTripApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOnlineSyncApi(@Named("BackendRetrofit") retrofit: Retrofit): OnlineSyncApi {
+        return retrofit.create(OnlineSyncApi::class.java)
     }
 }

@@ -18,12 +18,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.net.Uri
+import coil.compose.AsyncImage
 import com.triloo.data.model.Place
 import com.triloo.data.model.PlaceCategory
 import com.triloo.ui.components.*
@@ -41,7 +43,7 @@ fun PlaceDetailsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showDeleteDialog by remember { mutableStateOf(false) }
     
-    // Handle successful deletion
+    // Возвращаемся назад после успешного удаления.
     LaunchedEffect(uiState.isDeleted) {
         if (uiState.isDeleted) {
             onNavigateBack()
@@ -61,14 +63,14 @@ fun PlaceDetailsScreen(
                     }
                 },
                 actions = {
-                    // Edit button
+                    // Кнопка редактирования.
                     IconButton(onClick = { uiState.place?.let { onNavigateToEdit(it.id) } }) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
                             contentDescription = "Редактировать"
                         )
                     }
-                    // Delete button
+                    // Кнопка удаления.
                     IconButton(onClick = { showDeleteDialog = true }) {
                         Icon(
                             imageVector = Icons.Rounded.Delete,
@@ -107,7 +109,7 @@ fun PlaceDetailsScreen(
         }
     }
     
-    // Delete confirmation dialog
+    // Диалог подтверждения удаления.
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -159,7 +161,19 @@ private fun PlaceDetailsContent(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header with category icon
+        place.photoUrl?.let { photoUrl ->
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = place.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // Заголовок с иконкой категории.
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -167,12 +181,14 @@ private fun PlaceDetailsContent(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(getCategoryColor(place.category).copy(alpha = 0.15f)),
+                    .background(place.category.color.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = place.iconEmoji ?: place.category.emoji,
-                    style = MaterialTheme.typography.headlineMedium
+                Icon(
+                    imageVector = place.category.icon,
+                    contentDescription = place.category.displayName,
+                    tint = place.category.color,
+                    modifier = Modifier.size(28.dp)
                 )
             }
             
@@ -184,15 +200,26 @@ private fun PlaceDetailsContent(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
-                TrilooChip(
-                    text = place.category.displayName,
-                    color = getCategoryColor(place.category).copy(alpha = 0.15f),
-                    textColor = getCategoryColor(place.category)
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TrilooChip(
+                        text = place.category.displayName,
+                        icon = place.category.icon,
+                        iconTint = place.category.color,
+                        color = place.category.color.copy(alpha = 0.15f),
+                        textColor = place.category.color
+                    )
+                    place.priceLevel?.let { priceLevel ->
+                        TrilooChip(
+                            text = formatPriceLevel(priceLevel),
+                            color = GoldenSubtle,
+                            textColor = GoldenAccent
+                        )
+                    }
+                }
             }
         }
         
-        // Visited toggle
+        // Переключатель статуса посещения.
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -217,9 +244,9 @@ private fun PlaceDetailsContent(
             }
         }
         
-        // Info cards
+        // Информационные карточки.
         TrilooCard {
-            // Address
+            // Адрес.
             place.address?.let { address ->
                 InfoRow(
                     icon = Icons.Rounded.LocationOn,
@@ -229,7 +256,7 @@ private fun PlaceDetailsContent(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
             
-            // Time
+            // Время.
             place.scheduledTime?.let { time ->
                 InfoRow(
                     icon = Icons.Rounded.Schedule,
@@ -239,7 +266,7 @@ private fun PlaceDetailsContent(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
             
-            // Duration
+            // Длительность.
             place.estimatedDuration?.let { duration ->
                 InfoRow(
                     icon = Icons.Rounded.Timer,
@@ -249,7 +276,7 @@ private fun PlaceDetailsContent(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
             
-            // Rating
+            // Рейтинг.
             place.rating?.let { rating ->
                 InfoRow(
                     icon = Icons.Rounded.Star,
@@ -260,7 +287,7 @@ private fun PlaceDetailsContent(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
             
-            // Opening hours
+            // Часы работы.
             place.openingHours?.let { hours ->
                 InfoRow(
                     icon = Icons.Rounded.AccessTime,
@@ -270,7 +297,7 @@ private fun PlaceDetailsContent(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             }
             
-            // Coordinates (collapsed by default)
+            // Координаты, по умолчанию в свёрнутом виде.
             InfoRow(
                 icon = Icons.Rounded.MyLocation,
                 label = "Координаты",
@@ -278,7 +305,7 @@ private fun PlaceDetailsContent(
             )
         }
         
-        // Notes
+        // Заметки.
         place.notes?.let { notes ->
             TrilooCard {
                 Row(verticalAlignment = Alignment.Top) {
@@ -364,6 +391,12 @@ private fun PlaceDetailsContent(
         
         Spacer(modifier = Modifier.height(16.dp))
     }
+}
+
+private fun formatPriceLevel(priceLevel: Int): String {
+    val normalized = priceLevel.coerceIn(0, 4)
+    if (normalized == 0) return "Бюджетно"
+    return "Цена: ${"₽".repeat(normalized)}"
 }
 
 private fun openInMaps(context: android.content.Context, place: Place) {

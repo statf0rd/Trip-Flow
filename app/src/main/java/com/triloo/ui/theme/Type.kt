@@ -2,27 +2,19 @@ package com.triloo.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.triloo.R
 
 /**
- * Triloo Typography System
- * 
- * Primary: Outfit — Modern geometric sans-serif for headings
- * Body: DM Sans — Humanist sans-serif for readability
- * 
- * Note: Add font files to res/font/ folder:
- * - outfit_regular.ttf, outfit_medium.ttf, outfit_semibold.ttf, outfit_bold.ttf
- * - dm_sans_regular.ttf, dm_sans_medium.ttf, dm_sans_semibold.ttf
+ * Типографическая система Triloo.
+ *
+ * Основной шрифт заголовков: Outfit.
+ * Основной шрифт текста: DM Sans.
  */
 
-// Fallback to default until fonts are added
-val OutfitFontFamily = FontFamily.Default
-val DMSansFontFamily = FontFamily.Default
-
-// Uncomment when font files are added:
-/*
 val OutfitFontFamily = FontFamily(
     Font(R.font.outfit_regular, FontWeight.Normal),
     Font(R.font.outfit_medium, FontWeight.Medium),
@@ -35,10 +27,9 @@ val DMSansFontFamily = FontFamily(
     Font(R.font.dm_sans_medium, FontWeight.Medium),
     Font(R.font.dm_sans_semibold, FontWeight.SemiBold)
 )
-*/
 
 val TrilooTypography = Typography(
-    // DISPLAY — Hero sections, splash screens
+    // DISPLAY — крупные акцентные секции и splash-экраны.
     displayLarge = TextStyle(
         fontFamily = OutfitFontFamily,
         fontWeight = FontWeight.Bold,
@@ -61,7 +52,7 @@ val TrilooTypography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // HEADLINE — Screen titles, section headers
+    // HEADLINE — заголовки экранов и секций.
     headlineLarge = TextStyle(
         fontFamily = OutfitFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -84,7 +75,7 @@ val TrilooTypography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // TITLE — Card titles, list items, subsections
+    // TITLE — заголовки карточек, списков и вложенных секций.
     titleLarge = TextStyle(
         fontFamily = OutfitFontFamily,
         fontWeight = FontWeight.Medium,
@@ -107,7 +98,7 @@ val TrilooTypography = Typography(
         letterSpacing = 0.1.sp
     ),
 
-    // BODY — Main content text
+    // BODY — основной текст интерфейса.
     bodyLarge = TextStyle(
         fontFamily = DMSansFontFamily,
         fontWeight = FontWeight.Normal,
@@ -130,7 +121,7 @@ val TrilooTypography = Typography(
         letterSpacing = 0.4.sp
     ),
 
-    // LABEL — Buttons, chips, tabs, form labels
+    // LABEL — подписи кнопок, чипов, табов и полей форм.
     labelLarge = TextStyle(
         fontFamily = DMSansFontFamily,
         fontWeight = FontWeight.Medium,

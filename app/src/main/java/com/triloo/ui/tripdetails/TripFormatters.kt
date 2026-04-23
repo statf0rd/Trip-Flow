@@ -7,6 +7,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * Форматирует длительность в читаемый вид для карточек маршрута и мест.
+ */
 fun formatDurationLabel(minutes: Int): String {
     if (minutes < 60) return "$minutes мин"
     val hoursValue = minutes / 60.0

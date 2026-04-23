@@ -26,6 +26,9 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Собирает, сериализует и сливает relay-пакеты для офлайн-синхронизации поездок.
+ */
 @Singleton
 class RelayRepository @Inject constructor(
     private val database: TrilooDatabase,
@@ -50,19 +53,41 @@ class RelayRepository @Inject constructor(
         )
         .create()
 
-    suspend fun buildPackage(tripId: String): RelayPackage? {
+    suspend fun buildPackage(
+        tripId: String,
+        sinceCursor: Long? = null
+    ): RelayPackage? {
         val trip = tripDao.getTripById(tripId) ?: return null
+        val isDelta = sinceCursor != null
         val participants = tripDao.getParticipants(tripId)
+            .filterByCursor(sinceCursor) { it.updatedAt }
         val tripDays = placeDao.getTripDays(tripId)
+            .filterByCursor(sinceCursor) { it.updatedAt }
         val places = placeDao.getPlacesByTrip(tripId)
+            .filterByCursor(sinceCursor) { it.updatedAt }
         val expenses = expenseDao.getExpensesByTrip(tripId)
+            .filterByCursor(sinceCursor) { it.updatedAt }
         val expenseSplits = expenseDao.getSplitsForTrip(tripId)
+            .filter { split -> expenses.any { it.id == split.expenseId } }
         val deletions = deletionLogDao.getDeletionsForTrip(tripId)
-        val deviceId = userProfileRepository.getOrCreateUserId()
+            .filterByCursor(sinceCursor) { it.deletedAt }
+        val deviceId = userProfileRepository.getOrCreateDeviceId()
+        val changeCursor = maxOf(
+            trip.updatedAt,
+            participants.maxOfOrNull { it.updatedAt } ?: 0L,
+            tripDays.maxOfOrNull { it.updatedAt } ?: 0L,
+            places.maxOfOrNull { it.updatedAt } ?: 0L,
+            expenses.maxOfOrNull { it.updatedAt } ?: 0L,
+            deletions.maxOfOrNull { it.deletedAt } ?: 0L,
+            sinceCursor ?: 0L
+        )
 
         return RelayPackage(
             createdAt = System.currentTimeMillis(),
             deviceId = deviceId,
+            isDelta = isDelta,
+            baseCursor = sinceCursor,
+            changeCursor = changeCursor,
             trip = trip,
             participants = participants,
             tripDays = tripDays,
@@ -78,7 +103,7 @@ class RelayRepository @Inject constructor(
         val participants = tripDao.getParticipants(tripId)
         val tripDays = placeDao.getTripDays(tripId)
         val places = placeDao.getPlacesByTrip(tripId)
-        val deviceId = userProfileRepository.getOrCreateUserId()
+        val deviceId = userProfileRepository.getOrCreateDeviceId()
 
         return InvitePackage(
             createdAt = System.currentTimeMillis(),
@@ -188,13 +213,21 @@ class RelayRepository @Inject constructor(
     fun decodeInvite(payload: String): InvitePackage =
         gson.fromJson(payload, InvitePackage::class.java)
 
+    private inline fun <T> List<T>.filterByCursor(
+        sinceCursor: Long?,
+        updatedAt: (T) -> Long
+    ): List<T> {
+        if (sinceCursor == null) return this
+        return filter { updatedAt(it) > sinceCursor }
+    }
+
     private suspend fun upsertTrip(trip: Trip): Pair<Int, Int> {
         val local = tripDao.getTripById(trip.id)
         return if (local == null) {
             tripDao.insertTrip(trip)
             1 to 0
         } else if (trip.updatedAt > local.updatedAt) {
-            tripDao.insertTrip(trip)
+            tripDao.updateTrip(trip)
             0 to 1
         } else {
             0 to 0
@@ -207,7 +240,7 @@ class RelayRepository @Inject constructor(
             tripDao.insertParticipant(participant)
             1 to 0
         } else if (participant.updatedAt > local.updatedAt) {
-            tripDao.insertParticipant(participant)
+            tripDao.updateParticipant(participant)
             0 to 1
         } else {
             0 to 0
@@ -220,7 +253,7 @@ class RelayRepository @Inject constructor(
             placeDao.insertTripDay(day)
             1 to 0
         } else if (day.updatedAt > local.updatedAt) {
-            placeDao.insertTripDay(day)
+            placeDao.updateTripDay(day)
             0 to 1
         } else {
             0 to 0
@@ -233,7 +266,7 @@ class RelayRepository @Inject constructor(
             placeDao.insertPlace(place)
             1 to 0
         } else if (place.updatedAt > local.updatedAt) {
-            placeDao.insertPlace(place)
+            placeDao.updatePlace(place)
             0 to 1
         } else {
             0 to 0
@@ -253,7 +286,7 @@ class RelayRepository @Inject constructor(
             }
             1 to 0
         } else if (expense.updatedAt > local.updatedAt) {
-            expenseDao.insertExpense(expense)
+            expenseDao.updateExpense(expense)
             expenseDao.deleteSplitsForExpense(expense.id)
             if (splits.isNotEmpty()) {
                 expenseDao.insertExpenseSplits(splits)

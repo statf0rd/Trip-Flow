@@ -3,29 +3,31 @@ package com.triloo.data.route
 import com.triloo.BuildConfig
 import com.triloo.data.model.Place
 import com.triloo.data.model.TravelMode
-import com.triloo.data.remote.DirectionsApi
-import kotlinx.coroutines.delay
+import com.triloo.data.places.NearbyPlacesProvider
+import com.triloo.data.places.PlaceSuggestion
+import com.triloo.data.remote.OpenRouteServiceApi
+import com.triloo.data.remote.OpenRouteServiceDirectionsRequest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.*
 
 /**
- * Route Optimizer Interface
- * 
- * Provides route optimization and place recommendations.
- * Current implementation uses simple heuristics (Nearest Neighbor algorithm).
- * 
- * TODO: Integrate with AI/ML service for smarter recommendations
- * Uses Google Directions API when an API key is configured, falls back to heuristics otherwise.
+ * Интерфейс оптимизатора маршрута.
+ *
+ * Отвечает за перестановку точек, расчёт маршрута и рекомендации мест.
+ * Текущая реализация использует простые эвристики и openrouteservice,
+ * если ключ настроен; иначе остаётся на локальных расчётах.
+ *
+ * TODO: Подключить более умные AI/ML-подходы для рекомендаций и оптимизации.
  */
 interface RouteOptimizer {
     
     /**
-     * Optimize the order of places to minimize travel distance/time
-     * 
-     * @param places List of places to visit
-     * @param startLocation Starting point (hotel or current location)
-     * @return Optimized order of places
+     * Оптимизирует порядок мест, чтобы сократить путь и время в дороге.
+     *
+     * @param places список мест для посещения.
+     * @param startLocation стартовая точка: отель или текущее местоположение.
+     * @return результат с новым порядком мест и расчётными метриками.
      */
     suspend fun optimizeRoute(
         places: List<Place>,
@@ -33,13 +35,13 @@ interface RouteOptimizer {
     ): RouteOptimizationResult
     
     /**
-     * Get nearby place recommendations
-     * 
-     * @param currentPlaces Existing places in the itinerary
-     * @param center Center point for search
-     * @param radius Search radius in meters
-     * @param preferences User preferences for filtering
-     * @return List of recommended places
+     * Подбирает рекомендованные места рядом с текущим маршрутом.
+     *
+     * @param currentPlaces уже выбранные точки маршрута.
+     * @param center центральная точка поиска.
+     * @param radius радиус поиска в метрах.
+     * @param preferences пользовательские предпочтения для фильтрации.
+     * @return список рекомендованных мест.
      */
     suspend fun getRecommendations(
         currentPlaces: List<Place>,
@@ -49,11 +51,11 @@ interface RouteOptimizer {
     ): List<PlaceRecommendation>
     
     /**
-     * Calculate route details between places
-     * 
-     * @param places Ordered list of places
-     * @param travelMode Preferred travel mode
-     * @return Route details including distances and times
+     * Считает подробности маршрута между уже упорядоченными точками.
+     *
+     * @param places упорядоченный список мест.
+     * @param travelMode предпочтительный способ передвижения.
+     * @return детали маршрута с расстояниями и длительностями.
      */
     suspend fun calculateRoute(
         places: List<Place>,
@@ -62,7 +64,7 @@ interface RouteOptimizer {
 }
 
 /**
- * Simple coordinate class
+ * Простая координата на карте.
  */
 data class LatLng(
     val latitude: Double,
@@ -70,18 +72,18 @@ data class LatLng(
 )
 
 /**
- * Result of route optimization
+ * Результат оптимизации маршрута.
  */
 data class RouteOptimizationResult(
     val optimizedPlaces: List<Place>,
     val totalDistanceMeters: Int,
     val estimatedTimeMinutes: Int,
-    val savingsPercent: Float, // How much better than original order
+    val savingsPercent: Float, // Насколько маршрут лучше исходного порядка.
     val routeLegs: List<RouteLeg>
 )
 
 /**
- * A leg of the route between two places
+ * Один участок маршрута между двумя местами.
  */
 data class RouteLeg(
     val from: Place,
@@ -92,18 +94,20 @@ data class RouteLeg(
 )
 
 /**
- * Full route details
+ * Полные детали построенного маршрута.
  */
 data class RouteDetails(
     val places: List<Place>,
     val legs: List<RouteLeg>,
     val totalDistanceMeters: Int,
     val totalDurationMinutes: Int,
-    val polylineEncoded: String? = null // For map rendering
+    val polylineEncoded: String? = null, // Encoded polyline для рендера на карте.
+    val isEstimated: Boolean = false,
+    val sourceLabel: String = "openrouteservice"
 )
 
 /**
- * Place recommendation from optimizer
+ * Рекомендация места от оптимизатора.
  */
 data class PlaceRecommendation(
     val placeId: String,
@@ -113,16 +117,16 @@ data class PlaceRecommendation(
     val longitude: Double,
     val category: String,
     val rating: Float?,
-    val distanceFromRoute: Int, // meters
-    val reason: String // "По пути", "Рядом с ...", etc.
+    val distanceFromRoute: Int, // Расстояние от маршрута в метрах.
+    val reason: String // Причина рекомендации: "По пути", "Рядом с ...", и т.д.
 )
 
 /**
- * User travel preferences for recommendations
+ * Предпочтения пользователя для подбора рекомендаций.
  */
 data class TravelPreferences(
     val budgetLevel: BudgetLevel = BudgetLevel.MEDIUM,
-    val interests: List<String> = emptyList(), // "food", "museums", "nature", etc.
+    val interests: List<String> = emptyList(), // Например: "food", "museums", "nature".
     val travelStyle: TravelStyle = TravelStyle.BALANCED,
     val avoidCrowds: Boolean = false,
     val familyFriendly: Boolean = false
@@ -132,20 +136,22 @@ enum class BudgetLevel { LOW, MEDIUM, HIGH, LUXURY }
 enum class TravelStyle { RELAXED, BALANCED, ACTIVE }
 
 /**
- * Default implementation using Nearest Neighbor heuristic
- * 
- * This is a simple greedy algorithm that always picks the nearest unvisited place.
- * Not optimal, but fast and gives reasonable results for typical trip sizes.
- * 
- * TODO: Implement more sophisticated algorithms:
- * - 2-opt improvement
- * - Simulated annealing
- * - Genetic algorithm
- * - Call external AI service for complex optimization
+ * Реализация по умолчанию на эвристике ближайшего соседа.
+ *
+ * Это простой жадный алгоритм: на каждом шаге он выбирает ближайшую ещё не посещённую точку.
+ * Решение не гарантирует глобальный оптимум, но работает быстро и даёт приемлемый результат
+ * для типичных маршрутов поездки.
+ *
+ * TODO: Добавить более сильные алгоритмы:
+ * - 2-opt улучшение
+ * - имитацию отжига
+ * - генетический алгоритм
+ * - внешний AI-сервис для сложной оптимизации
  */
 @Singleton
 class NearestNeighborRouteOptimizer @Inject constructor(
-    private val directionsApi: DirectionsApi
+    private val openRouteServiceApi: OpenRouteServiceApi,
+    private val nearbyPlacesProvider: NearbyPlacesProvider
 ) : RouteOptimizer {
     
     override suspend fun optimizeRoute(
@@ -172,17 +178,14 @@ class NearestNeighborRouteOptimizer @Inject constructor(
             )
         }
         
-        // Simulate processing time
-        delay(500)
-        
-        // Calculate original route distance
+        // Считаем длину исходного маршрута.
         val originalDistance = calculateTotalDistance(places)
         
-        // Apply Nearest Neighbor algorithm
+        // Применяем алгоритм ближайшего соседа.
         val optimized = nearestNeighbor(places, startLocation)
         val optimizedDistance = calculateTotalDistance(optimized)
         
-        // Build route legs
+        // Собираем участки маршрута.
         val legs = optimized.zipWithNext().map { (from, to) ->
             val distance = haversineDistance(
                 from.latitude, from.longitude,
@@ -217,47 +220,83 @@ class NearestNeighborRouteOptimizer @Inject constructor(
         radius: Int,
         preferences: TravelPreferences?
     ): List<PlaceRecommendation> {
-        // Simulate processing time
-        delay(300)
-        
-        // TODO: Call Google Places API or AI service for real recommendations
-        // For now, return mock recommendations
-        
-        return listOf(
-            PlaceRecommendation(
-                placeId = "rec_1",
-                name = "Кофейня у парка",
-                address = "ул. Примерная, 10",
-                latitude = center.latitude + 0.002,
-                longitude = center.longitude + 0.001,
-                category = "cafe",
-                rating = 4.5f,
-                distanceFromRoute = 150,
-                reason = "Отличное место для перерыва"
-            ),
-            PlaceRecommendation(
-                placeId = "rec_2",
-                name = "Смотровая площадка",
-                address = "Набережная, 5",
-                latitude = center.latitude - 0.001,
-                longitude = center.longitude + 0.003,
-                category = "viewpoint",
-                rating = 4.8f,
-                distanceFromRoute = 300,
-                reason = "По пути к следующей точке"
-            ),
-            PlaceRecommendation(
-                placeId = "rec_3",
-                name = "Исторический музей",
-                address = "пр. Культуры, 15",
-                latitude = center.latitude + 0.003,
-                longitude = center.longitude - 0.002,
-                category = "museum",
-                rating = 4.6f,
-                distanceFromRoute = 500,
-                reason = "Рекомендуется посетителями"
+        val routeAnchors = buildRecommendationAnchors(currentPlaces, center)
+        val searchTypes = buildSearchTypes(currentPlaces, preferences)
+        val existingPlaceIds = currentPlaces.mapNotNull { it.placeId }.toSet()
+        val existingNames = currentPlaces.map { it.name.trim().lowercase() }.toSet()
+        val existingCoordinates = currentPlaces.map { LatLng(it.latitude, it.longitude) }
+
+        val candidates = mutableListOf<PlaceSuggestion>()
+        routeAnchors.forEach { anchor ->
+            searchTypes.forEach { type ->
+                candidates += nearbyPlacesProvider.getNearbyPlaces(
+                    latitude = anchor.latitude,
+                    longitude = anchor.longitude,
+                    radius = radius,
+                    type = type
+                )
+            }
+        }
+
+        return candidates
+            .distinctBy { it.placeId }
+            .filterNot { suggestion ->
+                suggestion.placeId in existingPlaceIds ||
+                    suggestion.name.trim().lowercase() in existingNames
+            }
+            .mapNotNull { suggestion ->
+                val suggestionPoint = LatLng(suggestion.latitude, suggestion.longitude)
+                val distanceFromRoute = existingCoordinates
+                    .minOfOrNull { point ->
+                        haversineDistance(
+                            point.latitude,
+                            point.longitude,
+                            suggestionPoint.latitude,
+                            suggestionPoint.longitude
+                        ).toInt()
+                    }
+                    ?: haversineDistance(
+                        center.latitude,
+                        center.longitude,
+                        suggestion.latitude,
+                        suggestion.longitude
+                    ).toInt()
+                if (distanceFromRoute > radius) return@mapNotNull null
+
+                val closestPlace = currentPlaces.minByOrNull { place ->
+                    haversineDistance(
+                        place.latitude,
+                        place.longitude,
+                        suggestion.latitude,
+                        suggestion.longitude
+                    )
+                }
+                val reason = when {
+                    closestPlace != null && distanceFromRoute <= 250 ->
+                        "В ${distanceFromRoute} м от ${closestPlace.name}"
+                    closestPlace != null ->
+                        "Рядом с ${closestPlace.name}"
+                    else ->
+                        "Недалеко от текущего маршрута"
+                }
+
+                PlaceRecommendation(
+                    placeId = suggestion.placeId,
+                    name = suggestion.name,
+                    address = suggestion.address,
+                    latitude = suggestion.latitude,
+                    longitude = suggestion.longitude,
+                    category = suggestion.category.displayName,
+                    rating = suggestion.rating,
+                    distanceFromRoute = distanceFromRoute,
+                    reason = reason
+                )
+            }
+            .sortedWith(
+                compareByDescending<PlaceRecommendation> { it.rating ?: 0f }
+                    .thenBy { it.distanceFromRoute }
             )
-        )
+            .take(6)
     }
     
     override suspend fun calculateRoute(
@@ -296,14 +335,20 @@ class NearestNeighborRouteOptimizer @Inject constructor(
             places = places,
             legs = legs,
             totalDistanceMeters = legs.sumOf { it.distanceMeters },
-            totalDurationMinutes = legs.sumOf { it.durationMinutes }
+            totalDurationMinutes = legs.sumOf { it.durationMinutes },
+            isEstimated = true,
+            sourceLabel = if (travelMode == TravelMode.TRANSIT) {
+                "эвристическая оценка"
+            } else {
+                "локальный расчёт"
+            }
         )
     }
     
-    // Private helper methods
+    // Приватные вспомогательные методы.
     
     /**
-     * Nearest Neighbor algorithm implementation
+     * Реализация алгоритма ближайшего соседа.
      */
     private fun nearestNeighbor(
         places: List<Place>,
@@ -312,12 +357,12 @@ class NearestNeighborRouteOptimizer @Inject constructor(
         val remaining = places.toMutableList()
         val result = mutableListOf<Place>()
         
-        // Start from the nearest place to start location, or first place
+        // Стартуем с ближайшей точки к стартовой позиции или с первого места из списка.
         var currentLat = startLocation?.latitude ?: places.first().latitude
         var currentLon = startLocation?.longitude ?: places.first().longitude
         
         while (remaining.isNotEmpty()) {
-            // Find nearest place
+            // Ищем ближайшее следующее место.
             val nearest = remaining.minByOrNull { place ->
                 haversineDistance(currentLat, currentLon, place.latitude, place.longitude)
             }!!
@@ -333,7 +378,7 @@ class NearestNeighborRouteOptimizer @Inject constructor(
     }
     
     /**
-     * Calculate total distance of a route
+     * Считает общую длину маршрута.
      */
     private fun calculateTotalDistance(places: List<Place>): Int {
         return places.zipWithNext().sumOf { (from, to) ->
@@ -345,14 +390,14 @@ class NearestNeighborRouteOptimizer @Inject constructor(
     }
     
     /**
-     * Haversine formula to calculate distance between two coordinates
-     * Returns distance in meters
+     * Формула гаверсинусов для расстояния между двумя координатами.
+     * Возвращает расстояние в метрах.
      */
     private fun haversineDistance(
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
     ): Double {
-        val earthRadius = 6371000.0 // meters
+        val earthRadius = 6371000.0 // Радиус Земли в метрах.
         
         val dLat = Math.toRadians(lat2 - lat1)
         val dLon = Math.toRadians(lon2 - lon1)
@@ -367,23 +412,23 @@ class NearestNeighborRouteOptimizer @Inject constructor(
     }
     
     /**
-     * Estimate walking time in minutes
-     * Assumes average walking speed of 5 km/h
+     * Оценивает время пешком в минутах.
+     * Использует среднюю скорость 5 км/ч.
      */
     private fun estimateWalkingTime(distanceMeters: Int): Int {
-        val walkingSpeedMps = 5000.0 / 3600.0 // 5 km/h in m/s
+        val walkingSpeedMps = 5000.0 / 3600.0 // 5 км/ч в м/с.
         return ceil(distanceMeters / walkingSpeedMps / 60).toInt()
     }
     
     /**
-     * Estimate travel time based on mode
+     * Оценивает время в пути в зависимости от режима передвижения.
      */
     private fun estimateTravelTime(distanceMeters: Int, mode: TravelMode): Int {
         val speedMps = when (mode) {
-            TravelMode.WALKING -> 5000.0 / 3600.0   // 5 km/h
-            TravelMode.BICYCLING -> 15000.0 / 3600.0 // 15 km/h
-            TravelMode.DRIVING -> 30000.0 / 3600.0   // 30 km/h (urban)
-            TravelMode.TRANSIT -> 20000.0 / 3600.0   // 20 km/h average
+            TravelMode.WALKING -> 5000.0 / 3600.0    // 5 км/ч.
+            TravelMode.BICYCLING -> 15000.0 / 3600.0 // 15 км/ч.
+            TravelMode.DRIVING -> 30000.0 / 3600.0   // 30 км/ч в городе.
+            TravelMode.TRANSIT -> 20000.0 / 3600.0   // Средняя скорость 20 км/ч.
         }
         return ceil(distanceMeters / speedMps / 60).toInt()
     }
@@ -392,35 +437,29 @@ class NearestNeighborRouteOptimizer @Inject constructor(
         places: List<Place>,
         travelMode: TravelMode
     ): RouteDetails? {
+        if (travelMode == TravelMode.TRANSIT) return null
         if (!hasValidApiKey() || places.size < 2) return null
 
-        val origin = "${places.first().latitude},${places.first().longitude}"
-        val destination = "${places.last().latitude},${places.last().longitude}"
-        val waypoints = if (places.size > 2) {
-            places.subList(1, places.lastIndex)
-                .joinToString("|") { "${it.latitude},${it.longitude}" }
-        } else {
-            null
-        }
-
         val response = runCatching {
-            directionsApi.getDirections(
-                origin = origin,
-                destination = destination,
-                waypoints = waypoints,
-                mode = travelMode.toDirectionsMode(),
-                apiKey = BuildConfig.MAPS_API_KEY
+            openRouteServiceApi.getDirections(
+                profile = travelMode.toOpenRouteServiceProfile(),
+                apiKey = BuildConfig.APP_OPENROUTESERVICE_API_KEY,
+                request = OpenRouteServiceDirectionsRequest(
+                    coordinates = places.map { place ->
+                        listOf(place.longitude, place.latitude)
+                    }
+                )
             )
         }.getOrNull() ?: return null
 
         val route = response.routes.firstOrNull() ?: return null
-        val legs = route.legs
-        if (legs.isEmpty()) return null
+        val segments = route.segments
+        if (segments.isEmpty()) return null
 
         val mappedLegs = places.zipWithNext().mapIndexedNotNull { index, (from, to) ->
-            val leg = legs.getOrNull(index) ?: return@mapIndexedNotNull null
-            val distance = leg.distance?.value ?: return@mapIndexedNotNull null
-            val durationSeconds = leg.durationInTraffic?.value ?: leg.duration?.value ?: 0
+            val segment = segments.getOrNull(index) ?: return@mapIndexedNotNull null
+            val distance = segment.distance?.roundToInt() ?: return@mapIndexedNotNull null
+            val durationSeconds = segment.duration ?: 0.0
             RouteLeg(
                 from = from,
                 to = to,
@@ -435,24 +474,74 @@ class NearestNeighborRouteOptimizer @Inject constructor(
         return RouteDetails(
             places = places,
             legs = mappedLegs,
-            totalDistanceMeters = mappedLegs.sumOf { it.distanceMeters },
-            totalDurationMinutes = mappedLegs.sumOf { it.durationMinutes },
-            polylineEncoded = route.overviewPolyline?.points
+            totalDistanceMeters = route.summary?.distance?.roundToInt()
+                ?: mappedLegs.sumOf { it.distanceMeters },
+            totalDurationMinutes = route.summary?.duration
+                ?.let { ceil(it / 60.0).toInt() }
+                ?: mappedLegs.sumOf { it.durationMinutes },
+            polylineEncoded = route.geometry,
+            isEstimated = false,
+            sourceLabel = "openrouteservice"
         )
     }
 
     private fun hasValidApiKey(): Boolean {
-        val apiKey = BuildConfig.MAPS_API_KEY
-        return apiKey.isNotBlank() && !apiKey.contains("YOUR_GOOGLE_MAPS_API_KEY")
+        val apiKey = BuildConfig.APP_OPENROUTESERVICE_API_KEY
+        return apiKey.isNotBlank()
     }
 
-    private fun TravelMode.toDirectionsMode(): String {
+    private fun buildRecommendationAnchors(
+        currentPlaces: List<Place>,
+        center: LatLng
+    ): List<LatLng> {
+        if (currentPlaces.isEmpty()) return listOf(center)
+        val anchors = buildList {
+            add(LatLng(currentPlaces.first().latitude, currentPlaces.first().longitude))
+            if (currentPlaces.size > 2) {
+                val middle = currentPlaces[currentPlaces.size / 2]
+                add(LatLng(middle.latitude, middle.longitude))
+            }
+            add(LatLng(currentPlaces.last().latitude, currentPlaces.last().longitude))
+            add(center)
+        }
+        return anchors.distinctBy { "${"%.5f".format(it.latitude)}:${"%.5f".format(it.longitude)}" }
+    }
+
+    private fun buildSearchTypes(
+        currentPlaces: List<Place>,
+        preferences: TravelPreferences?
+    ): List<String?> {
+        val interestTypes = preferences?.interests.orEmpty().flatMap { interest ->
+            when (interest.lowercase()) {
+                "food" -> listOf("restaurant", "cafe")
+                "museums" -> listOf("museum")
+                "nature" -> listOf("park", "tourist_attraction")
+                "nightlife" -> listOf("bar", "night_club")
+                "shopping" -> listOf("shopping_mall")
+                else -> emptyList()
+            }
+        }
+        val routeCategories = currentPlaces.map { it.category }.toSet()
+        val complementaryTypes = buildList {
+            if (routeCategories.none { it == com.triloo.data.model.PlaceCategory.RESTAURANT || it == com.triloo.data.model.PlaceCategory.CAFE }) {
+                add("cafe")
+            }
+            if (routeCategories.none { it == com.triloo.data.model.PlaceCategory.PARK || it == com.triloo.data.model.PlaceCategory.NATURE }) {
+                add("park")
+            }
+            if (routeCategories.none { it == com.triloo.data.model.PlaceCategory.VIEWPOINT || it == com.triloo.data.model.PlaceCategory.ATTRACTION }) {
+                add("tourist_attraction")
+            }
+        }
+        return listOf<String?>(null) + (interestTypes + complementaryTypes).distinct().take(3)
+    }
+
+    private fun TravelMode.toOpenRouteServiceProfile(): String {
         return when (this) {
-            TravelMode.WALKING -> "walking"
-            TravelMode.DRIVING -> "driving"
-            TravelMode.TRANSIT -> "transit"
-            TravelMode.BICYCLING -> "bicycling"
+            TravelMode.WALKING -> "foot-walking"
+            TravelMode.DRIVING -> "driving-car"
+            TravelMode.TRANSIT -> "driving-car"
+            TravelMode.BICYCLING -> "cycling-regular"
         }
     }
 }
-

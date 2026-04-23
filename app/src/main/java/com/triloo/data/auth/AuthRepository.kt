@@ -1,7 +1,5 @@
 package com.triloo.data.auth
 
-import android.util.Base64
-import com.google.gson.Gson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,57 +8,52 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Authentication Repository Interface.
- * Uses Firebase when configured, otherwise falls back to LocalAuthRepository.
+ * Контракт репозитория авторизации.
+ * Использует Firebase при наличии конфигурации и локальную реализацию как резервный вариант.
  */
 interface AuthRepository {
-    /** Current auth state */
+    /** Текущее состояние авторизации. */
     val authState: Flow<AuthState>
     
-    /** Current user (null if not authenticated) */
+    /** Текущий пользователь или `null`, если вход не выполнен. */
     val currentUser: User?
     
-    /** Sign in with email and password */
+    /** Выполняет вход по e-mail и паролю. */
     suspend fun signInWithEmail(credentials: SignInCredentials): AuthResult<User>
     
-    /** Sign up with email and password */
+    /** Создаёт пользователя по e-mail и паролю. */
     suspend fun signUpWithEmail(data: SignUpData): AuthResult<User>
-    
-    /** Sign in with Google */
-    suspend fun signInWithGoogle(idToken: String): AuthResult<User>
-    
-    /** Sign out */
+
+    /** Завершает текущую сессию. */
     suspend fun signOut()
     
-    /** Send password reset email */
+    /** Отправляет письмо для сброса пароля. */
     suspend fun sendPasswordResetEmail(email: String): AuthResult<Unit>
     
-    /** Update user profile */
+    /** Обновляет публичные данные профиля. */
     suspend fun updateProfile(displayName: String?, avatarUrl: String?): AuthResult<User>
     
-    /** Delete user account */
+    /** Удаляет текущую учётную запись. */
     suspend fun deleteAccount(): AuthResult<Unit>
 }
 
 /**
- * Local implementation backed by in-memory storage with Google ID token parsing.
- * Used as a fallback when Firebase configuration is missing.
+ * Локальная реализация с e-mail и паролем.
+ * Используется как резервный вариант, когда server/Firebase не настроены.
  */
 @Singleton
 class LocalAuthRepository @Inject constructor() : AuthRepository {
-    private val gson = Gson()
-    
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     override val authState: Flow<AuthState> = _authState.asStateFlow()
     
     private var _currentUser: User? = null
     override val currentUser: User? get() = _currentUser
     
-    // Local user storage for development
+    // Локальное хранилище пользователей для режима разработки.
     private val fakeUsers = mutableMapOf<String, Pair<User, String>>() // email -> (user, password)
     
     init {
-        // Add a test user
+        // Добавляем тестового пользователя.
         val testUser = User(
             id = "test-user-id",
             email = "test@triloo.app",
@@ -72,30 +65,30 @@ class LocalAuthRepository @Inject constructor() : AuthRepository {
     override suspend fun signInWithEmail(credentials: SignInCredentials): AuthResult<User> {
         _authState.value = AuthState.Loading
         
-        // Simulate network delay
+        // Имитируем сетевую задержку.
         delay(1000)
         
-        // Validate email format
+        // Проверяем формат e-mail.
         if (!isValidEmail(credentials.email)) {
             _authState.value = AuthState.Error(AuthError.InvalidEmail.message)
             return AuthResult.Failure(AuthError.InvalidEmail)
         }
         
-        // Check if user exists
+        // Проверяем, существует ли пользователь.
         val userEntry = fakeUsers[credentials.email.lowercase()]
         if (userEntry == null) {
             _authState.value = AuthState.Error(AuthError.UserNotFound.message)
             return AuthResult.Failure(AuthError.UserNotFound)
         }
         
-        // Check password
+        // Проверяем пароль.
         val (user, password) = userEntry
         if (password != credentials.password) {
             _authState.value = AuthState.Error(AuthError.WrongPassword.message)
             return AuthResult.Failure(AuthError.WrongPassword)
         }
         
-        // Success
+        // Возвращаем успешный результат.
         _currentUser = user.copy(lastLoginAt = System.currentTimeMillis())
         _authState.value = AuthState.Authenticated(_currentUser!!)
         return AuthResult.Success(_currentUser!!)
@@ -104,28 +97,28 @@ class LocalAuthRepository @Inject constructor() : AuthRepository {
     override suspend fun signUpWithEmail(data: SignUpData): AuthResult<User> {
         _authState.value = AuthState.Loading
         
-        // Simulate network delay
+        // Имитируем сетевую задержку.
         delay(1000)
         
-        // Validate email
+        // Проверяем e-mail.
         if (!isValidEmail(data.email)) {
             _authState.value = AuthState.Error(AuthError.InvalidEmail.message)
             return AuthResult.Failure(AuthError.InvalidEmail)
         }
         
-        // Validate password
+        // Проверяем пароль.
         if (data.password.length < 6) {
             _authState.value = AuthState.Error(AuthError.WeakPassword.message)
             return AuthResult.Failure(AuthError.WeakPassword)
         }
         
-        // Check if email already in use
+        // Проверяем, не занят ли e-mail.
         if (fakeUsers.containsKey(data.email.lowercase())) {
             _authState.value = AuthState.Error(AuthError.EmailAlreadyInUse.message)
             return AuthResult.Failure(AuthError.EmailAlreadyInUse)
         }
         
-        // Create new user
+        // Создаём нового пользователя.
         val newUser = User(
             email = data.email.lowercase(),
             displayName = data.displayName
@@ -135,31 +128,6 @@ class LocalAuthRepository @Inject constructor() : AuthRepository {
         _currentUser = newUser
         _authState.value = AuthState.Authenticated(newUser)
         return AuthResult.Success(newUser)
-    }
-    
-    override suspend fun signInWithGoogle(idToken: String): AuthResult<User> {
-        _authState.value = AuthState.Loading
-        
-        // Simulate network delay
-        delay(1500)
-        
-        if (idToken.isBlank()) {
-            val message = "Google Sign-In не настроен (проверьте GOOGLE_WEB_CLIENT_ID)"
-            _authState.value = AuthState.Error(message)
-            return AuthResult.Failure(AuthError.Unknown(message))
-        }
-
-        val tokenPayload = parseGoogleToken(idToken)
-        val googleUser = User(
-            id = tokenPayload?.sub ?: "google-user-${idToken.take(8)}",
-            email = tokenPayload?.email ?: "google.user@gmail.com",
-            displayName = tokenPayload?.name ?: "Google Пользователь",
-            avatarUrl = tokenPayload?.picture
-        )
-        
-        _currentUser = googleUser
-        _authState.value = AuthState.Authenticated(googleUser)
-        return AuthResult.Success(googleUser)
     }
     
     override suspend fun signOut() {
@@ -175,8 +143,8 @@ class LocalAuthRepository @Inject constructor() : AuthRepository {
             return AuthResult.Failure(AuthError.InvalidEmail)
         }
         
-        // In real implementation, send email via Firebase/backend
-        // For now, just return success
+        // В реальной реализации письмо уйдёт через Firebase или backend.
+        // Пока просто возвращаем успешный результат.
         return AuthResult.Success(Unit)
     }
     
@@ -212,24 +180,4 @@ class LocalAuthRepository @Inject constructor() : AuthRepository {
     private fun isValidEmail(email: String): Boolean {
         return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
-
-    private fun parseGoogleToken(idToken: String): GoogleTokenPayload? {
-        return runCatching {
-            val parts = idToken.split(".")
-            if (parts.size < 2) return null
-            val decoded = Base64.decode(
-                parts[1],
-                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-            )
-            val json = String(decoded, Charsets.UTF_8)
-            gson.fromJson(json, GoogleTokenPayload::class.java)
-        }.getOrNull()
-    }
 }
-
-private data class GoogleTokenPayload(
-    val sub: String?,
-    val email: String?,
-    val name: String?,
-    val picture: String?
-)

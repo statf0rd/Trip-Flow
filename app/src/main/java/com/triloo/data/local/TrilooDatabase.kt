@@ -26,10 +26,13 @@ import com.triloo.data.model.TripDay
         CurrencyRate::class,
         DeletionLog::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
+/**
+ * Основная Room-база приложения с поездками, маршрутами, расходами и журналом удалений.
+ */
 abstract class TrilooDatabase : RoomDatabase() {
     
     abstract fun tripDao(): TripDao
@@ -41,5 +44,4 @@ abstract class TrilooDatabase : RoomDatabase() {
         const val DATABASE_NAME = "triloo.db"
     }
 }
-
 

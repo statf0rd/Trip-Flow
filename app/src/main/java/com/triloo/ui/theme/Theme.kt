@@ -23,32 +23,32 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 /**
- * Triloo Theme
- * 
- * A warm, adventure-inspired theme with coral primary
- * and teal secondary accents. Optimized for travel UX.
+ * Основная тема Triloo.
+ *
+ * Тёплая travel-палитра строится на коралловом primary и бирюзовом secondary,
+ * чтобы интерфейс оставался живым, но не перегруженным.
  */
 
 private val LightColorScheme = lightColorScheme(
-    // Primary — Coral (main actions)
+    // Основной коралловый блок для главных действий.
     primary = CoralPrimary,
     onPrimary = Color.White,
     primaryContainer = CoralSubtle,
     onPrimaryContainer = CoralDark,
 
-    // Secondary — Teal (secondary actions, success)
+    // Бирюзовый блок для вторичных действий и успешных состояний.
     secondary = TealSecondary,
     onSecondary = Color.White,
     secondaryContainer = TealSubtle,
     onSecondaryContainer = TealDark,
 
-    // Tertiary — Golden (accents, currency)
+    // Tertiary — золотой для акцентов и валюты.
     tertiary = GoldenAccent,
     onTertiary = Slate900,
     tertiaryContainer = GoldenSubtle,
     onTertiaryContainer = GoldenDark,
 
-    // Background & Surface
+    // Фон и поверхности.
     background = Slate50,
     onBackground = Slate950,
     surface = Color.White,
@@ -56,48 +56,48 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = Slate100,
     onSurfaceVariant = Slate700,
 
-    // Outline & Dividers
+    // Обводки и разделители.
     outline = Slate400,
     outlineVariant = Slate300,
 
-    // Error
+    // Ошибки.
     error = Error,
     onError = Color.White,
     errorContainer = ErrorLight,
     onErrorContainer = Error,
 
-    // Inverse
+    // Инверсные цвета.
     inverseSurface = Slate900,
     inverseOnSurface = Slate100,
     inversePrimary = CoralLight,
 
-    // Scrim
+    // Затемняющая подложка.
     scrim = Color.Black.copy(alpha = 0.32f),
 
-    // Surface tint
+    // Тонирование поверхностей.
     surfaceTint = CoralPrimary
 )
 
 private val DarkColorScheme = darkColorScheme(
-    // Primary — Coral (lighter for dark mode)
+    // Более светлый коралл для тёмной темы.
     primary = CoralLight,
     onPrimary = Slate900,
     primaryContainer = CoralDark,
     onPrimaryContainer = CoralSubtle,
 
-    // Secondary — Teal
+    // Бирюзовый блок.
     secondary = TealLight,
     onSecondary = Slate900,
     secondaryContainer = TealDark,
     onSecondaryContainer = TealSubtle,
 
-    // Tertiary — Golden
+    // Tertiary — золотой.
     tertiary = GoldenLight,
     onTertiary = Slate900,
     tertiaryContainer = GoldenDark,
     onTertiaryContainer = GoldenSubtle,
 
-    // Background & Surface
+    // Фон и поверхности.
     background = DarkBackground,
     onBackground = DarkTextPrimary,
     surface = DarkSurface,
@@ -105,25 +105,25 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkTextSecondary,
 
-    // Outline & Dividers
+    // Обводки и разделители.
     outline = DarkBorder,
     outlineVariant = DarkBorder,
 
-    // Error
-    error = Color(0xFFF87171), // Lighter red for dark mode
+    // Ошибки.
+    error = Color(0xFFF87171), // Более светлый красный для тёмной темы.
     onError = Slate900,
     errorContainer = Color(0xFF7F1D1D),
     onErrorContainer = ErrorLight,
 
-    // Inverse
+    // Инверсные цвета.
     inverseSurface = Slate200,
     inverseOnSurface = Slate900,
     inversePrimary = CoralDark,
 
-    // Scrim
+    // Затемняющая подложка.
     scrim = Color.Black.copy(alpha = 0.5f),
 
-    // Surface tint
+    // Тонирование поверхностей.
     surfaceTint = CoralLight
 )
 
@@ -138,9 +138,15 @@ fun TrilooTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Set status bar color to transparent for edge-to-edge
             window.statusBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.navigationBarColor = Color.Transparent.toArgb()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced = false
+            }
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 

@@ -9,7 +9,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * Expense — A single expense entry within a trip
+ * Expense — одна запись о расходе внутри поездки.
  */
 @Entity(
     tableName = "expenses",
@@ -31,30 +31,30 @@ data class Expense(
     
     val description: String,
     val amount: Double,
-    val currency: String,                       // ISO 4217: USD, EUR, RUB, etc.
+    val currency: String,                       // Код валюты ISO 4217: USD, EUR, RUB и т.д.
     
-    val amountInBaseCurrency: Double,           // Converted to trip's base currency
-    val exchangeRate: Double,                   // Rate used for conversion
-    val exchangeRateDate: LocalDate,            // Date of rate (for history)
+    val amountInBaseCurrency: Double,           // Сумма, пересчитанная в базовую валюту поездки.
+    val exchangeRate: Double,                   // Курс, использованный для конвертации.
+    val exchangeRateDate: LocalDate,            // Дата курса для истории.
     
     val category: ExpenseCategory = ExpenseCategory.OTHER,
     
-    val paidByUserId: String,                   // Who paid
-    val paidByName: String,                     // Display name for UI
+    val paidByUserId: String,                   // Кто оплатил расход.
+    val paidByName: String,                     // Отображаемое имя плательщика в UI.
     
-    val splitType: SplitType = SplitType.EQUAL, // How to split
-    val splitAmounts: Map<String, Double>? = null, // userId -> amount (for custom splits)
+    val splitType: SplitType = SplitType.EQUAL, // Как делится сумма между участниками.
+    val splitAmounts: Map<String, Double>? = null, // userId -> amount для пользовательских сплитов.
     
     val date: LocalDate,
-    val time: String? = null,                   // "14:30" format
+    val time: String? = null,                   // Время в формате "14:30".
     
-    val placeId: String? = null,                // Link to a Place if relevant
+    val placeId: String? = null,                // Ссылка на место, если расход связан с ним.
     val placeName: String? = null,
     
-    val receiptImageUrl: String? = null,        // Photo of receipt
+    val receiptImageUrl: String? = null,        // Фото чека.
     val notes: String? = null,
     
-    val isSettled: Boolean = false,             // Has this been settled?
+    val isSettled: Boolean = false,             // Был ли расход уже урегулирован.
     
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -87,15 +87,15 @@ enum class ExpenseCategory(
 }
 
 enum class SplitType(val displayName: String) {
-    EQUAL("Поровну"),              // Split equally among all participants
-    EXACT("Точные суммы"),         // Each person pays exact amount
-    PERCENTAGE("Проценты"),         // Each person pays percentage
-    SHARES("Доли"),                // Custom shares (2:1:1 etc)
-    PAYER_ONLY("Только плательщик") // No split, personal expense
+    EQUAL("Поровну"),               // Делим сумму поровну между всеми участниками.
+    EXACT("Точные суммы"),          // Для каждого участника задаётся точная сумма.
+    PERCENTAGE("Проценты"),         // Доля каждого задаётся в процентах.
+    SHARES("Доли"),                 // Деление по пользовательским долям, например 2:1:1.
+    PAYER_ONLY("Только плательщик") // Личный расход без сплита.
 }
 
 /**
- * ExpenseSplit — How an expense is split among participants
+ * ExpenseSplit — распределение одного расхода между конкретными участниками.
  */
 @Entity(
     tableName = "expense_splits",
@@ -106,14 +106,14 @@ data class ExpenseSplit(
     val userId: String,
     val userName: String,
     
-    val shareAmount: Double,                    // Amount this person owes
+    val shareAmount: Double,                    // Сумма, которую должен этот участник.
     val shareAmountInBaseCurrency: Double,
     
-    val isPaid: Boolean = false                 // Has this share been settled?
+    val isPaid: Boolean = false                 // Погашена ли эта доля.
 )
 
 /**
- * Balance — Calculated debt between two participants
+ * Balance — рассчитанный долг между двумя участниками поездки.
  */
 data class Balance(
     val fromUserId: String,
@@ -126,7 +126,7 @@ data class Balance(
 )
 
 /**
- * ExpenseSummary — Aggregated expense statistics for a trip
+ * ExpenseSummary — агрегированная статистика расходов по поездке.
  */
 data class ExpenseSummary(
     val tripId: String,
@@ -134,7 +134,7 @@ data class ExpenseSummary(
     val currency: String,
     
     val byCategory: Map<ExpenseCategory, Double>,
-    val byPerson: Map<String, Double>,          // userId -> total spent
+    val byPerson: Map<String, Double>,          // userId -> сколько всего потратил пользователь.
     val byDay: Map<LocalDate, Double>,
     
     val averagePerDay: Double,
@@ -142,12 +142,12 @@ data class ExpenseSummary(
 )
 
 /**
- * Currency rates storage
+ * Локальное хранилище валютного курса на конкретную дату.
  */
 @Entity(tableName = "currency_rates")
 data class CurrencyRate(
     @PrimaryKey
-    val id: String,                             // "USD_RUB_2024-01-15"
+    val id: String,                             // Идентификатор формата "USD_RUB_2024-01-15".
     
     val fromCurrency: String,
     val toCurrency: String,
@@ -156,6 +156,5 @@ data class CurrencyRate(
     
     val fetchedAt: Long = System.currentTimeMillis()
 )
-
 
 

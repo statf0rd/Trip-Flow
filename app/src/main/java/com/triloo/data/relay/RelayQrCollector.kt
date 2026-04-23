@@ -1,5 +1,8 @@
 package com.triloo.data.relay
 
+/**
+ * Накапливает чанки одного QR-пакета и следит, чтобы пользователь не смешал разные сессии.
+ */
 class RelayQrCollector {
     private val chunks = mutableMapOf<Int, RelayQrChunk>()
     private var currentPackageId: String? = null

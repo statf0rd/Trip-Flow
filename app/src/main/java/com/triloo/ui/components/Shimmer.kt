@@ -15,17 +15,23 @@ import com.triloo.ui.theme.Slate200
 import com.triloo.ui.theme.Slate300
 import com.triloo.ui.theme.TrilooMotion
 
+/**
+ * Добавляет shimmer-подсветку для скелетонов загрузки.
+ */
+private const val ShimmerTravelDistance = 900f
+private const val ShimmerGradientSpread = 400f
+
 fun Modifier.shimmerEffect(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmerTransition")
     val translateAnimation = transition.animateFloat(
-        initialValue = -600f,
-        targetValue = 1200f,
+        initialValue = -ShimmerGradientSpread,
+        targetValue = ShimmerTravelDistance,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = TrilooMotion.shimmerDuration,
-                easing = TrilooMotion.easingStandard
+                durationMillis = 1000,
+                easing = TrilooMotion.easingEmphasized
             ),
-            repeatMode = RepeatMode.Restart
+            repeatMode = RepeatMode.Reverse
         ),
         label = "shimmerAnimation"
     )
@@ -34,19 +40,18 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         Slate200,
         Slate100,
         Slate200,
-        Slate300,
     )
 
     background(
         brush = Brush.linearGradient(
             colors = shimmerColors,
             start = Offset(
-                x = translateAnimation.value - 500f,
-                y = translateAnimation.value - 220f
+                x = translateAnimation.value - ShimmerGradientSpread,
+                y = translateAnimation.value - (ShimmerGradientSpread * 0.44f)
             ),
             end = Offset(
-                x = translateAnimation.value + 500f,
-                y = translateAnimation.value + 220f
+                x = translateAnimation.value + ShimmerGradientSpread,
+                y = translateAnimation.value + (ShimmerGradientSpread * 0.44f)
             )
         )
     )

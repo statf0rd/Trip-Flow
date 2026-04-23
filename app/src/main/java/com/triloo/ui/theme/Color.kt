@@ -3,54 +3,54 @@ package com.triloo.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Triloo Design System — Colors
- * 
- * Aesthetic: Warm adventure meets modern minimalism
- * Inspired by: Sunset horizons, ocean depths, golden hour travel moments
+ * Цветовая палитра дизайн-системы Triloo.
+ *
+ * Визуальная идея: тёплое путешествие с чистой современной базой.
+ * Ассоциации: закатный горизонт, морская глубина и золотой час в дороге.
  */
 
-// PRIMARY — Coral (Core actions)
-val CoralPrimary = Color(0xFFFF6B5B)          // Main action color
-val CoralLight = CoralPrimary
-val CoralDark = CoralPrimary
+// PRIMARY — коралловый для основных действий.
+val CoralPrimary = Color(0xFFFF6B5B)          // Основной акцентный цвет действий.
+val CoralLight = Color(0xFFFF9A8F)            // Осветлённый коралловый для фонов и hover.
+val CoralDark = Color(0xFFE04E40)             // Затемнённый коралловый для pressed-состояний.
 val CoralSubtle = CoralPrimary.copy(alpha = 0.12f)
 
-// SECONDARY — Teal (Secondary actions)
-val TealSecondary = Color(0xFF2DD4BF)         // Secondary actions, success
-val TealLight = TealSecondary
-val TealDark = TealSecondary
+// SECONDARY — бирюзовый для вторичных действий.
+val TealSecondary = Color(0xFF2DD4BF)         // Вторичные действия и успешные состояния.
+val TealLight = Color(0xFF6EE7D8)             // Осветлённый бирюзовый.
+val TealDark = Color(0xFF14B8A6)              // Затемнённый бирюзовый.
 val TealSubtle = TealSecondary.copy(alpha = 0.12f)
 
-// ACCENT — Gold (Highlights)
-val GoldenAccent = Color(0xFFFBBF24)          // Currency, premium features
-val GoldenLight = GoldenAccent
-val GoldenDark = GoldenAccent
+// ACCENT — золотой для акцентов.
+val GoldenAccent = Color(0xFFFBBF24)          // Валюта, премиальные акценты и выделение.
+val GoldenLight = Color(0xFFFCD34D)           // Осветлённый золотой.
+val GoldenDark = Color(0xFFF59E0B)            // Затемнённый золотой.
 val GoldenSubtle = GoldenAccent.copy(alpha = 0.12f)
 
-// NEUTRAL — Slate (Text, Backgrounds, Borders)
-val Slate950 = Color(0xFF0F172A)              // Primary text (light mode)
-val Slate900 = Color(0xFF1E293B)              // Headings
-val Slate800 = Color(0xFF334155)              // Secondary text
-val Slate700 = Color(0xFF475569)              // Tertiary text
-val Slate600 = Color(0xFF64748B)              // Placeholder
-val Slate500 = Color(0xFF94A3B8)              // Disabled
-val Slate400 = Color(0xFFCBD5E1)              // Borders
-val Slate300 = Color(0xFFE2E8F0)              // Dividers
-val Slate200 = Color(0xFFF1F5F9)              // Card backgrounds
-val Slate100 = Color(0xFFF8FAFC)              // Page backgrounds
-val Slate50 = Color(0xFFFAFBFC)               // Subtle backgrounds
+// NEUTRAL — сланцевые нейтрали для текста, фонов и границ.
+val Slate950 = Color(0xFF0F172A)              // Основной текст в светлой теме.
+val Slate900 = Color(0xFF1E293B)              // Заголовки.
+val Slate800 = Color(0xFF334155)              // Вторичный текст.
+val Slate700 = Color(0xFF475569)              // Третичный текст.
+val Slate600 = Color(0xFF64748B)              // Плейсхолдеры.
+val Slate500 = Color(0xFF94A3B8)              // Неактивные элементы.
+val Slate400 = Color(0xFFCBD5E1)              // Границы.
+val Slate300 = Color(0xFFE2E8F0)              // Разделители.
+val Slate200 = Color(0xFFF1F5F9)              // Фоны карточек.
+val Slate100 = Color(0xFFF8FAFC)              // Фон страниц.
+val Slate50 = Color(0xFFFAFBFC)               // Едва заметные подложки.
 
-// SEMANTIC — Status Colors (aligned to 3-4 hues)
-val Success = TealSecondary                   // Completed, Positive
+// SEMANTIC — статусные цвета, собранные вокруг основной палитры.
+val Success = TealSecondary                   // Успех и позитивные состояния.
 val SuccessLight = TealSecondary.copy(alpha = 0.16f)
-val Warning = GoldenAccent                    // Attention needed
+val Warning = GoldenAccent                    // Состояния, требующие внимания.
 val WarningLight = GoldenAccent.copy(alpha = 0.16f)
-val Error = Color(0xFFEF4444)                 // Errors, Delete
+val Error = Color(0xFFEF4444)                 // Ошибки и destructive-действия.
 val ErrorLight = Error.copy(alpha = 0.16f)
-val Info = CoralPrimary                       // Information
+val Info = CoralPrimary                       // Информационные подсказки.
 val InfoLight = CoralPrimary.copy(alpha = 0.16f)
 
-// EXPENSE CATEGORIES — Reduced to the core palette
+// EXPENSE CATEGORIES — цвета категорий расходов без лишнего расширения палитры.
 val ExpenseFood = CoralPrimary
 val ExpenseTransport = TealSecondary
 val ExpenseAccommodation = GoldenAccent
@@ -58,17 +58,17 @@ val ExpenseEntertainment = CoralPrimary
 val ExpenseShopping = TealSecondary
 val ExpenseOther = Slate600
 
-// MAP MARKERS — Reduced to the core palette
+// MAP MARKERS — цвета маркеров карты в той же базовой палитре.
 val MarkerHotel = GoldenAccent
 val MarkerFood = CoralPrimary
 val MarkerAttraction = CoralPrimary
 val MarkerNature = TealSecondary
 val MarkerFriend = TealSecondary
 
-// DARK MODE — Specific Dark Theme Colors
-val DarkBackground = Color(0xFF0D1117)        // GitHub-like dark
-val DarkSurface = Color(0xFF161B22)           // Elevated surfaces
-val DarkSurfaceVariant = Color(0xFF21262D)    // Cards
-val DarkBorder = Color(0xFF30363D)            // Borders
-val DarkTextPrimary = Color(0xFFF0F6FC)       // Primary text
-val DarkTextSecondary = Color(0xFF8B949E)     // Secondary text
+// DARK MODE — специальные цвета тёмной темы.
+val DarkBackground = Color(0xFF0D1117)        // Глубокий тёмный фон.
+val DarkSurface = Color(0xFF161B22)           // Поднятые поверхности.
+val DarkSurfaceVariant = Color(0xFF21262D)    // Карточки.
+val DarkBorder = Color(0xFF30363D)            // Границы.
+val DarkTextPrimary = Color(0xFFF0F6FC)       // Основной текст.
+val DarkTextSecondary = Color(0xFF8B949E)     // Вторичный текст.

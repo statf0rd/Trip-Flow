@@ -9,11 +9,15 @@ import com.triloo.data.model.DeletionLog
 import com.triloo.data.model.Expense
 import com.triloo.data.model.ExpenseSplit
 import com.triloo.data.model.ExpenseSummary
+import com.triloo.data.model.ParticipantRole
 import com.triloo.data.model.RelayEntityType
 import com.triloo.data.model.SplitType
-import com.triloo.data.user.UserProfileRepository
 import com.triloo.data.remote.CurrencyApi
+import com.triloo.data.sync.OnlineSyncRepository
+import com.triloo.data.user.UserProfileRepository
 import kotlinx.coroutines.flow.Flow
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDate
 import kotlin.math.abs
 import javax.inject.Inject
@@ -25,10 +29,11 @@ class ExpenseRepository @Inject constructor(
     private val tripDao: TripDao,
     private val deletionLogDao: DeletionLogDao,
     private val userProfileRepository: UserProfileRepository,
-    private val currencyApi: CurrencyApi
+    private val currencyApi: CurrencyApi,
+    private val onlineSyncRepository: OnlineSyncRepository
 ) {
     
-    // Expense CRUD
+    // CRUD-операции для расходов.
     
     fun observeExpensesByTrip(tripId: String): Flow<List<Expense>> =
         expenseDao.observeExpensesByTrip(tripId)
@@ -43,17 +48,20 @@ class ExpenseRepository @Inject constructor(
         expenseDao.getExpenseById(expenseId)
     
     suspend fun addExpense(expense: Expense): String {
+        requireExpensePermission(expense.tripId, "добавлять расходы")
         expenseDao.insertExpense(expense)
 
         val splits = buildSplits(expense)
         if (splits.isNotEmpty()) {
             expenseDao.insertExpenseSplits(splits)
         }
+        onlineSyncRepository.syncTripAsync(expense.tripId)
         
         return expense.id
     }
     
     suspend fun updateExpense(expense: Expense) {
+        requireExpensePermission(expense.tripId, "изменять расходы")
         expenseDao.updateExpense(expense.copy(updatedAt = System.currentTimeMillis()))
         expenseDao.deleteSplitsForExpense(expense.id)
 
@@ -61,11 +69,26 @@ class ExpenseRepository @Inject constructor(
         if (splits.isNotEmpty()) {
             expenseDao.insertExpenseSplits(splits)
         }
+        onlineSyncRepository.syncTripAsync(expense.tripId)
+    }
+
+    suspend fun setExpenseSettled(expenseId: String, isSettled: Boolean) {
+        val expense = expenseDao.getExpenseById(expenseId) ?: return
+        requireExpensePermission(expense.tripId, "закрывать долги")
+        expenseDao.updateExpense(
+            expense.copy(
+                isSettled = isSettled,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        onlineSyncRepository.syncTripAsync(expense.tripId)
     }
     
     suspend fun deleteExpense(expenseId: String) {
+        var tripIdForRefresh: String? = null
         expenseDao.getExpenseById(expenseId)?.let { expense ->
-            val deviceId = userProfileRepository.getOrCreateUserId()
+            requireExpensePermission(expense.tripId, "удалять расходы")
+            val deviceId = userProfileRepository.getOrCreateDeviceId()
             deletionLogDao.insertDeletion(
                 DeletionLog(
                     tripId = expense.tripId,
@@ -74,9 +97,11 @@ class ExpenseRepository @Inject constructor(
                     deviceId = deviceId
                 )
             )
+            tripIdForRefresh = expense.tripId
         }
         expenseDao.deleteSplitsForExpense(expenseId)
         expenseDao.deleteExpenseById(expenseId)
+        tripIdForRefresh?.let { onlineSyncRepository.syncTripAsync(it) }
     }
     
     private fun createEqualSplits(
@@ -105,7 +130,7 @@ class ExpenseRepository @Inject constructor(
             ExpenseSplit(
                 expenseId = expense.id,
                 userId = userId,
-                userName = userId, // Will be resolved later
+                userName = userId, // Имя будет подставлено позже.
                 shareAmount = amount,
                 shareAmountInBaseCurrency = amount * expense.exchangeRate,
                 isPaid = false
@@ -126,36 +151,48 @@ class ExpenseRepository @Inject constructor(
             else -> emptyList()
         }
     }
+
+    private suspend fun requireExpensePermission(tripId: String, action: String) {
+        val trip = tripDao.getTripById(tripId) ?: return
+        if (!trip.isGroupTrip) return
+
+        val currentUserId = userProfileRepository.getProfile().userId
+        val role = tripDao.getParticipant(tripId, currentUserId)?.role
+            ?: throw IllegalStateException("Недостаточно прав: вы не участник поездки")
+        if (role !in setOf(ParticipantRole.OWNER, ParticipantRole.ADMIN, ParticipantRole.MEMBER)) {
+            throw IllegalStateException("Недостаточно прав, чтобы $action")
+        }
+    }
     
-    // Balance Calculations
+    // Расчёт балансов между участниками.
     
     suspend fun calculateBalances(tripId: String): List<Balance> {
         val expenses = expenseDao.getExpensesByTrip(tripId)
         val participants = tripDao.getParticipants(tripId)
         val trip = tripDao.getTripById(tripId) ?: return emptyList()
         
-        // Calculate net balance for each participant
-        // Positive = owes money, Negative = is owed money
+        // Считаем чистый баланс каждого участника.
+        // Положительное значение = должен, отрицательное = должны ему.
         val netBalances = mutableMapOf<String, Double>()
         participants.forEach { netBalances[it.userId] = 0.0 }
         
         for (expense in expenses) {
-            if (expense.splitType == SplitType.PAYER_ONLY) continue
+            if (expense.splitType == SplitType.PAYER_ONLY || expense.isSettled) continue
             
             val splits = expenseDao.getSplitsForExpense(expense.id)
             
-            // Payer paid the full amount
+            // Плательщик внёс всю сумму расхода.
             netBalances[expense.paidByUserId] = 
                 (netBalances[expense.paidByUserId] ?: 0.0) - expense.amountInBaseCurrency
             
-            // Each person owes their share
+            // Каждый участник должен свою долю.
             for (split in splits) {
                 netBalances[split.userId] = 
                     (netBalances[split.userId] ?: 0.0) + split.shareAmountInBaseCurrency
             }
         }
         
-        // Simplify debts using greedy algorithm
+        // Упрощаем долги жадным алгоритмом.
         return simplifyDebts(netBalances, participants.associate { it.userId to it.displayName }, trip.baseCurrency)
     }
     
@@ -165,52 +202,59 @@ class ExpenseRepository @Inject constructor(
         currency: String
     ): List<Balance> {
         val balances = mutableListOf<Balance>()
-        
-        // Separate creditors (negative balance = owed money) and debtors (positive = owes money)
-        val creditors = netBalances.filter { it.value < -0.01 }.toMutableMap()
-        val debtors = netBalances.filter { it.value > 0.01 }.toMutableMap()
-        
-        // Greedy matching
+        val threshold = BigDecimal("0.01")
+
+        // Разделяем кредиторов (им должны) и должников (они должны).
+        val creditors = netBalances
+            .mapValues { BigDecimal.valueOf(it.value) }
+            .filter { it.value < -threshold }
+            .toMutableMap()
+        val debtors = netBalances
+            .mapValues { BigDecimal.valueOf(it.value) }
+            .filter { it.value > threshold }
+            .toMutableMap()
+
+        // Жадно сопоставляем кредиторов и должников.
         while (debtors.isNotEmpty() && creditors.isNotEmpty()) {
             val debtor = debtors.maxByOrNull { it.value } ?: break
             val creditor = creditors.minByOrNull { it.value } ?: break
-            
-            val amount = minOf(debtor.value, -creditor.value)
-            
-            if (amount > 0.01) {
+
+            val amount = minOf(debtor.value, creditor.value.negate())
+
+            if (amount > threshold) {
                 balances.add(
                     Balance(
                         fromUserId = debtor.key,
                         fromUserName = userNames[debtor.key] ?: debtor.key,
                         toUserId = creditor.key,
                         toUserName = userNames[creditor.key] ?: creditor.key,
-                        amount = kotlin.math.round(amount * 100) / 100,
+                        amount = amount.setScale(2, RoundingMode.HALF_UP).toDouble(),
                         currency = currency
                     )
                 )
             }
-            
-            // Update balances
+
+            // Обновляем остатки балансов после перевода.
             val newDebtorBalance = debtor.value - amount
             val newCreditorBalance = creditor.value + amount
-            
-            if (newDebtorBalance < 0.01) {
+
+            if (newDebtorBalance < threshold) {
                 debtors.remove(debtor.key)
             } else {
                 debtors[debtor.key] = newDebtorBalance
             }
-            
-            if (newCreditorBalance > -0.01) {
+
+            if (newCreditorBalance > -threshold) {
                 creditors.remove(creditor.key)
             } else {
                 creditors[creditor.key] = newCreditorBalance
             }
         }
-        
+
         return balances
     }
     
-    // Expense Summary
+    // Сводная статистика по расходам.
     
     suspend fun getExpenseSummary(tripId: String): ExpenseSummary? {
         val trip = tripDao.getTripById(tripId) ?: return null
@@ -254,7 +298,7 @@ class ExpenseRepository @Inject constructor(
         )
     }
     
-    // Currency Rates
+    // Работа с валютными курсами.
     
     suspend fun getCurrencyRate(from: String, to: String, date: LocalDate): Double? {
         val fromCode = from.uppercase()

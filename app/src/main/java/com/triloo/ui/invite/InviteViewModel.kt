@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Генерирует приглашение в поездку и упаковывает его в последовательность QR-чанков.
+ */
 @HiltViewModel
 class InviteViewModel @Inject constructor(
     private val relayRepository: RelayRepository,
@@ -61,6 +64,9 @@ class InviteViewModel @Inject constructor(
     }
 }
 
+/**
+ * Состояние экрана приглашения: код, имя поездки и готовые QR-страницы.
+ */
 data class InviteUiState(
     val tripName: String = "",
     val inviteCode: String = "",

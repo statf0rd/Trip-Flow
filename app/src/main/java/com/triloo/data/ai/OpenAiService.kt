@@ -8,6 +8,9 @@ import com.triloo.data.remote.OpenAiResponseFormat
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Тонкая обёртка над Gemini через OpenAI-совместимый endpoint для AI-рекомендаций.
+ */
 @Singleton
 class OpenAiService @Inject constructor(
     private val openAiApi: OpenAiApi
@@ -33,20 +36,36 @@ class OpenAiService @Inject constructor(
             maxTokens = maxTokens
         )
 
-        return runCatching {
-            openAiApi.chatCompletions(
-                authorization = "Bearer ${BuildConfig.OPENAI_API_KEY}",
-                request = request
-            )
-        }.getOrNull()?.choices?.firstOrNull()?.message?.content?.trim()?.takeIf { it.isNotBlank() }
+        for (apiKey in validApiKeys()) {
+            val content = runCatching {
+                openAiApi.chatCompletions(
+                    authorization = "Bearer $apiKey",
+                    request = request
+                )
+            }.getOrNull()?.choices?.firstOrNull()?.message?.content?.trim()
+
+            if (!content.isNullOrBlank()) {
+                return content
+            }
+        }
+
+        return null
     }
 
     private fun hasValidApiKey(): Boolean {
-        val key = BuildConfig.OPENAI_API_KEY
-        return key.isNotBlank() && !key.contains("YOUR_OPENAI_API_KEY")
+        return validApiKeys().isNotEmpty()
+    }
+
+    private fun validApiKeys(): List<String> {
+        return BuildConfig.APP_GEMINI_API_KEYS
+            .split(',')
+            .map { it.trim() }
+            .filter { key ->
+                key.isNotBlank() && !key.contains("YOUR_GEMINI_API_KEY")
+            }
     }
 
     companion object {
-        const val DEFAULT_MODEL = "gpt-4o-mini"
+        const val DEFAULT_MODEL = "gemini-2.5-flash"
     }
 }

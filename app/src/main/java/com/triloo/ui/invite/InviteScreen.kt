@@ -44,6 +44,9 @@ import com.triloo.ui.qr.generateQrBitmap
 import com.triloo.ui.theme.Error
 import com.triloo.ui.theme.TrilooTheme
 
+/**
+ * Экран, который показывает код приглашения и перелистываемые QR-фрагменты для входа в поездку.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InviteScreen(

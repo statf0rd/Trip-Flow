@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Готовит агрегированное состояние списка поездок и обрабатывает удаление карточек.
+ */
 @HiltViewModel
 class TripListViewModel @Inject constructor(
     private val tripRepository: TripRepository
@@ -41,11 +44,16 @@ class TripListViewModel @Inject constructor(
     
     fun deleteTrip(tripId: String) {
         viewModelScope.launch {
-            tripRepository.deleteTrip(tripId)
+            runCatching {
+                tripRepository.deleteTrip(tripId)
+            }
         }
     }
 }
 
+/**
+ * UI-состояние домашнего списка поездок, разбитое на текущие, будущие и завершённые.
+ */
 data class TripListUiState(
     val currentTrip: Trip? = null,
     val upcomingTrips: List<Trip> = emptyList(),
@@ -54,5 +62,3 @@ data class TripListUiState(
     val hasTrips: Boolean
         get() = currentTrip != null || upcomingTrips.isNotEmpty() || pastTrips.isNotEmpty()
 }
-
-

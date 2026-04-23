@@ -13,13 +13,13 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Room TypeConverters for custom types
+ * TypeConverter-ы Room для пользовательских типов, которые нельзя сохранить напрямую.
  */
 class Converters {
     private val gson = Gson()
     private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     
-    // LocalDate
+    // Преобразование `LocalDate`.
     @TypeConverter
     fun fromLocalDate(date: LocalDate?): String? {
         return date?.format(dateFormatter)
@@ -30,49 +30,55 @@ class Converters {
         return dateString?.let { LocalDate.parse(it, dateFormatter) }
     }
     
-    // TripStatus
+    // Преобразование статуса поездки.
     @TypeConverter
     fun fromTripStatus(status: TripStatus): String = status.name
-    
+
     @TypeConverter
-    fun toTripStatus(status: String): TripStatus = TripStatus.valueOf(status)
-    
-    // ParticipantRole
+    fun toTripStatus(status: String): TripStatus =
+        runCatching { TripStatus.valueOf(status) }.getOrDefault(TripStatus.PLANNING)
+
+    // Преобразование роли участника.
     @TypeConverter
     fun fromParticipantRole(role: ParticipantRole): String = role.name
-    
+
     @TypeConverter
-    fun toParticipantRole(role: String): ParticipantRole = ParticipantRole.valueOf(role)
-    
-    // PlaceCategory
+    fun toParticipantRole(role: String): ParticipantRole =
+        runCatching { ParticipantRole.valueOf(role) }.getOrDefault(ParticipantRole.MEMBER)
+
+    // Преобразование категории места.
     @TypeConverter
     fun fromPlaceCategory(category: PlaceCategory): String = category.name
-    
+
     @TypeConverter
-    fun toPlaceCategory(category: String): PlaceCategory = PlaceCategory.valueOf(category)
-    
-    // ExpenseCategory
+    fun toPlaceCategory(category: String): PlaceCategory =
+        runCatching { PlaceCategory.valueOf(category) }.getOrDefault(PlaceCategory.OTHER)
+
+    // Преобразование категории расхода.
     @TypeConverter
     fun fromExpenseCategory(category: ExpenseCategory): String = category.name
-    
+
     @TypeConverter
-    fun toExpenseCategory(category: String): ExpenseCategory = ExpenseCategory.valueOf(category)
-    
-    // SplitType
+    fun toExpenseCategory(category: String): ExpenseCategory =
+        runCatching { ExpenseCategory.valueOf(category) }.getOrDefault(ExpenseCategory.OTHER)
+
+    // Преобразование типа сплита.
     @TypeConverter
     fun fromSplitType(type: SplitType): String = type.name
-    
-    @TypeConverter
-    fun toSplitType(type: String): SplitType = SplitType.valueOf(type)
 
-    // RelayEntityType
+    @TypeConverter
+    fun toSplitType(type: String): SplitType =
+        runCatching { SplitType.valueOf(type) }.getOrDefault(SplitType.PAYER_ONLY)
+
+    // Преобразование типа relay-сущности.
     @TypeConverter
     fun fromRelayEntityType(type: RelayEntityType): String = type.name
 
     @TypeConverter
-    fun toRelayEntityType(type: String): RelayEntityType = RelayEntityType.valueOf(type)
+    fun toRelayEntityType(type: String): RelayEntityType =
+        runCatching { RelayEntityType.valueOf(type) }.getOrDefault(RelayEntityType.TRIP)
     
-    // Map<String, Double> for split amounts
+    // Сериализация карты сумм для пользовательских сплитов.
     @TypeConverter
     fun fromStringDoubleMap(map: Map<String, Double>?): String? {
         return map?.let { gson.toJson(it) }
@@ -86,5 +92,4 @@ class Converters {
         }
     }
 }
-
 

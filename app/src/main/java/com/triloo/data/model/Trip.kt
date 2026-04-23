@@ -7,7 +7,7 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 /**
- * Trip — The core entity representing a travel journey
+ * Trip — основная сущность поездки со сроками, направлением и групповыми настройками.
  */
 @Entity(tableName = "trips")
 data class Trip(
@@ -15,25 +15,27 @@ data class Trip(
     val id: String = UUID.randomUUID().toString(),
     
     val name: String,
-    val destination: String,                    // City/Country name
-    val destinationPlaceId: String? = null,     // Google Place ID
-    val coverImageUrl: String? = null,          // Cover photo URL
+    val destination: String,                    // Название города или страны.
+    val destinationPlaceId: String? = null,     // Идентификатор места в Google Places.
+    val destinationLatitude: Double? = null,     // Широта назначения.
+    val destinationLongitude: Double? = null,    // Долгота назначения.
+    val coverImageUrl: String? = null,          // Ссылка на фото-обложку.
     
     val startDate: LocalDate,
     val endDate: LocalDate,
     
-    val baseCurrency: String = "RUB",           // ISO 4217 currency code
-    val budget: Double? = null,                 // Optional total budget
+    val baseCurrency: String = "RUB",           // Код валюты по ISO 4217.
+    val budget: Double? = null,                 // Необязательный общий бюджет.
     
     val hotelName: String? = null,
     val hotelAddress: String? = null,
-    val hotelPlaceId: String? = null,           // Google Place ID for hotel
+    val hotelPlaceId: String? = null,           // Идентификатор отеля в Google Places.
     val hotelLatitude: Double? = null,
     val hotelLongitude: Double? = null,
     
-    val inviteCode: String = generateInviteCode(),  // For group trips
+    val inviteCode: String = generateInviteCode(),  // Код приглашения для групповой поездки.
     val isGroupTrip: Boolean = false,
-    val ownerId: String? = null,                // User ID of creator
+    val ownerId: String? = null,                // Идентификатор создателя поездки.
     
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
@@ -61,15 +63,15 @@ data class Trip(
 }
 
 enum class TripStatus {
-    PLANNING,       // Still being planned
-    CONFIRMED,      // All set, ready to go
-    ONGOING,        // Currently traveling
-    COMPLETED,      // Trip finished
-    CANCELLED       // Trip cancelled
+    PLANNING,       // Поездка ещё планируется.
+    CONFIRMED,      // План подтверждён и готов к поездке.
+    ONGOING,        // Поездка идёт прямо сейчас.
+    COMPLETED,      // Поездка завершена.
+    CANCELLED       // Поездка отменена.
 }
 
 /**
- * Participant — A person participating in a group trip
+ * Participant — участник групповой поездки с его правами и состоянием геошаринга.
  */
 @Entity(
     tableName = "participants",
@@ -97,8 +99,7 @@ data class Participant(
 )
 
 enum class ParticipantRole {
-    OWNER,      // Created the trip, full permissions
-    ADMIN,      // Can edit trip, invite others
-    MEMBER      // Can view and add expenses
+    OWNER,      // Создал поездку и имеет полный доступ.
+    ADMIN,      // Может редактировать поездку и приглашать других.
+    MEMBER      // Может просматривать поездку и добавлять расходы.
 }
-

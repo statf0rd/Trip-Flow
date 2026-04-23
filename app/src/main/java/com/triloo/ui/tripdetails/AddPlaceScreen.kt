@@ -3,17 +3,16 @@ package com.triloo.ui.tripdetails
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.*
@@ -23,9 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -35,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.triloo.BuildConfig
 import com.triloo.data.model.PlaceCategory
 import com.triloo.data.places.PlaceSuggestion
 import com.triloo.ui.PreviewData
@@ -44,11 +42,7 @@ import com.triloo.ui.theme.TrilooTheme
 import com.triloo.ui.theme.TrilooMotion
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +60,8 @@ fun AddPlaceScreen(
     }
     
     var showSuggestions by remember { mutableStateOf(false) }
+    var showMapPicker by remember { mutableStateOf(false) }
+    val mapEnabled = remember { BuildConfig.APP_MAPKIT_VIEW_ENABLED }
 
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
@@ -102,6 +98,7 @@ fun AddPlaceScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(scrollState)
+                .imePadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -113,7 +110,7 @@ fun AddPlaceScreen(
                 )
             }
 
-            // Name field with autocomplete
+            // Поле названия с автодополнением.
             Column {
             OutlinedTextField(
                 value = uiState.name,
@@ -133,11 +130,11 @@ fun AddPlaceScreen(
                     )
                 },
                     trailingIcon = {
-                        if (uiState.isSearching) {
+                        if (uiState.isSearching || uiState.isLoadingDetails) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = CoralPrimary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         } else if (uiState.name.isNotEmpty()) {
                             IconButton(onClick = { viewModel.updateName("") }) {
@@ -155,7 +152,7 @@ fun AddPlaceScreen(
                     shape = RoundedCornerShape(14.dp)
                 )
                 
-                // Suggestions dropdown
+                // Выпадающий список подсказок.
                 AnimatedVisibility(
                     visible = showSuggestions && suggestions.isNotEmpty(),
                     enter = TrilooMotion.enterExpand(),
@@ -188,7 +185,7 @@ fun AddPlaceScreen(
                 }
             }
             
-            // Selected place indicator
+            // Индикатор выбранного места.
             AnimatedVisibility(
                 visible = uiState.hasCoordinates,
                 enter = TrilooMotion.enterExpand(),
@@ -212,7 +209,11 @@ fun AddPlaceScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Место выбрано",
+                                text = if (uiState.isLoadingDetails) {
+                                    "Загружаем детали места..."
+                                } else {
+                                    "Место выбрано"
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = TealDark,
                                 fontWeight = FontWeight.SemiBold
@@ -247,7 +248,76 @@ fun AddPlaceScreen(
                 }
             }
 
-            // Address field (optional, pre-filled from suggestion)
+            // Кнопка «Указать на карте» и встроенный пикер.
+            if (mapEnabled) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMapPicker = !showMapPicker },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (showMapPicker) Icons.Rounded.ExpandLess else Icons.Rounded.MyLocation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = if (showMapPicker) "Скрыть карту" else "Указать на карте",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showMapPicker,
+                    enter = TrilooMotion.enterExpand(),
+                    exit = TrilooMotion.exitShrink()
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                            .nestedScroll(object : NestedScrollConnection {
+                                override fun onPreScroll(available: Offset, source: NestedScrollSource) = available
+                            }),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Box {
+                            com.triloo.feature.map.MapPickerView(
+                                modifier = Modifier.fillMaxSize(),
+                                initialCenter = com.triloo.feature.map.MapCoordinate(
+                                    latitude = if (uiState.hasCoordinates) uiState.latitude else 55.751244,
+                                    longitude = if (uiState.hasCoordinates) uiState.longitude else 37.618423
+                                ),
+                                initialZoom = if (uiState.hasCoordinates) 15f else 10f,
+                                onLocationPicked = { lat, lng ->
+                                    viewModel.updateCoordinates(lat, lng)
+                                }
+                            )
+                            // Перекрестие в центре карты.
+                            Icon(
+                                imageVector = Icons.Rounded.Place,
+                                contentDescription = "Метка",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .align(Alignment.Center)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Поле адреса: необязательное, может заполниться из подсказки.
             OutlinedTextField(
                 value = uiState.address,
                 onValueChange = viewModel::updateAddress,
@@ -267,13 +337,13 @@ fun AddPlaceScreen(
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Category selector
-            CategoryCarousel(
+            // Выбор категории.
+            CategoryGrid(
                 selected = uiState.category,
                 onSelected = viewModel::updateCategory
             )
 
-            // Time and duration row
+            // Строка времени и длительности.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -373,7 +443,7 @@ fun AddPlaceScreen(
                 )
             }
 
-            // Notes field
+            // Поле заметок.
             OutlinedTextField(
                 value = uiState.notes,
                 onValueChange = viewModel::updateNotes,
@@ -402,7 +472,7 @@ fun AddPlaceScreen(
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Error message
+            // Сообщение об ошибке.
             uiState.error?.let { errorText ->
                 Text(
                     text = errorText,
@@ -413,7 +483,7 @@ fun AddPlaceScreen(
 
             Spacer(modifier = Modifier.size(8.dp))
 
-            // Save button
+            // Кнопка сохранения.
             TrilooButton(
                 text = "Сохранить место",
                 onClick = viewModel::savePlace,
@@ -444,12 +514,14 @@ private fun SuggestionItem(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(getCategoryColor(suggestion.category).copy(alpha = 0.15f)),
+                .background(suggestion.category.color.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = suggestion.category.emoji,
-                style = MaterialTheme.typography.titleMedium
+            Icon(
+                imageVector = suggestion.category.icon,
+                contentDescription = suggestion.category.displayName,
+                tint = suggestion.category.color,
+                modifier = Modifier.size(22.dp)
             )
         }
         
@@ -491,35 +563,13 @@ private fun SuggestionItem(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CategoryCarousel(
+private fun CategoryGrid(
     selected: PlaceCategory,
     onSelected: (PlaceCategory) -> Unit
 ) {
     val categories = remember { PlaceCategory.entries }
-    val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    val currentSelected by rememberUpdatedState(selected)
-
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo }
-            .map { layoutInfo ->
-                val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-                layoutInfo.visibleItemsInfo.minByOrNull { item ->
-                    kotlin.math.abs((item.offset + item.size / 2) - center)
-                }?.index
-            }
-            .filterNotNull()
-            .distinctUntilChanged()
-            .collect { index ->
-                val category = categories.getOrNull(index) ?: return@collect
-                if (category != currentSelected) {
-                    onSelected(category)
-                }
-            }
-    }
 
     Column {
         Text(
@@ -528,111 +578,44 @@ private fun CategoryCarousel(
             fontWeight = FontWeight.SemiBold,
             color = Slate700
         )
-        Spacer(modifier = Modifier.size(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(260.dp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            LazyColumn(
-                state = listState,
-                flingBehavior = flingBehavior,
-                contentPadding = PaddingValues(vertical = 36.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                itemsIndexed(categories) { index, category ->
-                    val isSelected = category == selected
-                    val layoutInfo = listState.layoutInfo
-                    val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-                    val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-                    val distance = itemInfo?.let {
-                        abs((it.offset + it.size / 2) - center)
-                    } ?: 0
-                    val maxDistance = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / 2f
-                    val normalized = if (maxDistance > 0) {
-                        (distance / maxDistance).coerceIn(0f, 1f)
-                    } else 0f
-                    val alpha = 1f - (normalized * 0.55f)
-                    val scale = 1f - (normalized * 0.08f)
-                    val backgroundColor = if (isSelected) {
-                        getCategoryColor(category).copy(alpha = 0.2f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                    }
-                    val textColor = if (isSelected) getCategoryColor(category) else Slate600
+            categories.forEach { category ->
+                val isSelected = category == selected
+                val catColor = category.color
 
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .graphicsLayer {
-                                this.alpha = alpha
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .clickable {
-                                onSelected(category)
-                                scope.launch { listState.animateScrollToItem(index) }
-                            },
-                        shape = RoundedCornerShape(18.dp),
-                        color = backgroundColor
+                Surface(
+                    modifier = Modifier.clickable { onSelected(category) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) catColor.copy(alpha = 0.18f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = category.emoji,
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = category.displayName,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = textColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Icon(
+                            imageVector = category.icon,
+                            contentDescription = null,
+                            tint = if (isSelected) catColor else Slate600,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = category.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSelected) catColor else Slate600,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1
+                        )
                     }
                 }
             }
-
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.9f),
-                                Color.Transparent,
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
-                            )
-                        )
-                    )
-            )
         }
-    }
-}
-
-private fun getCategoryColor(category: PlaceCategory): Color {
-    return when (category) {
-        PlaceCategory.RESTAURANT, PlaceCategory.CAFE -> ExpenseFood
-        PlaceCategory.BAR, PlaceCategory.NIGHTLIFE -> Color(0xFFEC4899)
-        PlaceCategory.MUSEUM, PlaceCategory.ATTRACTION -> CoralPrimary
-        PlaceCategory.PARK, PlaceCategory.NATURE, PlaceCategory.BEACH -> TealSecondary
-        PlaceCategory.SHOPPING -> Color(0xFF14B8A6)
-        PlaceCategory.ENTERTAINMENT -> Color(0xFF8B5CF6)
-        PlaceCategory.HOLIDAY -> Color(0xFFF97316)
-        PlaceCategory.TRANSPORT -> Color(0xFF6366F1)
-        PlaceCategory.VIEWPOINT -> GoldenAccent
-        else -> Slate600
     }
 }
 
@@ -651,7 +634,7 @@ private fun AddPlaceScreenPreview() {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            CategoryCarousel(
+            CategoryGrid(
                 selected = PreviewData.addPlaceState.category,
                 onSelected = {}
             )
