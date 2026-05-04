@@ -168,7 +168,7 @@ private fun PlaceDetailsContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
-                    .clip(RoundedCornerShape(24.dp)),
+                    .clip(TrilooShapes.Lg),
                 contentScale = ContentScale.Crop
             )
         }
@@ -180,7 +180,7 @@ private fun PlaceDetailsContent(
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(TrilooShapes.Md)
                     .background(place.category.color.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -222,7 +222,7 @@ private fun PlaceDetailsContent(
         // Переключатель статуса посещения.
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = TrilooShapes.Md,
             color = if (place.isVisited) TealSubtle else Slate100,
             onClick = onMarkVisited
         ) {
@@ -363,7 +363,7 @@ private fun PlaceDetailsContent(
             OutlinedButton(
                 onClick = { openInMaps(context, place) },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Map,
@@ -377,7 +377,7 @@ private fun PlaceDetailsContent(
             OutlinedButton(
                 onClick = { buildRoute(context, place) },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Directions,

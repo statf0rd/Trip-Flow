@@ -149,7 +149,7 @@ fun AddPlaceScreen(
                     imeAction = ImeAction.Next
                     ),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = TrilooShapes.Sm
                 )
                 
                 // Выпадающий список подсказок.
@@ -162,7 +162,7 @@ fun AddPlaceScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = TrilooShapes.Sm,
                         shadowElevation = 4.dp,
                         color = MaterialTheme.colorScheme.surface
                     ) {
@@ -193,7 +193,7 @@ fun AddPlaceScreen(
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = TealSubtle
                 ) {
                     Row(
@@ -254,7 +254,7 @@ fun AddPlaceScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showMapPicker = !showMapPicker },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                 ) {
                     Row(
@@ -289,7 +289,7 @@ fun AddPlaceScreen(
                             .nestedScroll(object : NestedScrollConnection {
                                 override fun onPreScroll(available: Offset, source: NestedScrollSource) = available
                             }),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = TrilooShapes.Sm
                     ) {
                         Box {
                             com.triloo.feature.map.MapPickerView(
@@ -334,7 +334,7 @@ fun AddPlaceScreen(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
 
             // Выбор категории.
@@ -381,7 +381,7 @@ fun AddPlaceScreen(
                         ),
                         textStyle = MaterialTheme.typography.bodyMedium,
                         singleLine = true,
-                        shape = RoundedCornerShape(14.dp)
+                        shape = TrilooShapes.Sm
                     )
 
                     uiState.lockedTimeFormat?.let { locked ->
@@ -439,7 +439,7 @@ fun AddPlaceScreen(
                         imeAction = ImeAction.Next
                     ),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = TrilooShapes.Sm
                 )
             }
 
@@ -469,7 +469,7 @@ fun AddPlaceScreen(
                 ),
                 minLines = 2,
                 maxLines = 4,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
 
             // Сообщение об ошибке.
@@ -513,7 +513,7 @@ private fun SuggestionItem(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(TrilooShapes.Sm)
                 .background(suggestion.category.color.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
@@ -590,7 +590,7 @@ private fun CategoryGrid(
 
                 Surface(
                     modifier = Modifier.clickable { onSelected(category) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = if (isSelected) catColor.copy(alpha = 0.18f)
                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                 ) {

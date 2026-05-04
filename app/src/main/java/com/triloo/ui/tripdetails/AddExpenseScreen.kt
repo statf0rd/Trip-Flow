@@ -138,6 +138,7 @@ private fun AddExpenseContent(
         DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("ru"))
     }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -174,7 +175,7 @@ private fun AddExpenseContent(
         ) {
             trip?.let {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = Slate100
                 ) {
                     Row(
@@ -227,7 +228,7 @@ private fun AddExpenseContent(
                             imeAction = ImeAction.Next
                         ),
                         singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = TrilooShapes.Sm,
                         textStyle = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = FontWeight.Bold
                         )
@@ -286,7 +287,7 @@ private fun AddExpenseContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
 
             ReceiptSection(
@@ -325,7 +326,7 @@ private fun AddExpenseContent(
 
             if (uiState.splitType != SplitType.PAYER_ONLY) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = TrilooShapes.Md,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                 ) {
                     Row(
@@ -377,7 +378,7 @@ private fun AddExpenseContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
 
             Row(
@@ -400,7 +401,7 @@ private fun AddExpenseContent(
                             tint = Slate500
                         )
                     },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     colors = OutlinedTextFieldDefaults.colors(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
                         disabledBorderColor = MaterialTheme.colorScheme.outline,
@@ -411,10 +412,14 @@ private fun AddExpenseContent(
 
                 OutlinedTextField(
                     value = uiState.time,
-                    onValueChange = onTimeChange,
-                    modifier = Modifier.weight(1f),
+                    onValueChange = {},
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { showTimePicker = true },
                     label = { Text("Время") },
                     placeholder = { Text("14:30", color = Slate500) },
+                    readOnly = true,
+                    enabled = false,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Rounded.Schedule,
@@ -422,11 +427,15 @@ private fun AddExpenseContent(
                             tint = Slate500
                         )
                     },
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Next
-                    ),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = TrilooShapes.textField,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLeadingIconColor = Slate500,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledPlaceholderColor = Slate500
+                    )
                 )
             }
 
@@ -454,12 +463,12 @@ private fun AddExpenseContent(
                 ),
                 minLines = 2,
                 maxLines = 3,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
 
             uiState.error?.let { errorText ->
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = ErrorLight
                 ) {
                     Row(
@@ -537,6 +546,59 @@ private fun AddExpenseContent(
             )
         }
     }
+
+    if (showTimePicker) {
+        ExpenseTimePickerDialog(
+            initialValue = uiState.time,
+            onDismissRequest = { showTimePicker = false },
+            onConfirm = { hh, mm ->
+                onTimeChange(String.format(Locale.US, "%02d:%02d", hh, mm))
+                showTimePicker = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExpenseTimePickerDialog(
+    initialValue: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val now = remember { java.time.LocalTime.now() }
+    val parsed = remember(initialValue) { parseInitialTime(initialValue) }
+    val state = rememberTimePickerState(
+        initialHour = parsed?.first ?: now.hour,
+        initialMinute = parsed?.second ?: now.minute,
+        is24Hour = true
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Выберите время") },
+        text = {
+            TimePicker(state = state)
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
+                Text("ОК")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Отмена")
+            }
+        }
+    )
+}
+
+private fun parseInitialTime(value: String): Pair<Int, Int>? {
+    val parts = value.trim().split(":")
+    if (parts.size != 2) return null
+    val hh = parts[0].toIntOrNull()?.coerceIn(0, 23) ?: return null
+    val mm = parts[1].toIntOrNull()?.coerceIn(0, 59) ?: return null
+    return hh to mm
 }
 
 @Composable
@@ -549,7 +611,7 @@ private fun ReceiptSection(
     onRemoveReceipt: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
     ) {
         Column(
@@ -599,7 +661,7 @@ private fun ReceiptSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(TrilooShapes.Md)
                 )
             }
 
@@ -616,7 +678,7 @@ private fun ReceiptSection(
 
             summary?.let { summaryText ->
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     color = TealSubtle
                 ) {
                     Text(
@@ -630,7 +692,7 @@ private fun ReceiptSection(
 
             error?.let { errorText ->
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     color = ErrorLight
                 ) {
                     Text(
@@ -697,7 +759,7 @@ private fun ExpenseSplitSection(
                             scaleY = scale
                         }
                         .clickable { onSplitTypeChange(type) },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = TrilooShapes.Md,
                     color = if (isSelected) accent.copy(alpha = 0.14f) else Slate100,
                     border = BorderStroke(
                         1.dp,
@@ -726,7 +788,7 @@ private fun ExpenseSplitSection(
         when (splitType) {
             SplitType.PAYER_ONLY -> {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = TrilooShapes.Md,
                     color = Slate100
                 ) {
                     Row(
@@ -762,7 +824,7 @@ private fun ExpenseSplitSection(
                 } else null
 
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = TrilooShapes.Md,
                     color = Slate100
                 ) {
                     Column(
@@ -839,7 +901,7 @@ private fun ExpenseSplitSection(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = TrilooShapes.Md,
                     color = Slate100
                 ) {
                     Column(
@@ -916,7 +978,7 @@ private fun ExpenseSplitSection(
                                         keyboardType = KeyboardType.Decimal,
                                         imeAction = ImeAction.Done
                                     ),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = TrilooShapes.Sm,
                                     suffix = { Text(currency) }
                                 )
                             }
@@ -987,7 +1049,7 @@ private fun ExpenseCategoryTile(
                 scaleY = scale
             }
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = if (isSelected) accent.copy(alpha = 0.16f) else Slate100,
         border = BorderStroke(
             width = if (isSelected) 1.5.dp else 1.dp,
@@ -1004,7 +1066,7 @@ private fun ExpenseCategoryTile(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(TrilooShapes.Sm)
                     .background(accent.copy(alpha = if (isSelected) 0.22f else 0.14f)),
                 contentAlignment = Alignment.Center
             ) {

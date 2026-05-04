@@ -374,7 +374,7 @@ private fun SettingsSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = TrilooShapes.Md,
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(content = content)
@@ -527,7 +527,7 @@ private fun <T> SettingsChoiceSheet(
                         .clickable {
                             dismissAfter { onSelect(option) }
                         },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {

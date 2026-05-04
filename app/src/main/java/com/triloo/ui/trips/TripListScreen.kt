@@ -199,22 +199,19 @@ private fun TripListContent(
             }
         }
         
-        // Ближайшие поездки.
+        // Ближайшие поездки. Горизонтальный список без обрезания: пользователь
+        // прокручивает свайпом, отдельного «show all» экрана пока нет.
         if (uiState.upcomingTrips.isNotEmpty()) {
             item {
-                SectionHeader(
-                    title = "Предстоящие",
-                    action = if (uiState.upcomingTrips.size > 3) "Все" else null,
-                    onAction = { /* Показать все. */ }
-                )
+                SectionHeader(title = "Предстоящие")
             }
-            
+
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    itemsIndexed(uiState.upcomingTrips.take(5)) { index, trip ->
+                    itemsIndexed(uiState.upcomingTrips) { index, trip ->
                         UpcomingTripCard(
                             trip = trip,
                             onClick = { onTripClick(trip.id) },
@@ -228,14 +225,15 @@ private fun TripListContent(
             }
         }
         
-        // Прошедшие поездки.
+        // Прошедшие поездки. LazyColumn рендерит их лениво — список можно
+        // показывать целиком, без клиентской обрезки.
         if (uiState.pastTrips.isNotEmpty()) {
             item {
                 SectionHeader(title = "Прошедшие")
             }
-            
+
             itemsIndexed(
-                items = uiState.pastTrips.take(10),
+                items = uiState.pastTrips,
                 key = { _, trip -> trip.id }
             ) { index, trip ->
                 PastTripCard(
@@ -269,7 +267,7 @@ private fun CurrentTripCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = TrilooShapes.Lg,
     ) {
         Box(
             modifier = Modifier
@@ -308,7 +306,7 @@ private fun CurrentTripCard(
                     
                     // Счётчик оставшихся дней.
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = TrilooShapes.Md,
                         color = Color.White.copy(alpha = 0.2f)
                     ) {
                         Column(
@@ -370,7 +368,7 @@ private fun QuickStat(
 ) {
     Surface(
         modifier = modifier.height(QuickStatHeight),
-        shape = RoundedCornerShape(12.dp),
+        shape = TrilooShapes.Sm,
         color = Color.White.copy(alpha = 0.15f)
     ) {
         Row(
@@ -536,7 +534,7 @@ private fun PastTripCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 ),
-            shape = RoundedCornerShape(16.dp),
+            shape = TrilooShapes.Md,
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ) {
             Row(
@@ -547,7 +545,7 @@ private fun PastTripCard(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(TrilooShapes.Sm)
                         .background(Slate200),
                     contentAlignment = Alignment.Center
                 ) {
@@ -734,7 +732,7 @@ private fun CreateTripTypeItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = TrilooShapes.Sm,
                 color = iconBackground
             ) {
                 Icon(
@@ -785,7 +783,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
                     .padding(horizontal = 20.dp)
                     .fillMaxWidth()
                     .height(220.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(TrilooShapes.Lg)
                     .shimmerEffect()
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -806,7 +804,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .width(UpcomingCardWidth)
                             .height(UpcomingCardMinHeight)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(TrilooShapes.Md)
                             .shimmerEffect()
                     )
                 }
@@ -824,7 +822,7 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
                     .padding(horizontal = 20.dp, vertical = 6.dp)
                     .fillMaxWidth()
                     .height(80.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(TrilooShapes.Md)
                     .shimmerEffect()
             )
         }

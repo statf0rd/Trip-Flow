@@ -147,7 +147,7 @@ fun SignInContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -181,7 +181,7 @@ fun SignInContent(
                     onDone = { focusManager.clearFocus() }
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
             
             TextButton(
@@ -202,7 +202,7 @@ fun SignInContent(
                 exit = TrilooMotion.exitShrink()
             ) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = ErrorLight,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -363,7 +363,7 @@ fun SignUpContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -385,7 +385,7 @@ fun SignUpContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp)
+                shape = TrilooShapes.Sm
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -416,7 +416,7 @@ fun SignUpContent(
                     imeAction = ImeAction.Next
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = TrilooShapes.Sm,
                 supportingText = {
                     Text("Минимум 6 символов")
                 }
@@ -445,7 +445,7 @@ fun SignUpContent(
                     onDone = { focusManager.clearFocus() }
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = TrilooShapes.Sm,
                 isError = confirmPassword.isNotEmpty() && password != confirmPassword,
                 supportingText = {
                     if (confirmPassword.isNotEmpty() && password != confirmPassword) {
@@ -470,7 +470,7 @@ fun SignUpContent(
             authState.error?.let { error ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = ErrorLight,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -671,7 +671,7 @@ fun ForgotPasswordContent(
                             imeAction = ImeAction.Done
                         ),
                         singleLine = true,
-                        shape = RoundedCornerShape(14.dp)
+                        shape = TrilooShapes.Sm
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))

@@ -446,7 +446,7 @@ private fun TrilooTabRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     ) {
         BoxWithConstraints(
@@ -468,12 +468,12 @@ private fun TrilooTabRow(
                     .offset(x = indicatorOffset)
                     .width(tabWidth)
                     .height(rowHeight)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(TrilooShapes.Sm)
                     .background(MaterialTheme.colorScheme.surface)
                     .border(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = TrilooShapes.Sm
                     )
             )
             Row(

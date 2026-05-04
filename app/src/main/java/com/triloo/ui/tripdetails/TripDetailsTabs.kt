@@ -174,7 +174,7 @@ private fun OptimizeRouteBanner(
     onOptimizeRoute: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = TrilooShapes.Md,
         color = TealSubtle,
         border = BorderStroke(1.dp, TealSecondary.copy(alpha = 0.35f))
     ) {
@@ -219,7 +219,7 @@ private fun OptimizeRouteBanner(
                     containerColor = TealSecondary,
                     contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = TrilooShapes.Sm,
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
@@ -313,9 +313,9 @@ private fun DayCard(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(TrilooShapes.Sm)
                             .clickable(onClick = onAddPlace),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = TrilooShapes.Sm,
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                     ) {
                         Row(
@@ -536,7 +536,7 @@ private fun TimelineGapRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = blockHeight),
-            shape = RoundedCornerShape(14.dp),
+            shape = TrilooShapes.Sm,
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
         ) {
             Row(
@@ -683,9 +683,9 @@ private fun TimelineEventCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(TrilooShapes.Md)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
@@ -699,7 +699,7 @@ private fun TimelineEventCard(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(TrilooShapes.Sm)
                             .background(color = place.category.color.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1014,7 +1014,7 @@ fun MapTab(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                shape = RoundedCornerShape(28.dp),
+                shape = TrilooShapes.featureCard,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             ) {
                 Column(
@@ -1032,13 +1032,13 @@ fun MapTab(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Настоящая карта временно отключена",
+                        text = "Карта временно недоступна",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Yandex MapKit отклоняет текущий API ключ. Вкладка остаётся в безопасном режиме, чтобы приложение не падало.",
+                        text = "Места и маршрут уже сохранены — мы покажем их на карте, как только починим интеграцию. Расходы и план остаются доступны.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1057,7 +1057,7 @@ fun MapTab(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 20.dp),
-                shape = RoundedCornerShape(18.dp),
+                shape = TrilooShapes.Md,
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
@@ -1128,7 +1128,7 @@ fun MapTab(
                 bannerText?.let { text ->
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = TrilooShapes.Sm,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                     ) {
                         Row(
@@ -1181,7 +1181,7 @@ fun MapTab(
             routeDetails?.let { details ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = TrilooShapes.Sm,
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                 ) {
                     Text(
@@ -1218,7 +1218,7 @@ fun MapTab(
             }
             if (categories.isNotEmpty()) {
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = TrilooShapes.Md,
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                     shadowElevation = 8.dp
                 ) {
@@ -1281,7 +1281,7 @@ private fun InfoChip(
     text: String
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = TrilooShapes.Sm,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
     ) {
         Row(
@@ -1379,7 +1379,7 @@ private fun RoutePlanningCard(
     onApplySuggestedTravelMode: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
     ) {
         Column(
@@ -1435,7 +1435,7 @@ private fun RecommendationsCard(
     recommendations: List<PlaceRecommendation>
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
         shadowElevation = 8.dp
     ) {
@@ -1465,7 +1465,7 @@ private fun RecommendationItem(
 ) {
     Surface(
         modifier = Modifier.width(228.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     ) {
         Column(
@@ -1491,7 +1491,7 @@ private fun RecommendationItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(999.dp),
+                    shape = TrilooShapes.pill,
                     color = CoralSubtle
                 ) {
                     Text(
@@ -1683,7 +1683,7 @@ private fun ExpenseSummaryCard(
     expenseCount: Int
 ) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Row(
@@ -1738,7 +1738,7 @@ private fun BalancesCard(
     balances: List<Balance>
 ) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     ) {
         Column(
@@ -1801,7 +1801,7 @@ private fun ExpenseItem(
     
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surface,
         onClick = onClick
     ) {
@@ -1813,7 +1813,7 @@ private fun ExpenseItem(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(TrilooShapes.Sm)
                     .background(Color(expense.category.colorHex).copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -1855,7 +1855,7 @@ private fun ExpenseItem(
                 if (expense.splitType != SplitType.PAYER_ONLY) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
-                        shape = RoundedCornerShape(999.dp),
+                        shape = TrilooShapes.pill,
                         color = if (expense.isSettled) {
                             TealSecondary.copy(alpha = 0.14f)
                         } else {
@@ -1912,10 +1912,10 @@ private fun ExpenseItem(
             
             Spacer(modifier = Modifier.width(8.dp))
             
-            // Кнопка удаления.
+            // Кнопка удаления — touch target 48dp (a11y), иконка визуально 18dp.
             IconButton(
                 onClick = { showDeleteDialog = true },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,

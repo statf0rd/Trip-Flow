@@ -250,7 +250,7 @@ private fun CreateTripContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = TrilooShapes.Sm,
                         shadowElevation = 4.dp,
                         color = MaterialTheme.colorScheme.surface
                     ) {
@@ -312,7 +312,7 @@ private fun CreateTripContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showDestinationMap = !showDestinationMap },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = TrilooShapes.Sm,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                 ) {
                     Row(
@@ -356,7 +356,7 @@ private fun CreateTripContent(
                             .nestedScroll(object : NestedScrollConnection {
                                 override fun onPreScroll(available: Offset, source: NestedScrollSource) = available
                             }),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = TrilooShapes.Sm
                     ) {
                         Box {
                             com.triloo.feature.map.MapPickerView(
@@ -485,7 +485,7 @@ private fun CreateTripContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = TrilooShapes.Sm,
                         shadowElevation = 4.dp,
                         color = MaterialTheme.colorScheme.surface
                     ) {
@@ -637,7 +637,7 @@ private fun TrilooTextField(
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        shape = TrilooShapes.Sm,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -666,9 +666,9 @@ private fun DatePickerField(
     
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(TrilooShapes.Sm)
             .clickable { showPicker = true },
-        shape = RoundedCornerShape(14.dp),
+        shape = TrilooShapes.Sm,
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
@@ -770,9 +770,9 @@ private fun CurrencySelector(
             Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(TrilooShapes.Sm)
                     .clickable { onCurrencySelected(code) },
-                shape = RoundedCornerShape(12.dp),
+                shape = TrilooShapes.Sm,
                 color = if (isSelected) CoralSubtle else MaterialTheme.colorScheme.surfaceVariant,
                 border = if (isSelected) {
                     androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
@@ -871,9 +871,9 @@ private fun HotelRecommendationCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(TrilooShapes.Md)
             .clickable(onClick = onSelect),
-        shape = RoundedCornerShape(18.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
@@ -991,7 +991,7 @@ private fun HotelMetaChip(
     tint: Color
 ) {
     Surface(
-        shape = RoundedCornerShape(999.dp),
+        shape = TrilooShapes.pill,
         color = tint.copy(alpha = 0.12f)
     ) {
         Row(
@@ -1022,7 +1022,7 @@ private fun SelectedHotelCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = TrilooShapes.Md,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
@@ -1036,7 +1036,7 @@ private fun SelectedHotelCard(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(TrilooShapes.Sm)
                     .background(CoralSubtle),
                 contentAlignment = Alignment.Center
             ) {
