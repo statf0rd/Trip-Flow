@@ -82,20 +82,20 @@ private val DarkColorScheme = darkColorScheme(
     // Более светлый коралл для тёмной темы.
     primary = CoralLight,
     onPrimary = Slate900,
-    primaryContainer = CoralDark,
-    onPrimaryContainer = CoralSubtle,
+    primaryContainer = CoralContainerDark,
+    onPrimaryContainer = CoralLight,
 
     // Бирюзовый блок.
     secondary = TealLight,
     onSecondary = Slate900,
-    secondaryContainer = TealDark,
-    onSecondaryContainer = TealSubtle,
+    secondaryContainer = TealContainerDark,
+    onSecondaryContainer = TealLight,
 
     // Tertiary — золотой.
     tertiary = GoldenLight,
     onTertiary = Slate900,
-    tertiaryContainer = GoldenDark,
-    onTertiaryContainer = GoldenSubtle,
+    tertiaryContainer = GoldenContainerDark,
+    onTertiaryContainer = GoldenLight,
 
     // Фон и поверхности.
     background = DarkBackground,
@@ -112,8 +112,8 @@ private val DarkColorScheme = darkColorScheme(
     // Ошибки.
     error = Color(0xFFF87171), // Более светлый красный для тёмной темы.
     onError = Slate900,
-    errorContainer = Color(0xFF7F1D1D),
-    onErrorContainer = ErrorLight,
+    errorContainer = ErrorContainerDark,
+    onErrorContainer = ErrorOnContainerDark,
 
     // Инверсные цвета.
     inverseSurface = Slate200,

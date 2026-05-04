@@ -181,13 +181,13 @@ fun TripDetailsScreen(
                         0 -> PlanTab(
                             days = uiState.days,
                             places = uiState.places,
-                            onDayClick = { /* Разворачивание дня обрабатывается внутри карточки. */ },
                             onPlaceClick = { placeId -> onNavigateToPlaceDetails(placeId) },
                             onEditPlace = { placeId -> onNavigateToEditPlace(placeId) },
-                            onAddPlace = { dayId -> 
-                                onNavigateToAddPlace(tripId, dayId) 
+                            onAddPlace = { dayId ->
+                                onNavigateToAddPlace(tripId, dayId)
                             },
-                            onDeletePlace = { placeId -> viewModel.deletePlace(placeId) }
+                            onDeletePlace = { placeId -> viewModel.deletePlace(placeId) },
+                            onOptimizeRoute = { viewModel.optimizeRoute() }
                         )
                         1 -> MapTab(
                             trip = uiState.trip!!,
@@ -589,7 +589,6 @@ private fun TripDetailsScreenPreview() {
                 PlanTab(
                     days = uiState.days,
                     places = uiState.places,
-                    onDayClick = {},
                     onPlaceClick = {},
                     onEditPlace = {},
                     onAddPlace = {},

@@ -189,6 +189,8 @@ private fun TripListContent(
                 SectionHeader(title = "Сейчас в поездке")
                 CurrentTripCard(
                     trip = trip,
+                    placeCount = uiState.currentTripPlaceCount,
+                    totalSpent = uiState.currentTripTotalSpent,
                     onClick = { onTripClick(trip.id) },
                     onLongClick = { onTripLongClick(trip) },
                     modifier = Modifier.padding(horizontal = 20.dp)
@@ -252,6 +254,8 @@ private fun TripListContent(
 @Composable
 private fun CurrentTripCard(
     trip: Trip,
+    placeCount: Int,
+    totalSpent: Double,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -341,13 +345,13 @@ private fun CurrentTripCard(
                     )
                     QuickStat(
                         icon = Icons.Rounded.Place,
-                        value = "0",
-                        label = "мест",
+                        value = placeCount.toString(),
+                        label = pluralizePlaces(placeCount),
                         modifier = Modifier.weight(1f)
                     )
                     QuickStat(
                         icon = Icons.Rounded.Payments,
-                        value = "₽0",
+                        value = formatCurrentTripAmount(totalSpent, trip.baseCurrency),
                         label = "потрачено",
                         modifier = Modifier.weight(1f)
                     )
@@ -666,13 +670,13 @@ private fun CreateTripTypeSheet(
             .padding(horizontal = 20.dp)
     ) {
         Text(
-            text = "Создать путешествие",
+            text = "Что хотите сделать?",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Выберите формат: личная или групповая поездка",
+            text = "Создайте свою поездку или присоединитесь к чужой по коду",
             style = MaterialTheme.typography.bodySmall,
             color = Slate600
         )
@@ -699,14 +703,16 @@ private fun CreateTripTypeSheet(
             onClick = onCreateGroupTrip
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        TextButton(
-            onClick = onJoinGroupTrip,
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text(text = "У меня есть код — присоединиться")
-        }
+        CreateTripTypeItem(
+            icon = Icons.Rounded.QrCodeScanner,
+            iconTint = GoldenDark,
+            iconBackground = GoldenSubtle,
+            title = "Присоединиться по коду",
+            description = "Введите код или отсканируйте QR от организатора",
+            onClick = onJoinGroupTrip
+        )
     }
 }
 
@@ -846,6 +852,38 @@ private fun pluralizeDays(count: Int): String {
         count % 10 in 2..4 -> "дня осталось"
         else -> "дней осталось"
     }
+}
+
+private fun pluralizePlaces(count: Int): String {
+    return when {
+        count % 100 in 11..19 -> "мест"
+        count % 10 == 1 -> "место"
+        count % 10 in 2..4 -> "места"
+        else -> "мест"
+    }
+}
+
+/**
+ * Компактный формат суммы для QuickStat: 1280 → «1.3K», 14500 → «14.5K».
+ * Символ валюты подбирается из распространённых ISO-кодов с фолбэком на код.
+ */
+private fun formatCurrentTripAmount(amount: Double, currency: String): String {
+    val symbol = when (currency.uppercase(Locale.US)) {
+        "RUB" -> "₽"
+        "USD" -> "$"
+        "EUR" -> "€"
+        "TRY" -> "₺"
+        "THB" -> "฿"
+        else -> currency
+    }
+    val formatted = when {
+        amount >= 1_000_000 -> String.format(Locale.US, "%.1fM", amount / 1_000_000)
+        amount >= 10_000 -> String.format(Locale.US, "%.1fK", amount / 1_000)
+        amount >= 1_000 -> String.format(Locale.US, "%.1fK", amount / 1_000)
+        amount > 0 -> String.format(Locale.US, "%.0f", amount)
+        else -> "0"
+    }
+    return "$symbol$formatted"
 }
 
 private fun getDestinationEmoji(destination: String): String {

@@ -13,9 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.pager.PageSize
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
@@ -55,8 +52,6 @@ import java.time.ZoneId
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.absoluteValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 
 /**
@@ -311,7 +306,7 @@ private fun AddExpenseContent(
                     color = Slate700
                 )
 
-                ExpenseCategoryCarousel(
+                ExpenseCategoryGrid(
                     categories = ExpenseCategory.entries.toList(),
                     selectedCategory = uiState.category,
                     onCategoryChange = onCategoryChange
@@ -940,104 +935,95 @@ private fun ExpenseSplitSection(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ExpenseCategoryCarousel(
+private fun ExpenseCategoryGrid(
     categories: List<ExpenseCategory>,
     selectedCategory: ExpenseCategory,
     onCategoryChange: (ExpenseCategory) -> Unit
 ) {
-    val initialPage = categories.indexOf(selectedCategory).coerceAtLeast(0)
-    val pagerState = rememberPagerState(
-        initialPage = initialPage,
-        pageCount = { categories.size }
-    )
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(pagerState.currentPage) {
-        categories.getOrNull(pagerState.currentPage)?.let { category ->
-            if (category != selectedCategory) {
-                onCategoryChange(category)
+    val rows = categories.chunked(3)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                row.forEach { category ->
+                    ExpenseCategoryTile(
+                        category = category,
+                        isSelected = category == selectedCategory,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCategoryChange(category) }
+                    )
+                }
+                // Если в последней строке меньше трёх элементов — добиваем пустыми
+                // weight'ами, чтобы плитки сохранили одинаковый размер.
+                repeat(3 - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }
+}
 
-    LaunchedEffect(selectedCategory) {
-        val target = categories.indexOf(selectedCategory)
-        if (target >= 0 && target != pagerState.currentPage) {
-            pagerState.scrollToPage(target)
-        }
-    }
-
-    VerticalPager(
-        state = pagerState,
-        pageSize = PageSize.Fixed(56.dp),
-        contentPadding = PaddingValues(vertical = 20.dp),
-        beyondViewportPageCount = 2,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(240.dp)
-    ) { page ->
-        val category = categories[page]
-        val isSelected = category == selectedCategory
-        val pageOffset = (
-            (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-        ).absoluteValue
-        val scale = 0.92f + (1f - pageOffset.coerceIn(0f, 1f)) * 0.08f
-        val alpha = 0.6f + (1f - pageOffset.coerceIn(0f, 1f)) * 0.4f
-        val accent = Color(category.colorHex)
-
-        Surface(
+@Composable
+private fun ExpenseCategoryTile(
+    category: ExpenseCategory,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val accent = Color(category.colorHex)
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.02f else 1f,
+        animationSpec = TrilooMotion.selectSpring,
+        label = "categoryTileScale"
+    )
+    Surface(
+        modifier = modifier
+            .heightIn(min = 88.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) accent.copy(alpha = 0.16f) else Slate100,
+        border = BorderStroke(
+            width = if (isSelected) 1.5.dp else 1.dp,
+            color = if (isSelected) accent.copy(alpha = 0.55f) else Slate200
+        )
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                }
-                .clickable {
-                    coroutineScope.launch {
-                        pagerState.animateScrollToPage(page)
-                    }
-                },
-            shape = RoundedCornerShape(18.dp),
-            color = if (isSelected) accent.copy(alpha = 0.18f) else Slate100,
-            border = if (isSelected) BorderStroke(1.dp, accent.copy(alpha = 0.6f)) else null
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accent.copy(alpha = if (isSelected) 0.22f else 0.14f)),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = category.icon,
                     contentDescription = category.displayName,
-                    tint = Color(category.colorHex),
-                    modifier = Modifier.size(28.dp)
+                    tint = accent,
+                    modifier = Modifier.size(20.dp)
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = category.displayName,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isSelected) accent else Slate800
-                    )
-                    Text(
-                        text = if (isSelected) "Выбрано" else "Прокрутите",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate500
-                    )
-                }
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = accent
-                    )
-                }
             }
+            Text(
+                text = category.displayName,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isSelected) accent else Slate800,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
     }
 }

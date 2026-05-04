@@ -64,6 +64,9 @@ val MarkerFood = CoralPrimary
 val MarkerAttraction = CoralPrimary
 val MarkerNature = TealSecondary
 val MarkerFriend = TealSecondary
+val MarkerParticipant = Color(0xFF2563EB)     // Синий маркер участника группы.
+val MarkerDestination = TealSecondary         // Маркер места назначения.
+val MarkerRecommendation = GoldenAccent       // Маркер AI-рекомендации.
 
 // DARK MODE — специальные цвета тёмной темы.
 val DarkBackground = Color(0xFF0D1117)        // Глубокий тёмный фон.
@@ -72,3 +75,12 @@ val DarkSurfaceVariant = Color(0xFF21262D)    // Карточки.
 val DarkBorder = Color(0xFF30363D)            // Границы.
 val DarkTextPrimary = Color(0xFFF0F6FC)       // Основной текст.
 val DarkTextSecondary = Color(0xFF8B949E)     // Вторичный текст.
+
+// DARK MODE CONTAINERS — приглушённые тёмные оттенки палитры с гарантированным
+// контрастом для светлого текста. Заменяют использование CoralDark/TealDark/GoldenDark
+// в *Container ролях, на которых alpha-12% «*Subtle» текст был нечитаем.
+val CoralContainerDark = Color(0xFF5C2A22)    // Контейнер primary в тёмной теме.
+val TealContainerDark = Color(0xFF0F4640)     // Контейнер secondary в тёмной теме.
+val GoldenContainerDark = Color(0xFF5A4416)   // Контейнер tertiary в тёмной теме.
+val ErrorContainerDark = Color(0xFF5C1F1F)    // Контейнер error в тёмной теме.
+val ErrorOnContainerDark = Color(0xFFFEE2E2)  // Светлый текст на ErrorContainerDark.

@@ -126,11 +126,11 @@ private fun buildDaySchedules(
 fun PlanTab(
     days: List<TripDay>,
     places: List<Place>,
-    onDayClick: (String) -> Unit,
     onPlaceClick: (String) -> Unit,
     onEditPlace: (String) -> Unit = {},
     onAddPlace: (String) -> Unit,
-    onDeletePlace: (String) -> Unit = {}
+    onDeletePlace: (String) -> Unit = {},
+    onOptimizeRoute: () -> Unit = {}
 ) {
     if (days.isEmpty()) {
         EmptyState(
@@ -143,17 +143,22 @@ fun PlanTab(
         val schedules = remember(sortedDays, places) {
             buildDaySchedules(sortedDays, places)
         }
+        val showOptimizeBanner = remember(places) { places.size >= 3 }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (showOptimizeBanner) {
+                item(key = "optimize-banner") {
+                    OptimizeRouteBanner(onOptimizeRoute = onOptimizeRoute)
+                }
+            }
             items(sortedDays, key = { it.id }) { day ->
                 val schedule = schedules[day.id] ?: DaySchedule()
                 DayCard(
                     day = day,
                     schedule = schedule,
-                    onDayClick = { onDayClick(day.id) },
                     onPlaceClick = onPlaceClick,
                     onEditPlace = onEditPlace,
                     onAddPlace = { onAddPlace(day.id) },
@@ -165,21 +170,83 @@ fun PlanTab(
 }
 
 @Composable
+private fun OptimizeRouteBanner(
+    onOptimizeRoute: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = TealSubtle,
+        border = BorderStroke(1.dp, TealSecondary.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(TealSecondary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = TealDark,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Оптимизировать маршрут",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Triloo соберёт места по дням так, чтобы вы меньше ездили и больше успевали.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FilledTonalButton(
+                onClick = onOptimizeRoute,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = TealSecondary,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Запустить",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DayCard(
     day: TripDay,
     schedule: DaySchedule,
-    onDayClick: () -> Unit,
     onPlaceClick: (String) -> Unit,
     onEditPlace: (String) -> Unit,
     onAddPlace: () -> Unit,
     onDeletePlace: (String) -> Unit
 ) {
-    val dateFormatter = remember { 
-        DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag("ru")) 
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag("ru"))
     }
     var isExpanded by remember { mutableStateOf(true) }
-    
-    TrilooCard(onClick = onDayClick) {
+
+    TrilooCard(onClick = { isExpanded = !isExpanded }) {
         // Заголовок дня.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -871,7 +938,7 @@ fun MapTab(
                         latitude = point.latitude,
                         longitude = point.longitude,
                         label = "H",
-                        colorArgb = Color(0xFF7C3AED).toArgb(),
+                        colorArgb = MarkerHotel.toArgb(),
                         title = trip.hotelName ?: "Отель",
                         scale = 1.02f,
                         zIndex = 3f
@@ -884,7 +951,7 @@ fun MapTab(
                         latitude = marker.latitude,
                         longitude = marker.longitude,
                         label = "D",
-                        colorArgb = TealSecondary.toArgb(),
+                        colorArgb = MarkerDestination.toArgb(),
                         title = marker.name,
                         scale = 1.02f,
                         zIndex = 3f
@@ -899,7 +966,7 @@ fun MapTab(
                         latitude = point.latitude,
                         longitude = point.longitude,
                         label = label,
-                        colorArgb = Color(0xFF2563EB).toArgb(),
+                        colorArgb = MarkerParticipant.toArgb(),
                         title = participant.displayName,
                         scale = 0.92f,
                         zIndex = 4f
@@ -912,7 +979,7 @@ fun MapTab(
                         latitude = recommendation.latitude,
                         longitude = recommendation.longitude,
                         label = "R${index + 1}",
-                        colorArgb = GoldenAccent.toArgb(),
+                        colorArgb = MarkerRecommendation.toArgb(),
                         title = recommendation.name,
                         scale = 0.88f,
                         zIndex = 2.5f
@@ -2078,7 +2145,6 @@ private fun PlanTabPreview() {
         PlanTab(
             days = TripDetailsPreviewData.days,
             places = TripDetailsPreviewData.places,
-            onDayClick = { _ -> },
             onPlaceClick = { _ -> },
             onEditPlace = { _ -> },
             onAddPlace = { _ -> },
@@ -2094,7 +2160,6 @@ private fun DayCardPreview() {
         DayCard(
             day = TripDetailsPreviewData.days.first(),
             schedule = TripDetailsPreviewData.day1Schedule,
-            onDayClick = { },
             onPlaceClick = { _ -> },
             onEditPlace = { _ -> },
             onAddPlace = { },

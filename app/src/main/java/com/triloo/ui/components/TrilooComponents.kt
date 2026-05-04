@@ -90,7 +90,7 @@ fun TrilooButton(
             disabledContainerColor = colorScheme.surfaceVariant,
             disabledContentColor = colorScheme.onSurfaceVariant
         ),
-        shape = RoundedCornerShape(14.dp),
+        shape = TrilooShapes.button,
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
     ) {
         AnimatedContent(
@@ -192,11 +192,11 @@ fun TrilooFab(
             }
             .shadow(
                 elevation = 16.dp,
-                shape = RoundedCornerShape(18.dp),
+                shape = TrilooShapes.card,
                 ambientColor = colorScheme.primary.copy(alpha = 0.3f),
                 spotColor = colorScheme.primary.copy(alpha = 0.3f)
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = TrilooShapes.card,
         containerColor = colorScheme.primary,
         contentColor = colorScheme.onPrimary,
         interactionSource = interactionSource
@@ -249,7 +249,7 @@ fun TrilooCard(
         modifier = modifier
             .scale(scale)
             .then(clickableModifier),
-        shape = RoundedCornerShape(20.dp),
+        shape = TrilooShapes.card,
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = elevation,
         tonalElevation = 1.dp
@@ -300,7 +300,7 @@ fun TrilooChip(
                     Modifier.clickable(onClick = onClick)
                 } else Modifier
             ),
-        shape = RoundedCornerShape(12.dp),
+        shape = TrilooShapes.chip,
         color = animatedColor
     ) {
         Row(

@@ -263,117 +263,36 @@ private fun SettingsContent(
     }
 
     if (showThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text("Тема") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeMode.entries.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onThemeSelected(mode)
-                                    showThemeDialog = false
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = uiState.themeMode == mode,
-                                onClick = {
-                                    onThemeSelected(mode)
-                                    showThemeDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = mode.displayName)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) {
-                    Text("Закрыть")
-                }
-            }
+        SettingsChoiceSheet(
+            title = "Тема",
+            options = ThemeMode.entries.toList(),
+            selected = uiState.themeMode,
+            displayName = { it.displayName },
+            onSelect = onThemeSelected,
+            onDismiss = { showThemeDialog = false }
         )
     }
 
     if (showCurrencyDialog) {
         val currencies = buildCurrencyOptions(uiState.defaultCurrency)
-        AlertDialog(
-            onDismissRequest = { showCurrencyDialog = false },
-            title = { Text("Валюта по умолчанию") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    currencies.forEach { currency ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onCurrencySelected(currency)
-                                    showCurrencyDialog = false
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = uiState.defaultCurrency == currency,
-                                onClick = {
-                                    onCurrencySelected(currency)
-                                    showCurrencyDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = currency)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCurrencyDialog = false }) {
-                    Text("Закрыть")
-                }
-            }
+        SettingsChoiceSheet(
+            title = "Валюта по умолчанию",
+            options = currencies,
+            selected = uiState.defaultCurrency,
+            displayName = { it },
+            onSelect = onCurrencySelected,
+            onDismiss = { showCurrencyDialog = false }
         )
     }
 
     if (showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLanguageDialog = false },
-            title = { Text("Язык") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppLanguage.entries.forEach { language ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onLanguageSelected(language)
-                                    showLanguageDialog = false
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = uiState.language == language,
-                                onClick = {
-                                    onLanguageSelected(language)
-                                    showLanguageDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = language.displayName)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
-                    Text("Закрыть")
-                }
-            }
+        SettingsChoiceSheet(
+            title = "Язык",
+            options = AppLanguage.entries.toList(),
+            selected = uiState.language,
+            displayName = { it.displayName },
+            onSelect = onLanguageSelected,
+            onDismiss = { showLanguageDialog = false }
         )
     }
 
@@ -558,6 +477,91 @@ private fun SettingsSwitchItem(
                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> SettingsChoiceSheet(
+    title: String,
+    options: List<T>,
+    selected: T,
+    displayName: (T) -> String,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    fun dismissAfter(action: () -> Unit) {
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
+            action()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            options.forEach { option ->
+                val isSelected = option == selected
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            dismissAfter { onSelect(option) }
+                        },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = displayName(option),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
