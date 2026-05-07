@@ -84,6 +84,35 @@ class AddPlaceViewModel @Inject constructor(
             // Заранее загружаем информацию о дне для заголовка экрана.
             _day.value = tripRepository.getTripDayById(dayId)
 
+            // Координаты направления поездки нужны и для центрирования карты,
+            // и для bias-поиска подсказок: пользователь добавляет места внутри
+            // конкретного города, не из Москвы.
+            val trip = tripRepository.getTripById(tripId)
+            if (trip?.destinationLatitude != null && trip.destinationLongitude != null) {
+                _uiState.update { state ->
+                    state.copy(
+                        tripDestinationLatitude = trip.destinationLatitude,
+                        tripDestinationLongitude = trip.destinationLongitude
+                    )
+                }
+            }
+
+            // Уже добавленные точки всей поездки — для контекстных маркеров
+            // на map-пикере. Текущее редактируемое место исключаем (его пин
+            // — это центральный crosshair).
+            val tripPlaces = runCatching { tripRepository.getPlacesByTrip(tripId) }
+                .getOrDefault(emptyList())
+            _uiState.update { state ->
+                state.copy(
+                    existingPlaces = tripPlaces
+                        .asSequence()
+                        .filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                        .filter { it.id != placeId }
+                        .map { ExistingTripPlace(it.id, it.name, it.latitude, it.longitude) }
+                        .toList()
+                )
+            }
+
             val existing = tripRepository.getPlacesByDay(dayId)
             val lockedFormat = existing.firstNotNullOfOrNull { place ->
                 place.scheduledTime?.let { detectTimeFormat(it) }
@@ -124,7 +153,12 @@ class AddPlaceViewModel @Inject constructor(
     private suspend fun searchPlaces(query: String) {
         _uiState.update { it.copy(isSearching = true) }
         try {
-            val results = placesService.searchPlaces(query)
+            val state = _uiState.value
+            val results = placesService.searchPlaces(
+                query = query,
+                latitude = state.tripDestinationLatitude,
+                longitude = state.tripDestinationLongitude
+            )
             _suggestions.value = results
         } catch (e: Exception) {
             _suggestions.value = emptyList()
@@ -419,6 +453,9 @@ data class AddPlaceUiState(
     val address: String = "",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
+    val tripDestinationLatitude: Double? = null,
+    val tripDestinationLongitude: Double? = null,
+    val existingPlaces: List<ExistingTripPlace> = emptyList(),
     val category: PlaceCategory = PlaceCategory.ATTRACTION,
     val time: String = "",
     val timeFormat: TimeFormat = TimeFormat.HOURS_24,
@@ -446,6 +483,17 @@ data class AddPlaceUiState(
     val hasCoordinates: Boolean
         get() = latitude != 0.0 || longitude != 0.0
 }
+
+/**
+ * Лёгкий снимок места из поездки — нужен только для контекста на map-пикере,
+ * чтобы рендерить маркеры существующих точек, не таща сюда полный data.model.Place.
+ */
+data class ExistingTripPlace(
+    val id: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double
+)
 
 enum class DurationUnit(val label: String) {
     MINUTES("мин"),

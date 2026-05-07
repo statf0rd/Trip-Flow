@@ -401,28 +401,69 @@ private fun formatPriceLevel(priceLevel: Int): String {
 
 private fun openInMaps(context: android.content.Context, place: Place) {
     val query = Uri.encode(place.name)
-    val uri = Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}($query)")
-    val intent = Intent(Intent.ACTION_VIEW, uri)
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
+    // Сначала пробуем системную geo-схему — её перехватывают любые установленные
+    // карты (Google/Yandex/2GIS). Если ни одно приложение не отвечает, падаем на
+    // веб-версию Google Maps; добавляем NEW_TASK на случай не-Activity Context.
+    val geoIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}($query)")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(geoIntent)
+        return
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Нет приложения, обрабатывающего geo: — проваливаемся на веб.
+    }
+
+    val webIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse(
+            "https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}"
+        )
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(webIntent)
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Без браузера и карт делать нечего.
     }
 }
 
 private fun buildRoute(context: android.content.Context, place: Place) {
-    val navigationUri = Uri.parse("google.navigation:q=${place.latitude},${place.longitude}")
-    val navigationIntent = Intent(Intent.ACTION_VIEW, navigationUri)
+    val navigationIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("google.navigation:q=${place.latitude},${place.longitude}")
+    )
         .setPackage("com.google.android.apps.maps")
-    if (navigationIntent.resolveActivity(context.packageManager) != null) {
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
         context.startActivity(navigationIntent)
         return
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Нет Google Maps — пробуем generic geo-route.
     }
 
-    val fallbackUri = Uri.parse(
-        "https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}"
-    )
-    val fallbackIntent = Intent(Intent.ACTION_VIEW, fallbackUri)
-    if (fallbackIntent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(fallbackIntent)
+    // Generic VIEW по google.navigation: подхватят и Yandex Maps/Navigator.
+    val genericNavIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("google.navigation:q=${place.latitude},${place.longitude}")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(genericNavIntent)
+        return
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Падаем на веб-маршрут.
+    }
+
+    val webRouteIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse(
+            "https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}"
+        )
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(webRouteIntent)
+    } catch (_: android.content.ActivityNotFoundException) {
+        // Без карт и без браузера — тупик.
     }
 }
 

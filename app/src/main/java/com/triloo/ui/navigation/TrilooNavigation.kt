@@ -169,34 +169,40 @@ fun TrilooNavHost(
         
         // Настройки.
         composable(Screen.Settings.route) {
-            SettingsScreen(
-                onNavigateBack = {
-                    navController.popBackStack()
-                },
-                onNavigateToGroupTrips = {
-                    navController.navigate(Screen.GroupTrips.route)
-                },
-                onNavigateToAuth = {
-                    navController.navigate(Screen.Auth.route)
-                },
-                onNavigateToPrivacyPolicy = {
-                    navController.navigate(Screen.PrivacyPolicy.route)
-                }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                SettingsScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    },
+                    onNavigateToGroupTrips = {
+                        navController.navigate(Screen.GroupTrips.route)
+                    },
+                    onNavigateToAuth = {
+                        navController.navigate(Screen.Auth.route)
+                    },
+                    onNavigateToPrivacyPolicy = {
+                        navController.navigate(Screen.PrivacyPolicy.route)
+                    }
+                )
+            }
         }
 
         composable(Screen.PrivacyPolicy.route) {
-            PrivacyPolicyScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                PrivacyPolicyScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         // Авторизация.
         composable(Screen.Auth.route) {
-            AuthFlowScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onAuthComplete = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                AuthFlowScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onAuthComplete = { navController.popBackStack() }
+                )
+            }
         }
 
         // Групповые поездки.
@@ -206,21 +212,23 @@ fun TrilooNavHost(
                 ?.getStateFlow("qr_result", null)
             val qrResult = qrResultFlow?.collectAsStateWithLifecycle()?.value
 
-            GroupTripsScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToTrip = { tripId ->
-                    navController.navigate(Screen.TripDetails.createRoute(tripId))
-                },
-                onScanInvite = {
-                    navController.navigate(Screen.QrScanner.createRoute("invite"))
-                },
-                qrResult = qrResult,
-                onConsumeQrResult = {
-                    navController.currentBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("qr_result", null)
-                }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                GroupTripsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToTrip = { tripId ->
+                        navController.navigate(Screen.TripDetails.createRoute(tripId))
+                    },
+                    onScanInvite = {
+                        navController.navigate(Screen.QrScanner.createRoute("invite"))
+                    },
+                    qrResult = qrResult,
+                    onConsumeQrResult = {
+                        navController.currentBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("qr_result", null)
+                    }
+                )
+            }
         }
         
         // Создание поездки.
@@ -243,6 +251,10 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
+            // SwipeBack отключён — на этом экране открывается полноэкранная
+            // Yandex-карта (DestinationMapPicker). Yandex MapView перехватывает
+            // тачи на уровне View, и любая Compose-обёртка с pointerInput
+            // ломает pan/zoom карты. Возврат — кнопка Close в TopAppBar.
             CreateTripScreen(
                 onNavigateBack = {
                     navController.popBackStack()
@@ -254,7 +266,7 @@ fun TrilooNavHost(
                 }
             )
         }
-        
+
         // Детали поездки.
         composable(
             route = Screen.TripDetails.route,
@@ -263,7 +275,10 @@ fun TrilooNavHost(
             )
         ) { backStackEntry ->
             val tripId = backStackEntry.arguments?.getString("tripId") ?: return@composable
-            
+
+            // SwipeBack отключён — на этом экране есть таб «Карта» с Yandex
+            // MapView, чьи pan/zoom-жесты ломаются любой Compose-обёрткой
+            // с pointerInput. Возврат — стрелка в TopAppBar.
             TripDetailsScreen(
                 tripId = tripId,
                 onNavigateBack = {
@@ -301,9 +316,11 @@ fun TrilooNavHost(
             route = Screen.Invite.route,
             arguments = listOf(navArgument("tripId") { type = NavType.StringType })
         ) {
-            InviteScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                InviteScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         // Relay sync.
@@ -311,9 +328,11 @@ fun TrilooNavHost(
             route = Screen.Relay.route,
             arguments = listOf(navArgument("tripId") { type = NavType.StringType })
         ) {
-            RelayScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                RelayScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         // QR-сканер.
@@ -332,18 +351,20 @@ fun TrilooNavHost(
                 else -> "Сканировать QR"
             }
 
-            QrScannerScreen(
-                title = title,
-                onNavigateBack = { navController.popBackStack() },
-                onResult = { result ->
-                    navController.previousBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("qr_result", result)
-                    navController.popBackStack()
-                }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                QrScannerScreen(
+                    title = title,
+                    onNavigateBack = { navController.popBackStack() },
+                    onResult = { result ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("qr_result", result)
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
-        
+
         // Добавление места.
         composable(
             route = Screen.AddPlace.route,
@@ -359,9 +380,11 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
-            AddPlaceScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                AddPlaceScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         // Редактирование места.
@@ -378,9 +401,11 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
-            AddPlaceScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                AddPlaceScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         // Редактирование поездки.
@@ -397,12 +422,13 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
+            // SwipeBack отключён — на EditTrip может открыться карта (см. CreateTrip).
             CreateTripScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onTripCreated = { navController.popBackStack() }
             )
         }
-        
+
         // Детали места.
         composable(
             route = Screen.PlaceDetails.route,
@@ -410,14 +436,16 @@ fun TrilooNavHost(
                 navArgument("placeId") { type = NavType.StringType }
             )
         ) {
-            PlaceDetailsScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { placeId ->
-                    navController.navigate(Screen.EditPlace.createRoute(placeId))
-                }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                PlaceDetailsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEdit = { placeId ->
+                        navController.navigate(Screen.EditPlace.createRoute(placeId))
+                    }
+                )
+            }
         }
-        
+
         // Добавление расхода.
         composable(
             route = Screen.AddExpense.route,
@@ -432,11 +460,13 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
-            AddExpenseScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                AddExpenseScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
-        
+
         // Редактирование расхода.
         composable(
             route = Screen.EditExpense.route,
@@ -452,9 +482,11 @@ fun TrilooNavHost(
                 TrilooMotion.exitBottomSheet()
             }
         ) {
-            AddExpenseScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                AddExpenseScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

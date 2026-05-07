@@ -15,17 +15,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.onFocusChanged
@@ -137,6 +136,7 @@ private fun CreateTripContent(
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val mapEnabled = remember { com.triloo.BuildConfig.APP_MAPKIT_VIEW_ENABLED }
     var isBudgetFieldFocused by remember { mutableStateOf(false) }
+    var showDestinationMap by rememberSaveable { mutableStateOf(false) }
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
 
@@ -154,6 +154,7 @@ private fun CreateTripContent(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -192,23 +193,15 @@ private fun CreateTripContent(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
-            
-            TrilooTextField(
-                value = uiState.name,
-                onValueChange = onNameChange,
-                label = "Название поездки",
-                placeholder = "Отпуск в Турции",
-                leadingIcon = Icons.Rounded.FlightTakeoff,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                )
+
+            // === HERO 1: Куда вы едете? ===
+            Text(
+                text = "Куда вы едете?",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Column {
                 TrilooTextField(
@@ -224,12 +217,19 @@ private fun CreateTripContent(
                                 color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.dp
                             )
-                        } else if (uiState.destinationLatitude != null) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = TealSecondary
-                            )
+                        } else if (mapEnabled) {
+                            // Inline map-pin: открывает полноэкранный picker
+                            IconButton(onClick = { showDestinationMap = true }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Map,
+                                    contentDescription = "Указать на карте",
+                                    tint = if (uiState.destinationLatitude != null) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
                         }
                     },
                     keyboardOptions = KeyboardOptions(
@@ -304,150 +304,119 @@ private fun CreateTripContent(
                 }
             }
 
-            if (mapEnabled) {
-                var showDestinationMap by remember { mutableStateOf(false) }
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showDestinationMap = !showDestinationMap },
-                    shape = TrilooShapes.Sm,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (showDestinationMap) Icons.Rounded.ExpandLess else Icons.Rounded.MyLocation,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = if (showDestinationMap) "Скрыть карту" else "Указать на карте",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        if (uiState.destinationLatitude != null) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                tint = TealSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = showDestinationMap,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .nestedScroll(object : NestedScrollConnection {
-                                override fun onPreScroll(available: Offset, source: NestedScrollSource) = available
-                            }),
-                        shape = TrilooShapes.Sm
-                    ) {
-                        Box {
-                            com.triloo.feature.map.MapPickerView(
-                                modifier = Modifier.fillMaxSize(),
-                                initialCenter = com.triloo.feature.map.MapCoordinate(
-                                    latitude = uiState.destinationLatitude ?: 55.751244,
-                                    longitude = uiState.destinationLongitude ?: 37.618423
-                                ),
-                                initialZoom = if (uiState.destinationLatitude != null) 12f else 5f,
-                                onLocationPicked = onDestinationCoordinatesPicked
-                            )
-                            Icon(
-                                imageVector = Icons.Rounded.Place,
-                                contentDescription = "Метка",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .align(Alignment.Center)
-                            )
-                        }
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "Даты поездки",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+            // Опциональное название — мельче, ниже destination
+            TrilooTextField(
+                value = uiState.name,
+                onValueChange = onNameChange,
+                label = "Название (опционально)",
+                placeholder = "Например: Отпуск в Турции",
+                leadingIcon = Icons.Rounded.FlightTakeoff,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
             )
-            
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // === HERO 2: Когда? ===
+            Text(
+                text = "Когда?",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                DatePickerField(
-                    label = "Начало",
-                    date = uiState.startDate,
-                    onDateSelected = onStartDateChange,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                DatePickerField(
-                    label = "Конец",
-                    date = uiState.endDate,
-                    onDateSelected = onEndDateChange,
-                    minDate = uiState.startDate,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            
-            if (uiState.startDate != null && uiState.endDate != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                val days = java.time.temporal.ChronoUnit.DAYS.between(
-                    uiState.startDate,
-                    uiState.endDate
-                ).toInt() + 1
-                Text(
-                    text = "📅 $days ${pluralizeDays(days)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
+
+            // Единая range-карточка вместо двух отдельных date-полей.
+            DateRangeCard(
+                startDate = uiState.startDate,
+                endDate = uiState.endDate,
+                onRangeSelected = { start, end ->
+                    onStartDateChange(start)
+                    onEndDateChange(end)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // === Базовая валюта — компактно ===
             Text(
                 text = "Базовая валюта",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            CurrencySelector(
+            Spacer(modifier = Modifier.height(10.dp))
+
+            CompactCurrencyRow(
                 selectedCurrency = uiState.baseCurrency,
                 onCurrencySelected = onCurrencyChange
             )
-            
-            Spacer(modifier = Modifier.height(24.dp))
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // === Опциональные доп. параметры (Отель + Бюджет) ===
+            var optionalExpanded by rememberSaveable {
+                mutableStateOf(uiState.hotelName.isNotBlank() || uiState.budgetInput.isNotBlank())
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { optionalExpanded = !optionalExpanded },
+                shape = TrilooShapes.Md,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Дополнительно",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Отель и бюджет",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = if (optionalExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = optionalExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
 
             Column {
                 TrilooTextField(
                     value = uiState.hotelName,
                     onValueChange = onHotelNameChange,
-                    label = "Отель (опционально)",
+                    label = "Отель",
                     placeholder = "Название или адрес отеля",
                     leadingIcon = Icons.Rounded.Hotel,
                     trailingIcon = {
@@ -560,7 +529,7 @@ private fun CreateTripContent(
             TrilooTextField(
                 value = uiState.budgetInput,
                 onValueChange = onBudgetChange,
-                label = "Бюджет (опционально)",
+                label = "Бюджет",
                 placeholder = "100000",
                 leadingIcon = Icons.Rounded.AccountBalanceWallet,
                 suffix = uiState.baseCurrency,
@@ -577,9 +546,11 @@ private fun CreateTripContent(
                     onDone = { focusManager.clearFocus() }
                 )
             )
-            
+                }
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
-            
+
             TrilooButton(
                 text = if (uiState.isEditing) "Сохранить изменения" else "Создать путешествие",
                 onClick = onSaveTrip,
@@ -600,6 +571,225 @@ private fun CreateTripContent(
             onSelect = onHotelRecommendationSelected,
             onOpenWebsite = openWebsite
         )
+    }
+
+        if (showDestinationMap) {
+            BackHandler(enabled = true) { showDestinationMap = false }
+            DestinationMapPicker(
+                initialLatitude = uiState.destinationLatitude,
+                initialLongitude = uiState.destinationLongitude,
+                onLocationPicked = onDestinationCoordinatesPicked,
+                onDismiss = { showDestinationMap = false }
+            )
+        }
+    }
+}
+
+/**
+ * Единая карточка-диапазон дат: открывает Material 3 DateRangePicker одним
+ * тапом и показывает выбранный интервал плюс пилюлю с длительностью.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateRangeCard(
+    startDate: LocalDate?,
+    endDate: LocalDate?,
+    onRangeSelected: (LocalDate, LocalDate) -> Unit
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val rangeFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
+    }
+    val rangeFormatterFull = remember {
+        DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("ru"))
+    }
+
+    val days = if (startDate != null && endDate != null) {
+        java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate).toInt() + 1
+    } else null
+
+    val rangeText = when {
+        startDate != null && endDate != null -> {
+            val sameYear = startDate.year == endDate.year
+            val startStr = if (sameYear) startDate.format(rangeFormatter)
+                else startDate.format(rangeFormatterFull)
+            val endStr = endDate.format(rangeFormatterFull)
+            "$startStr — $endStr"
+        }
+        else -> "Выберите даты поездки"
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showPicker = true },
+        shape = TrilooShapes.Md,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.CalendarMonth,
+                contentDescription = null,
+                tint = if (startDate != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = rangeText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (startDate != null) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                if (days != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = TrilooShapes.pill,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "$days ${pluralizeDays(days)}",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    if (showPicker) {
+        val state = rememberDateRangePickerState(
+            initialSelectedStartDateMillis = startDate?.toEpochDay()?.times(86_400_000L),
+            initialSelectedEndDateMillis = endDate?.toEpochDay()?.times(86_400_000L)
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val s = state.selectedStartDateMillis
+                        val e = state.selectedEndDateMillis
+                        if (s != null && e != null) {
+                            val startLd = java.time.Instant.ofEpochMilli(s)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate()
+                            val endLd = java.time.Instant.ofEpochMilli(e)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate()
+                            onRangeSelected(startLd, endLd)
+                        }
+                        showPicker = false
+                    },
+                    enabled = state.selectedStartDateMillis != null &&
+                        state.selectedEndDateMillis != null
+                ) {
+                    Text("OK", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) {
+                    Text("Отмена")
+                }
+            }
+        ) {
+            DateRangePicker(
+                state = state,
+                title = null,
+                headline = null,
+                showModeToggle = false,
+                modifier = Modifier.heightIn(max = 560.dp),
+                colors = DatePickerDefaults.colors(
+                    selectedDayContainerColor = MaterialTheme.colorScheme.primary,
+                    todayDateBorderColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+    }
+}
+
+/**
+ * Компактная строка чипов выбора валюты: символ + код, активный — заполненный
+ * primary-pill, остальные — прозрачные. Заменяет старые квадратные карточки.
+ */
+@Composable
+private fun CompactCurrencyRow(
+    selectedCurrency: String,
+    onCurrencySelected: (String) -> Unit
+) {
+    val currencies = listOf(
+        "RUB" to "₽",
+        "USD" to "$",
+        "EUR" to "€",
+        "TRY" to "₺",
+        "THB" to "฿",
+        "AED" to "AED"
+    )
+
+    androidx.compose.foundation.lazy.LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(currencies) { (code, symbol) ->
+            val isSelected = selectedCurrency == code
+            Surface(
+                modifier = Modifier.clickable { onCurrencySelected(code) },
+                shape = TrilooShapes.pill,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                },
+                border = if (isSelected) null else androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = symbol,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    Text(
+                        text = code,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -880,16 +1070,21 @@ private fun HotelRecommendationCard(
             color = MaterialTheme.colorScheme.outlineVariant
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+        Column {
+            HotelCardCover(
+                photoUrl = recommendation.photoUrl,
+                hotelName = recommendation.name,
+                sourceLabel = recommendation.source.toLabel(),
+                ratingText = recommendation.rating?.let {
+                    String.format(Locale.US, "%.1f", it)
+                } ?: recommendation.starLevel?.let { "$it★" }
+            )
+
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     Text(
                         text = recommendation.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -902,14 +1097,6 @@ private fun HotelRecommendationCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = recommendation.source.toLabel(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -980,7 +1167,141 @@ private fun HotelRecommendationCard(
                     }
                 }
             }
+            }
         }
+    }
+}
+
+/**
+ * Обложка карточки рекомендации отеля. Если есть photoUrl — показываем
+ * AsyncImage; иначе генерируем стабильный градиент по хешу названия и
+ * крупно рисуем эмодзи ✦ + первую букву отеля. Поверх — pill-чипы с
+ * рейтингом (слева) и источником (справа).
+ */
+@Composable
+private fun HotelCardCover(
+    photoUrl: String?,
+    hotelName: String,
+    sourceLabel: String,
+    ratingText: String?
+) {
+    val gradient = remember(hotelName) { gradientForHotel(hotelName) }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+    ) {
+        if (!photoUrl.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = photoUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            // Дарким верх для контраста pill-ов
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.35f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.25f)
+                            )
+                        )
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(colors = gradient)
+                    )
+            )
+            // Декоративная буква + эмодзи в правом нижнем углу.
+            Text(
+                text = hotelName.firstOrNull()?.uppercase() ?: "🏨",
+                style = MaterialTheme.typography.displayLarge,
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.Center)
+            )
+            Text(
+                text = "🏨",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = 12.dp)
+                    .graphicsLayer { alpha = 0.65f }
+            )
+        }
+
+        // Pill-чипы поверх
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            if (ratingText != null) {
+                Surface(
+                    shape = TrilooShapes.pill,
+                    color = Color.Black.copy(alpha = 0.45f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = GoldenAccent,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = ratingText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.size(0.dp))
+            }
+            Surface(
+                shape = TrilooShapes.pill,
+                color = Color.Black.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = sourceLabel,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Стабильный градиент по хешу названия отеля — каждое имя получает свою
+ * визуальную «обложку», но всегда одну и ту же при перезапуске.
+ */
+private fun gradientForHotel(name: String): List<Color> {
+    val hash = kotlin.math.abs(name.lowercase().hashCode())
+    return when (hash % 5) {
+        0 -> listOf(CoralPrimary, CoralLight)
+        1 -> listOf(TealSecondary, TealLight)
+        2 -> listOf(GoldenAccent, GoldenLight)
+        3 -> listOf(CoralPrimary, GoldenAccent)
+        else -> listOf(TealSecondary, CoralLight)
     }
 }
 
@@ -1110,5 +1431,90 @@ private fun com.triloo.data.accommodation.RecommendationSource.toLabel(): String
     return when (this) {
         com.triloo.data.accommodation.RecommendationSource.AI -> "AI"
         com.triloo.data.accommodation.RecommendationSource.HEURISTIC -> "Geoapify"
+    }
+}
+
+/**
+ * Полноэкранный overlay-карта для выбора координат места назначения.
+ *
+ * Сознательно НЕ Dialog: Yandex MapKit рендерится через SurfaceView, и под
+ * Dialog'овым отдельным Window тач-ивенты для SurfaceView могут не доходить
+ * до карты. Здесь мы рендерим overlay в том же Window, поверх Scaffold'а
+ * формы, что даёт картe полноценные pan/zoom/tap.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DestinationMapPicker(
+    initialLatitude: Double?,
+    initialLongitude: Double?,
+    onLocationPicked: (Double, Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "Выберите место",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Двигайте карту, чтобы поставить метку в нужной точке",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Закрыть"
+                        )
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "Готово",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                com.triloo.feature.map.MapPickerView(
+                    modifier = Modifier.fillMaxSize(),
+                    initialCenter = com.triloo.feature.map.MapCoordinate(
+                        latitude = initialLatitude ?: 55.751244,
+                        longitude = initialLongitude ?: 37.618423
+                    ),
+                    initialZoom = if (initialLatitude != null) 12f else 5f,
+                    onLocationPicked = onLocationPicked
+                )
+                Icon(
+                    imageVector = Icons.Rounded.Place,
+                    contentDescription = "Метка",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .align(Alignment.Center)
+                )
+            }
+        }
     }
 }

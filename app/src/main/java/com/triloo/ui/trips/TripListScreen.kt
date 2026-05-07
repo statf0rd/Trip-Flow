@@ -5,11 +5,13 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,34 +65,9 @@ fun TripListScreen(
     val scope = rememberCoroutineScope()
     
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Ваши путешествия",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToGroupTrips) {
-                        Icon(
-                            imageVector = Icons.Rounded.Group,
-                            contentDescription = "Групповые поездки"
-                        )
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Rounded.Settings,
-                            contentDescription = "Настройки"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
-            )
-        },
+        // TopAppBar намеренно отсутствует: hero-блок с приветствием и иконки
+        // действий теперь отображаются как первый item внутри LazyColumn,
+        // что экономит вертикальное пространство и поднимает контент.
         floatingActionButton = {
             if (uiState.hasTrips) {
                 TrilooFab(
@@ -114,6 +92,7 @@ fun TripListScreen(
                 uiState = uiState,
                 onTripClick = onNavigateToTrip,
                 onTripLongClick = { trip -> tripToDelete = trip },
+                onCreateTrip = { showCreateTripSheet = true },
                 modifier = Modifier.padding(paddingValues)
             )
         }
@@ -135,7 +114,8 @@ fun TripListScreen(
             CreateTripTypeSheet(
                 onCreatePersonalTrip = { hideThen { onNavigateToCreateTrip(false) } },
                 onCreateGroupTrip = { hideThen { onNavigateToCreateTrip(true) } },
-                onJoinGroupTrip = { hideThen(onNavigateToGroupTrips) }
+                onJoinGroupTrip = { hideThen(onNavigateToGroupTrips) },
+                onOpenSettings = { hideThen(onNavigateToSettings) }
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -172,20 +152,36 @@ fun TripListScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TripListContent(
     uiState: TripListUiState,
     onTripClick: (String) -> Unit,
     onTripLongClick: (Trip) -> Unit,
+    onCreateTrip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val pastByYear = remember(uiState.pastTrips) {
+        uiState.pastTrips
+            .groupBy { it.endDate.year }
+            .toSortedMap(compareByDescending { it })
+    }
+
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp)
+        modifier = modifier.fillMaxSize().statusBarsPadding(),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
     ) {
+        // Hero — только приветствие по времени суток. Иконки действий
+        // (Settings, Группы) скрыты с главного экрана и доступны через
+        // bottom-sheet, открываемый по FAB.
+        item(key = "hero") {
+            HomeHero(modifier = Modifier.padding(horizontal = 20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Текущая поездка в главной акцентной карточке.
         uiState.currentTrip?.let { trip ->
-            item {
+            item(key = "current-${trip.id}") {
                 SectionHeader(title = "Сейчас в поездке")
                 CurrentTripCard(
                     trip = trip,
@@ -198,53 +194,281 @@ private fun TripListContent(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
-        
-        // Ближайшие поездки. Горизонтальный список без обрезания: пользователь
-        // прокручивает свайпом, отдельного «show all» экрана пока нет.
+
+        // Ближайшие поездки или CTA «Куда дальше?» — взаимоисключающие блоки.
         if (uiState.upcomingTrips.isNotEmpty()) {
-            item {
+            item(key = "upcoming-header") {
                 SectionHeader(title = "Предстоящие")
             }
-
-            item {
+            item(key = "upcoming-row") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    itemsIndexed(uiState.upcomingTrips) { index, trip ->
+                    items(
+                        items = uiState.upcomingTrips,
+                        key = { trip -> trip.id }
+                    ) { trip ->
                         UpcomingTripCard(
                             trip = trip,
                             onClick = { onTripClick(trip.id) },
                             onLongClick = { onTripLongClick(trip) },
-                            animationDelay = index * 50,
-                            modifier = Modifier.width(UpcomingCardWidth)
+                            modifier = Modifier
+                                .width(UpcomingCardWidth)
+                                .animateItem()
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
-        }
-        
-        // Прошедшие поездки. LazyColumn рендерит их лениво — список можно
-        // показывать целиком, без клиентской обрезки.
-        if (uiState.pastTrips.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Прошедшие")
+        } else {
+            item(key = "plan-next") {
+                PlanNextTripCard(
+                    onClick = onCreateTrip,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
             }
+        }
 
-            itemsIndexed(
-                items = uiState.pastTrips,
-                key = { _, trip -> trip.id }
-            ) { index, trip ->
-                PastTripCard(
-                    trip = trip,
-                    onClick = { onTripClick(trip.id) },
-                    onLongClick = { onTripLongClick(trip) },
-                    animationDelay = index * 50,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+        // Прошедшие — журнал, сгруппированный по годам.
+        if (pastByYear.isNotEmpty()) {
+            item(key = "past-header") {
+                SectionHeader(title = "Журнал поездок")
+            }
+            pastByYear.forEach { (year, trips) ->
+                item(key = "year-$year") {
+                    YearSeparator(
+                        year = year,
+                        tripCount = trips.size,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
+                }
+                items(
+                    items = trips,
+                    key = { trip -> "journal-${trip.id}" }
+                ) { trip ->
+                    JournalPastTripCard(
+                        trip = trip,
+                        onClick = { onTripClick(trip.id) },
+                        onLongClick = { onTripLongClick(trip) },
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp, vertical = 6.dp)
+                            .animateItem()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeHero(
+    modifier: Modifier = Modifier
+) {
+    val greeting = remember { greetingForCurrentTime() }
+    Text(
+        text = greeting,
+        modifier = modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp),
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground,
+        lineHeight = 36.sp
+    )
+}
+
+@Composable
+private fun PlanNextTripCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        shape = TrilooShapes.featureCard,
+        color = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier.background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        CoralPrimary.copy(alpha = 0.18f),
+                        GoldenAccent.copy(alpha = 0.18f),
+                        TealSecondary.copy(alpha = 0.14f)
+                    )
+                )
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Explore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Куда дальше?",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Спланируйте следующую поездку — мы поможем с местами и бюджетом.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun YearSeparator(
+    year: Int,
+    tripCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = year.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+        Text(
+            text = "$tripCount ${pluralizeTripsLabel(tripCount)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun JournalPastTripCard(
+    trip: Trip,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("LLLL", Locale.forLanguageTag("ru"))
+    }
+    val gradient = remember(trip.destination) { gradientForDestination(trip.destination) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = TrilooShapes.Md
+    ) {
+        Box(
+            modifier = Modifier.background(brush = Brush.linearGradient(gradient))
+        ) {
+            // Декоративный эмодзи как полупрозрачный «штамп» справа.
+            Text(
+                text = getDestinationEmoji(trip.destination),
+                style = MaterialTheme.typography.displayLarge,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 14.dp)
+                    .graphicsLayer { alpha = 0.7f }
+            )
+            Column(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = trip.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Place,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = shortenDestination(trip.destination),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.92f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    JournalChip(text = "${trip.durationDays} ${pluralizeDaysWord(trip.durationDays)}")
+                    JournalChip(text = trip.endDate.format(dateFormatter).replaceFirstChar { it.uppercase() })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JournalChip(text: String) {
+    Surface(
+        shape = TrilooShapes.pill,
+        color = Color.White.copy(alpha = 0.22f)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -259,11 +483,14 @@ private fun CurrentTripCard(
     modifier: Modifier = Modifier
 ) {
     val daysLeft = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.endDate).toInt()
-    
+    val interactionSource = remember { MutableInteractionSource() }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
@@ -298,12 +525,14 @@ private fun CurrentTripCard(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = trip.destination,
+                            text = shortenDestination(trip.destination),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White.copy(alpha = 0.9f)
+                            color = Color.White.copy(alpha = 0.9f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    
+
                     // Счётчик оставшихся дней.
                     Surface(
                         shape = TrilooShapes.Md,
@@ -410,173 +639,119 @@ private fun UpcomingTripCard(
     trip: Trip,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    animationDelay: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val dateFormatter = remember { 
-        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru")) 
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
     }
     val daysUntil = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.startDate).toInt()
-    
-    val visibilityState = remember {
-        MutableTransitionState(false).apply { targetState = true }
-    }
 
-    AnimatedVisibility(
-        visibleState = visibilityState,
-        enter = TrilooMotion.enterHorizontalStagger(delayMillis = animationDelay),
-        exit = TrilooMotion.exitStagger()
+    TrilooCard(
+        modifier = modifier.heightIn(min = UpcomingCardMinHeight),
+        onClick = onClick,
+        onLongClick = onLongClick
     ) {
-        TrilooCard(
-            modifier = modifier.heightIn(min = UpcomingCardMinHeight),
-            onClick = onClick,
-            onLongClick = onLongClick
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = trip.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = trip.destination,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Slate600
-                    )
-                }
-                
-                TrilooChip(
-                    text = "через $daysUntil д",
-                    emoji = "📅"
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = trip.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = shortenDestination(trip.destination),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Slate600,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            DaysUntilBadge(days = daysUntil)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.DateRange,
+                contentDescription = null,
+                tint = Slate500,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate600
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Text(
+                text = "${trip.durationDays} дн.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate500
+            )
+        }
+
+        if (trip.isGroupTrip) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Rounded.DateRange,
+                    imageVector = Icons.Rounded.Group,
                     contentDescription = null,
-                    tint = Slate500,
+                    tint = TealSecondary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}",
+                    text = "Групповая поездка",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate600
+                    color = TealSecondary
                 )
-                
-                Spacer(modifier = Modifier.width(16.dp))
-                
-                Text(
-                    text = "${trip.durationDays} дн.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate500
-                )
-            }
-            
-            if (trip.isGroupTrip) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Rounded.Group,
-                        contentDescription = null,
-                        tint = TealSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Групповая поездка",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TealSecondary
-                    )
-                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PastTripCard(
-    trip: Trip,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-    animationDelay: Int = 0
-) {
-    val dateFormatter = remember { 
-        DateTimeFormatter.ofPattern("MMM yyyy", Locale.forLanguageTag("ru")) 
-    }
-
-    val visibilityState = remember {
-        MutableTransitionState(false).apply { targetState = true }
-    }
-
-    AnimatedVisibility(
-        visibleState = visibilityState,
-        enter = TrilooMotion.enterVerticalStagger(delayMillis = animationDelay),
-        exit = TrilooMotion.exitStagger()
+private fun DaysUntilBadge(days: Int) {
+    Surface(
+        shape = TrilooShapes.Sm,
+        color = TealSubtle
     ) {
-        Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick
-                ),
-            shape = TrilooShapes.Md,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Emoji-заглушка для обложки.
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(TrilooShapes.Sm)
-                        .background(Slate200),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = getDestinationEmoji(trip.destination),
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = trip.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${trip.destination} • ${trip.endDate.format(dateFormatter)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = Slate400
-                )
-            }
+            Text(
+                text = "через",
+                style = MaterialTheme.typography.labelSmall,
+                color = TealSecondary
+            )
+            Text(
+                text = days.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                color = TealSecondary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = pluralizeDaysWord(days),
+                style = MaterialTheme.typography.labelSmall,
+                color = TealSecondary
+            )
         }
     }
 }
@@ -660,7 +835,8 @@ private fun EmptyTripsState(
 private fun CreateTripTypeSheet(
     onCreatePersonalTrip: () -> Unit,
     onCreateGroupTrip: () -> Unit,
-    onJoinGroupTrip: () -> Unit
+    onJoinGroupTrip: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -711,6 +887,23 @@ private fun CreateTripTypeSheet(
             description = "Введите код или отсканируйте QR от организатора",
             onClick = onJoinGroupTrip
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Settings,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Настройки")
+        }
     }
 }
 
@@ -837,6 +1030,7 @@ private fun TripListScreenPreview() {
             uiState = PreviewData.tripListState,
             onTripClick = {},
             onTripLongClick = {},
+            onCreateTrip = {},
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -898,6 +1092,74 @@ private fun getDestinationEmoji(destination: String): String {
         lower.contains("дубай") || lower.contains("dubai") -> "🏙️"
         lower.contains("бали") || lower.contains("bali") -> "🌴"
         lower.contains("турция") || lower.contains("turkey") -> "🏝️"
+        lower.contains("грузия") || lower.contains("тбилиси") -> "🍷"
+        lower.contains("эльбрус") || lower.contains("азау") || lower.contains("кавказ") -> "🏔️"
         else -> "🌍"
+    }
+}
+
+private fun greetingForCurrentTime(): String {
+    val hour = java.time.LocalTime.now().hour
+    return when (hour) {
+        in 5..11 -> "Доброе утро"
+        in 12..17 -> "Добрый день"
+        in 18..22 -> "Добрый вечер"
+        else -> "Доброй ночи"
+    }
+}
+
+private fun pluralizeTripsLabel(count: Int): String {
+    return when {
+        count % 100 in 11..19 -> "поездок"
+        count % 10 == 1 -> "поездка"
+        count % 10 in 2..4 -> "поездки"
+        else -> "поездок"
+    }
+}
+
+private fun pluralizeDestinations(count: Int): String {
+    return when {
+        count % 100 in 11..19 -> "направлений"
+        count % 10 == 1 -> "направление"
+        count % 10 in 2..4 -> "направления"
+        else -> "направлений"
+    }
+}
+
+private fun pluralizeDaysWord(count: Int): String {
+    return when {
+        count % 100 in 11..19 -> "дней"
+        count % 10 == 1 -> "день"
+        count % 10 in 2..4 -> "дня"
+        else -> "дней"
+    }
+}
+
+/**
+ * Берём только последний сегмент адреса вида «Регион, район, посёлок, точка»,
+ * чтобы карточка не разваливалась на 4–5 строк, когда направление пришло из
+ * Yandex/Google Places. Для коротких пользовательских строк ничего не меняем.
+ */
+private fun shortenDestination(destination: String): String {
+    if (destination.isBlank()) return destination
+    val segments = destination.split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    return segments.lastOrNull() ?: destination
+}
+
+/**
+ * Стабильно подбирает градиентную пару цветов под направление поездки.
+ * Один и тот же destination всегда получает одинаковый градиент, чтобы
+ * пользователь визуально привязывал страну к цвету в журнале.
+ */
+private fun gradientForDestination(destination: String): List<Color> {
+    val hash = kotlin.math.abs(destination.lowercase().hashCode())
+    return when (hash % 5) {
+        0 -> listOf(CoralPrimary, CoralLight)
+        1 -> listOf(TealSecondary, TealLight)
+        2 -> listOf(GoldenAccent, GoldenLight)
+        3 -> listOf(CoralPrimary, GoldenAccent)
+        else -> listOf(TealSecondary, CoralLight)
     }
 }

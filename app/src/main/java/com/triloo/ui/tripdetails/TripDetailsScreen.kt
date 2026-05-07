@@ -221,6 +221,15 @@ fun TripDetailsScreen(
                             onEnableLocationSharing = {
                                 pendingLocationSharingStart = true
                                 locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            },
+                            // Тот же permission-launcher, что и для геошаринга, —
+                            // FINE_LOCATION хватает обоим сценариям, и нет смысла
+                            // плодить второй ActivityResult-launcher.
+                            onRequestLocationPermission = {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            },
+                            onFetchUserLocation = { onResolved ->
+                                viewModel.requestCurrentUserLocation(onResolved)
                             }
                         )
                         2 -> ExpensesTab(

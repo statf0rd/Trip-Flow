@@ -231,6 +231,12 @@ class CreateTripViewModel @Inject constructor(
         _uiState.update { it.copy(isGroupTrip = isGroupTrip) }
     }
 
+    // Ключ последнего успешного запроса рекомендаций. Если пользователь
+    // нажал кнопку повторно с тем же destination/budget/currency/датами,
+    // не запускаем пайплайн заново — просто переоткрываем sheet с уже
+    // имеющимся списком.
+    private var lastRecommendationsKey: String? = null
+
     fun requestHotelRecommendations() {
         val state = _uiState.value
         val budget = state.budget
@@ -255,6 +261,20 @@ class CreateTripViewModel @Inject constructor(
             }
         }
 
+        // Если параметры не изменились и список рекомендаций уже есть —
+        // просто переоткрываем sheet, не запускаем пайплайн повторно.
+        val key = buildString {
+            append(state.destination.trim().lowercase())
+            append("|"); append(budget)
+            append("|"); append(state.baseCurrency)
+            append("|"); append(startDate)
+            append("|"); append(endDate)
+        }
+        if (key == lastRecommendationsKey && state.hotelRecommendations.isNotEmpty()) {
+            _uiState.update { it.copy(showHotelRecommendationsSheet = true) }
+            return
+        }
+
         _uiState.update {
             it.copy(
                 isLoadingHotelRecommendations = true,
@@ -275,6 +295,9 @@ class CreateTripViewModel @Inject constructor(
                     )
                 )
             }.onSuccess { recommendations ->
+                if (recommendations.isNotEmpty()) {
+                    lastRecommendationsKey = key
+                }
                 _uiState.update {
                     it.copy(
                         isLoadingHotelRecommendations = false,
@@ -335,7 +358,7 @@ class CreateTripViewModel @Inject constructor(
                         return@launch
                     }
                     val updatedTrip = baseTrip.copy(
-                        name = state.name.trim(),
+                        name = state.effectiveName,
                         destination = state.destination.trim(),
                         destinationLatitude = state.destinationLatitude,
                         destinationLongitude = state.destinationLongitude,
@@ -355,7 +378,7 @@ class CreateTripViewModel @Inject constructor(
                     val profile = userProfileRepository.getProfile()
                     val ownerId = profile.userId
                     val trip = Trip(
-                        name = state.name.trim(),
+                        name = state.effectiveName,
                         destination = state.destination.trim(),
                         destinationLatitude = state.destinationLatitude,
                         destinationLongitude = state.destinationLongitude,
@@ -484,9 +507,21 @@ data class CreateTripUiState(
         get() = budgetInput.toDoubleOrNull()
 
     val isValid: Boolean
-        get() = name.isNotBlank() && 
-                destination.isNotBlank() && 
-                startDate != null && 
+        get() = destination.isNotBlank() &&
+                startDate != null &&
                 endDate != null &&
                 !endDate.isBefore(startDate)
+
+    /**
+     * Имя поездки опционально (см. лейбл «Название (опционально)»).
+     * Если пользователь его не ввёл — берём последний значимый сегмент
+     * direction'а: «Регион, район, посёлок, точка» → «точка».
+     */
+    val effectiveName: String
+        get() = name.trim().ifBlank {
+            destination.split(',')
+                .map { it.trim() }
+                .lastOrNull { it.isNotEmpty() }
+                ?: destination.trim()
+        }
 }

@@ -3,6 +3,7 @@ package com.triloo.data.places
 import com.triloo.BuildConfig
 import com.triloo.data.model.PlaceCategory
 import com.triloo.data.remote.GeosuggestApi
+import java.util.Locale
 import com.yandex.mapkit.GeoObject
 import com.yandex.mapkit.GeoObjectCollection
 import com.yandex.mapkit.geometry.BoundingBox
@@ -60,6 +61,11 @@ class PlacesService @Inject constructor(
     }
     private val suggestionCache = ConcurrentHashMap<String, PlaceSuggestion>()
     private val detailsCache = ConcurrentHashMap<String, PlaceDetails>()
+    // Кэш «нет фото» (NULL_PHOTO) и положительных результатов: ключ —
+    // нормализованное имя + округлённые до 4 знаков координаты. Это
+    // не даёт пайплайну делать повторный Yandex Search для тех же отелей.
+    private val photoCache = ConcurrentHashMap<String, String>()
+    private val NULL_PHOTO = "__null__"
 
     /**
      * Ищет места по текстовому запросу и возвращает список подсказок.
@@ -116,6 +122,77 @@ class PlacesService @Inject constructor(
 
         resolved?.let { detailsCache[placeId] = it.copy(placeId = placeId) }
         return resolved?.copy(placeId = placeId)
+    }
+
+    /**
+     * Запрашивает у Yandex Search первое совпадение по имени+координатам и
+     * возвращает URL первого фото из BusinessPhotoObjectMetadata. Используется
+     * для обогащения карточек отелей (HotelCardCover) реальными фотками.
+     *
+     * Если MapKit-ключ невалиден или совпадение не найдено — возвращает null,
+     * чтобы UI откатился на градиентную обложку.
+     */
+    suspend fun fetchPhotoUrl(
+        name: String,
+        latitude: Double,
+        longitude: Double
+    ): String? {
+        if (name.isBlank() || !hasValidMapKitKey()) return null
+
+        val cacheKey = "${name.trim().lowercase()}|" +
+            String.format(Locale.US, "%.4f", latitude) + "|" +
+            String.format(Locale.US, "%.4f", longitude)
+        photoCache[cacheKey]?.let { cached ->
+            return if (cached == NULL_PHOTO) null else cached
+        }
+
+        // Расширенный радиус (5 км вместо 1.5 км), типы — и BIZ, и GEO,
+        // чтобы Yandex с большей вероятностью вернул объект с фото.
+        val point = Point(latitude, longitude)
+        val attempts = listOf(
+            // 1. Точное название отеля + узкий радиус.
+            name to 1500f,
+            // 2. Название + расширенный радиус (5 км — для гор/посёлков).
+            name to 5000f,
+            // 3. «отель + название» — иногда так Yandex быстрее находит категорию.
+            "отель $name" to 5000f
+        )
+
+        var url: String? = null
+        for ((query, radius) in attempts) {
+            val response = runCatching {
+                searchManager.submitAwait(
+                    query = query,
+                    geometry = Geometry.fromCircle(Circle(point, radius)),
+                    options = buildSearchOptions(
+                        userPoint = point,
+                        searchTypes = SearchType.BIZ.value + SearchType.GEO.value
+                    )
+                )
+            }.getOrNull()
+
+            val candidates = response?.extractGeoObjects().orEmpty()
+            android.util.Log.d(
+                "PlacesPhotos",
+                "fetchPhotoUrl(name=\"$name\", q=\"$query\", r=$radius): " +
+                    "${candidates.size} candidates"
+            )
+
+            url = candidates
+                .firstNotNullOfOrNull {
+                    it.toPlaceDetails()?.photoUrl?.takeIf { u -> u.isNotBlank() }
+                }
+            if (url != null) break
+        }
+
+        if (url != null) {
+            android.util.Log.d("PlacesPhotos", "fetchPhotoUrl SUCCESS for \"$name\" → $url")
+        } else {
+            android.util.Log.d("PlacesPhotos", "fetchPhotoUrl NO MATCH for \"$name\"")
+        }
+
+        photoCache[cacheKey] = url ?: NULL_PHOTO
+        return url
     }
 
     /**
@@ -607,7 +684,8 @@ class PlacesService @Inject constructor(
             category = category,
             latitude = latitude,
             longitude = longitude,
-            rating = rating
+            rating = rating,
+            photoUrl = photoUrl
         )
     }
 
@@ -674,7 +752,8 @@ data class PlaceSuggestion(
     val category: PlaceCategory = PlaceCategory.OTHER,
     val latitude: Double,
     val longitude: Double,
-    val rating: Float? = null
+    val rating: Float? = null,
+    val photoUrl: String? = null
 )
 
 /**

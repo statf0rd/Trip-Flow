@@ -120,6 +120,8 @@ app/src/main/java/com/triloo/
 
 ## 📋 MVP Чек-лист
 
+> Подробный roadmap с техническим долгом, частично готовыми фичами и backlog'ом — в `obsi/00-Index/Roadmap.md` (Obsidian vault проекта).
+
 ### ✅ Фаза 1: Основа (Готово)
 - [x] Настройка проекта (Gradle, зависимости)
 - [x] Дизайн-система (цвета, типографика, компоненты)
@@ -132,25 +134,40 @@ app/src/main/java/com/triloo/
 - [x] CreateTripScreen — создание поездки
 - [x] TripDetailsScreen — детали с вкладками
 
-### 🔲 Фаза 2: Core Features
-- [ ] AddPlaceScreen — добавление мест через Google Places
+### ✅ Фаза 2: Core Features (Готово)
+- [x] AddPlaceScreen — добавление мест с автокомплитом (Geoapify + Yandex Geosuggest + Google Places)
 - [x] AddExpenseScreen — добавление расходов
-- [ ] Google Maps интеграция (карта с маркерами)
-- [ ] Directions API (маршруты между точками)
-- [ ] Конвертация валют (API + кеширование)
+- [x] Карты (Yandex MapKit основной + Google Maps fallback, через `:feature-map` модуль)
+- [x] Directions / OpenRouteService API подключён, nearest-neighbor оптимизатор маршрута
+- [x] Конвертация валют (open.er-api.com + кэш в Room)
 
-### 🔲 Фаза 3: Групповые функции
-- [x] Приглашение участников (invite code + QR)
-- [x] Triloo Relay — офлайн‑синхронизация через QR
-- [ ] Онлайн‑синхронизация (Firebase / собственный backend)
-- [ ] Расчёт долгов (кто кому сколько должен)
-- [ ] Геошаринг (отслеживание позиций участников)
+### 🟡 Фаза 3: Групповые функции (Частично)
+- [x] Приглашение участников (invite code + QR через ZXing)
+- [x] Triloo Relay — офлайн‑синхронизация через Bluetooth + QR-чанки с AES-256
+- [x] Расчёт долгов (`ExpenseRepository.calculateBalances`, 5 split types в модели)
+- [x] Геошаринг участников через Foreground Service + FusedLocationProviderClient
+- [ ] Онлайн‑синхронизация — backend stubs (Node.js Express в `/server`), endpoints `/sync` не дописаны
+- [ ] Полноценные сплиты в UI — пока только PAYER_ONLY в `AddExpenseScreen`
+- [ ] HTTPS вместо `usesCleartextTraffic="true"` для backend
+- [ ] Conflict resolution per-field (сейчас Last-Write-Wins на всю запись)
 
-### 🔲 Фаза 4: Улучшения
-- [ ] OCR для чеков (распознавание суммы)
-- [ ] Рекомендации мест на основе предпочтений
+### 🟡 Фаза 4: Улучшения (Частично)
+- [x] OCR для чеков (Google ML Kit Text Recognition, on-device)
 - [x] Оффлайн‑режим (Triloo Relay)
-- [ ] Push-уведомления
+- [x] Crashlytics + Privacy Policy + Notification channels
+- [ ] Рекомендации мест на основе предпочтений (Gemini/OpenAI scaffolding в `data/ai/OpenAiService.kt`)
+- [ ] Push-уведомления через FCM
+- [ ] Heatmap категорий на карте (расчёт в `CategoryHeatmapCalculator`, рендер не сделан)
+- [ ] ETA между точками в UI таймлайна
+- [ ] Email-верификация и password reset для auth
+
+### 💡 Backlog / идеи
+- iOS-портабельность через Kotlin Multiplatform (потребует переезд репозиториев в shared)
+- CRDT-based replication вместо Last-Write-Wins
+- Кеш карт и маркеров для офлайн-режима
+- Расширенная аналитика расходов: графики, экспорт CSV/JSON
+- Hard-delete API для GDPR (право на забвение)
+- TTL для `DeletionLog` (сейчас растёт без ограничений)
 
 ---
 

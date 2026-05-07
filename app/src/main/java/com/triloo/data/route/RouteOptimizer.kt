@@ -102,6 +102,7 @@ data class RouteDetails(
     val totalDistanceMeters: Int,
     val totalDurationMinutes: Int,
     val polylineEncoded: String? = null, // Encoded polyline для рендера на карте.
+    val decodedPath: List<RoutePoint>? = null, // Готовые точки от Yandex Transport — без encode/decode.
     val isEstimated: Boolean = false,
     val sourceLabel: String = "openrouteservice"
 )
@@ -151,7 +152,8 @@ enum class TravelStyle { RELAXED, BALANCED, ACTIVE }
 @Singleton
 class NearestNeighborRouteOptimizer @Inject constructor(
     private val openRouteServiceApi: OpenRouteServiceApi,
-    private val nearbyPlacesProvider: NearbyPlacesProvider
+    private val nearbyPlacesProvider: NearbyPlacesProvider,
+    private val yandexRouter: YandexRouter
 ) : RouteOptimizer {
     
     override suspend fun optimizeRoute(
@@ -311,6 +313,40 @@ class NearestNeighborRouteOptimizer @Inject constructor(
                 totalDurationMinutes = 0
             )
         }
+        // 1) Сначала пробуем Yandex Transport — он один умеет TRANSIT и
+        //    отдаёт реальные полилинии для всех режимов кроме BICYCLING.
+        val yandexResult = yandexRouter.route(places, travelMode)
+        if (yandexResult != null) {
+            val legs = places.zipWithNext().map { (from, to) ->
+                val distance = haversineDistance(
+                    from.latitude, from.longitude,
+                    to.latitude, to.longitude
+                ).toInt()
+                RouteLeg(
+                    from = from,
+                    to = to,
+                    distanceMeters = distance,
+                    durationMinutes = estimateTravelTime(distance, travelMode),
+                    travelMode = travelMode
+                )
+            }
+            return RouteDetails(
+                places = places,
+                legs = legs,
+                totalDistanceMeters = yandexResult.distanceMeters,
+                totalDurationMinutes = yandexResult.durationMinutes,
+                decodedPath = yandexResult.points,
+                isEstimated = false,
+                sourceLabel = when (travelMode) {
+                    TravelMode.TRANSIT -> "Yandex Transit"
+                    TravelMode.DRIVING -> "Yandex Driving"
+                    TravelMode.WALKING -> "Yandex Pedestrian"
+                    TravelMode.BICYCLING -> "Yandex"
+                }
+            )
+        }
+
+        // 2) Fallback — OpenRouteService для non-TRANSIT режимов.
         val remoteDetails = fetchDirectionsRoute(places, travelMode)
         if (remoteDetails != null) {
             return remoteDetails

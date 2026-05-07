@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -176,7 +177,7 @@ private fun AddExpenseContent(
             trip?.let {
                 Surface(
                     shape = TrilooShapes.Sm,
-                    color = Slate100
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -185,14 +186,14 @@ private fun AddExpenseContent(
                         Icon(
                             imageVector = Icons.Rounded.Wallet,
                             contentDescription = null,
-                            tint = Slate600,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Базовая валюта: ${it.baseCurrency}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Slate700
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -203,7 +204,7 @@ private fun AddExpenseContent(
                     text = "Сумма",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = Slate700
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
                 Row(
@@ -304,7 +305,7 @@ private fun AddExpenseContent(
                     text = "Категория",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = Slate700
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 ExpenseCategoryGrid(
@@ -734,7 +735,7 @@ private fun ExpenseSplitSection(
             text = "Разделить",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = Slate700
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         val splitOptions = listOf(SplitType.PAYER_ONLY, SplitType.EQUAL, SplitType.EXACT)
@@ -760,11 +761,12 @@ private fun ExpenseSplitSection(
                         }
                         .clickable { onSplitTypeChange(type) },
                     shape = TrilooShapes.Md,
-                    color = if (isSelected) accent.copy(alpha = 0.14f) else Slate100,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) accent.copy(alpha = 0.6f) else Slate200
-                    )
+                    color = if (isSelected) {
+                        accent.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                    },
+                    border = if (isSelected) BorderStroke(1.dp, accent.copy(alpha = 0.6f)) else null
                 ) {
                     Box(
                         modifier = Modifier
@@ -776,7 +778,7 @@ private fun ExpenseSplitSection(
                             text = type.displayName,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (isSelected) accent else Slate700,
+                            color = if (isSelected) accent else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -789,7 +791,7 @@ private fun ExpenseSplitSection(
             SplitType.PAYER_ONLY -> {
                 Surface(
                     shape = TrilooShapes.Md,
-                    color = Slate100
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -825,7 +827,7 @@ private fun ExpenseSplitSection(
 
                 Surface(
                     shape = TrilooShapes.Md,
-                    color = Slate100
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -902,7 +904,7 @@ private fun ExpenseSplitSection(
 
                 Surface(
                     shape = TrilooShapes.Md,
-                    color = Slate100
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -997,33 +999,28 @@ private fun ExpenseSplitSection(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExpenseCategoryGrid(
     categories: List<ExpenseCategory>,
     selectedCategory: ExpenseCategory,
     onCategoryChange: (ExpenseCategory) -> Unit
 ) {
-    val rows = categories.chunked(3)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        rows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                row.forEach { category ->
-                    ExpenseCategoryTile(
-                        category = category,
-                        isSelected = category == selectedCategory,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onCategoryChange(category) }
-                    )
-                }
-                // Если в последней строке меньше трёх элементов — добиваем пустыми
-                // weight'ами, чтобы плитки сохранили одинаковый размер.
-                repeat(3 - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
+    // Стало FlowRow вместо ручных rows.chunked(3) — раньше при 13 категориях
+    // последняя строка имела 1 одинокую плитку «Другое» и выглядела ломано.
+    // FlowRow сам аккуратно укладывает чипы по доступной ширине и оставляет
+    // одинаковый размер на каждом, без «фантомных» Spacer'ов.
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        categories.forEach { category ->
+            ExpenseCategoryTile(
+                category = category,
+                isSelected = category == selectedCategory,
+                onClick = { onCategoryChange(category) }
+            )
         }
     }
 }
@@ -1032,59 +1029,63 @@ private fun ExpenseCategoryGrid(
 private fun ExpenseCategoryTile(
     category: ExpenseCategory,
     isSelected: Boolean,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val accent = Color(category.colorHex)
+    val unselectedSurface = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.02f else 1f,
+        targetValue = if (isSelected) 1.03f else 1f,
         animationSpec = TrilooMotion.selectSpring,
         label = "categoryTileScale"
     )
     Surface(
-        modifier = modifier
-            .heightIn(min = 88.dp)
+        modifier = Modifier
+            .width(78.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(TrilooShapes.Sm)
             .clickable(onClick = onClick),
-        shape = TrilooShapes.Md,
-        color = if (isSelected) accent.copy(alpha = 0.16f) else Slate100,
-        border = BorderStroke(
-            width = if (isSelected) 1.5.dp else 1.dp,
-            color = if (isSelected) accent.copy(alpha = 0.55f) else Slate200
-        )
+        shape = TrilooShapes.Sm,
+        color = if (isSelected) accent.copy(alpha = 0.16f) else unselectedSurface,
+        border = if (isSelected) BorderStroke(1.5.dp, accent.copy(alpha = 0.55f)) else null
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(TrilooShapes.Sm)
-                    .background(accent.copy(alpha = if (isSelected) 0.22f else 0.14f)),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (isSelected) accent.copy(alpha = 0.22f)
+                        else accent.copy(alpha = 0.10f)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = category.icon,
                     contentDescription = category.displayName,
                     tint = accent,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
             Text(
                 text = category.displayName,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (isSelected) accent else Slate800,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 14.sp
             )
         }
     }

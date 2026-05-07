@@ -9,9 +9,11 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlin.coroutines.resume
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,5 +82,29 @@ class LocationSharingManager @Inject constructor(
         awaitClose {
             fusedLocationClient.removeLocationUpdates(callback)
         }
+    }
+
+    /**
+     * Одноразовый запрос последней известной координаты — для кнопки «найти меня»
+     * на карте. Вернёт null, если у системы нет свежего fix'а или нет permission.
+     * Вызывающий обязан проверить ACCESS_FINE/COARSE_LOCATION перед вызовом.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun currentLocation(): SharedLocationPoint? = suspendCancellableCoroutine { cont ->
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location ->
+                if (!cont.isActive) return@addOnSuccessListener
+                val point = location?.let {
+                    SharedLocationPoint(
+                        latitude = it.latitude,
+                        longitude = it.longitude,
+                        timestamp = it.time.takeIf { time -> time > 0 } ?: System.currentTimeMillis()
+                    )
+                }
+                cont.resume(point)
+            }
+            .addOnFailureListener {
+                if (cont.isActive) cont.resume(null)
+            }
     }
 }

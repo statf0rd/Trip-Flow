@@ -3,9 +3,11 @@ package com.triloo.data.accommodation
 import com.google.gson.Gson
 import com.triloo.BuildConfig
 import com.triloo.data.ai.OpenAiService
+import com.triloo.data.places.PlacesService
 import com.triloo.data.remote.GeoapifyApi
 import com.triloo.data.remote.GeoapifyGeocodeFeature
 import com.triloo.data.remote.GeoapifyPlaceFeature
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -20,6 +22,7 @@ import kotlin.math.abs
 class AccommodationRecommendationService @Inject constructor(
     private val geoapifyApi: GeoapifyApi,
     private val openAiService: OpenAiService,
+    private val placesService: PlacesService,
     private val gson: Gson
 ) {
 
@@ -33,10 +36,44 @@ class AccommodationRecommendationService @Inject constructor(
         val heuristicRecommendations = rankHeuristically(request, candidates)
         val aiRecommendations = rankWithAi(request, candidates)
 
-        return mergeRankings(
+        val merged = mergeRankings(
             aiRecommendations = aiRecommendations,
             heuristicRecommendations = heuristicRecommendations
         )
+
+        // Обогащаем рекомендации реальными фото через Yandex Search.
+        // Параллельно дёргаем фото для каждой карточки и подменяем photoUrl.
+        return enrichWithPhotos(merged)
+    }
+
+    /**
+     * Параллельно подгружает фото для каждой рекомендации через Yandex Search
+     * (по name + lat/lng). Если рекомендация уже имеет photoUrl (например,
+     * пришло от AI с готовым URL), оставляем как есть. На отсутствие сети /
+     * совпадения карточка получает null → UI покажет градиент-фолбэк.
+     */
+    private suspend fun enrichWithPhotos(
+        recommendations: List<AccommodationRecommendation>
+    ): List<AccommodationRecommendation> = coroutineScope {
+        recommendations.map { recommendation ->
+            async {
+                val lat = recommendation.latitude
+                val lng = recommendation.longitude
+                if (!recommendation.photoUrl.isNullOrBlank() || lat == null || lng == null) {
+                    recommendation
+                } else {
+                    val url = runCatching {
+                        placesService.fetchPhotoUrl(
+                            name = recommendation.name,
+                            latitude = lat,
+                            longitude = lng
+                        )
+                    }.getOrNull()
+                    if (url.isNullOrBlank()) recommendation
+                    else recommendation.copy(photoUrl = url)
+                }
+            }
+        }.map { it.await() }
     }
 
     private suspend fun loadCandidates(destination: String): List<AccommodationCandidate> = coroutineScope {

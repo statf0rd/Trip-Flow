@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import java.util.Locale
 import com.triloo.data.location.LocationSharingServiceController
 import com.triloo.data.model.*
 import com.triloo.data.places.PlacesService
@@ -41,7 +42,8 @@ class TripDetailsViewModel @Inject constructor(
     private val routePlanningAssistant: RoutePlanningAssistant,
     private val placesService: PlacesService,
     private val onlineSyncRepository: OnlineSyncRepository,
-    private val locationSharingServiceController: LocationSharingServiceController
+    private val locationSharingServiceController: LocationSharingServiceController,
+    private val locationSharingManager: com.triloo.data.location.LocationSharingManager
 ) : ViewModel() {
     companion object {
         private const val TAG = "TripDetailsViewModel"
@@ -95,7 +97,10 @@ class TripDetailsViewModel @Inject constructor(
         PlanningInputs(
             trip = plan.trip,
             days = plan.days,
-            places = plan.places,
+            // Места без координат не должны попадать ни в эвристику, ни в AI-план,
+            // иначе расстояние от (0,0) до реальной точки даёт сотни/тысячи км
+            // и подсказка маршрута показывает мусор вроде «7066 км · пешком».
+            places = plan.places.filter { it.latitude != 0.0 || it.longitude != 0.0 },
             planningMode = planningMode
         )
     }.mapLatest { input ->
@@ -383,20 +388,62 @@ class TripDetailsViewModel @Inject constructor(
                 }
                 val planningSuggestion = planningSuggestionState.value
 
+                var totalDays = 0
+                var changedDays = 0
+
                 days.forEach { day ->
                     val dayPlaces = places.filter { it.tripDayId == day.id }
                     if (dayPlaces.size < 2) return@forEach
-                    val orderedIds = if (
+                    totalDays += 1
+
+                    // Текущий порядок — как его видит пользователь в плане:
+                    // сначала по scheduledTime (UI сортирует по нему), потом по orderIndex.
+                    val currentOrder = dayPlaces.sortedWith(
+                        compareBy<com.triloo.data.model.Place> {
+                            parseScheduledMinutes(it.scheduledTime)
+                        }.thenBy { it.orderIndex }
+                    )
+
+                    val optimizedOrder = if (
                         _selectedPlanningMode.value == RoutePlanningMode.AI_ASSISTED &&
                         planningSuggestion != null
                     ) {
-                        planningSuggestion.dayOrders[day.id].orEmpty()
-                            .ifEmpty { dayPlaces.sortedBy { it.orderIndex }.map { it.id } }
+                        val orderedIds = planningSuggestion.dayOrders[day.id].orEmpty()
+                        if (orderedIds.isEmpty()) currentOrder
+                        else orderedIds.mapNotNull { id -> dayPlaces.firstOrNull { it.id == id } }
                     } else {
-                        val result = routeOptimizer.optimizeRoute(dayPlaces, startLocation)
-                        result.optimizedPlaces.map { it.id }
+                        routeOptimizer.optimizeRoute(dayPlaces, startLocation).optimizedPlaces
                     }
-                    tripRepository.reorderPlaces(day.id, orderedIds)
+
+                    if (optimizedOrder.map { it.id } == currentOrder.map { it.id }) {
+                        return@forEach
+                    }
+
+                    // Сохраняем существующие тайм-слоты дня и переселяем в них места
+                    // в новом порядке. Иначе reorder только orderIndex'а никак не
+                    // отображается в UI (план сортирует по scheduledTime).
+                    val now = System.currentTimeMillis()
+                    optimizedOrder.forEachIndexed { idx, place ->
+                        val targetSlot = currentOrder[idx]
+                        tripRepository.updatePlace(
+                            place.copy(
+                                scheduledTime = targetSlot.scheduledTime,
+                                estimatedDuration = targetSlot.estimatedDuration,
+                                orderIndex = idx,
+                                updatedAt = now
+                            )
+                        )
+                    }
+                    changedDays += 1
+                }
+
+                // Reuse-им существующий канал _actionError для фидбэка — снэк-бар уже
+                // подписан на него; иначе тап «Запустить» был молчаливым.
+                _actionError.value = when {
+                    totalDays == 0 -> "Добавьте 2+ места в день, чтобы оптимизировать"
+                    changedDays == 0 -> "Маршрут уже идёт оптимально"
+                    changedDays == 1 -> "Маршрут пересобран на 1 дне"
+                    else -> "Маршрут пересобран · $changedDays дн."
                 }
             }.onFailure { error ->
                 Log.w(TAG, "optimizeRoute failed", error)
@@ -431,6 +478,19 @@ class TripDetailsViewModel @Inject constructor(
         locationSharingServiceController.stopSharing()
     }
 
+    /**
+     * Одноразово получает координаты пользователя через FusedLocationProviderClient
+     * и пробрасывает их в callback. UI отвечает за permission-запрос — без
+     * ACCESS_FINE/COARSE_LOCATION нечего и спрашивать у системы.
+     */
+    fun requestCurrentUserLocation(onResolved: (Double, Double) -> Unit) {
+        viewModelScope.launch {
+            val point = runCatching { locationSharingManager.currentLocation() }
+                .getOrNull() ?: return@launch
+            onResolved(point.latitude, point.longitude)
+        }
+    }
+
     fun setMapVisible(isVisible: Boolean) {
         if (!isVisible) {
             participantRefreshJob?.cancel()
@@ -456,20 +516,46 @@ class TripDetailsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * «18:30» / «6:30 PM» → минуты от полуночи. Пустые/невалидные строки
+     * получают Int.MAX_VALUE, чтобы при сортировке пойти в самый конец —
+     * совпадает с тем, как план показывает места без времени.
+     */
+    private fun parseScheduledMinutes(raw: String?): Int {
+        if (raw.isNullOrBlank()) return Int.MAX_VALUE
+        val trimmed = raw.trim().uppercase(Locale.US)
+        val isPm = trimmed.endsWith("PM")
+        val isAm = trimmed.endsWith("AM")
+        val core = trimmed.removeSuffix("AM").removeSuffix("PM").trim()
+        val parts = core.split(":")
+        if (parts.size != 2) return Int.MAX_VALUE
+        val h = parts[0].toIntOrNull() ?: return Int.MAX_VALUE
+        val m = parts[1].toIntOrNull() ?: return Int.MAX_VALUE
+        val hour24 = when {
+            isPm && h < 12 -> h + 12
+            isAm && h == 12 -> 0
+            else -> h
+        }
+        return hour24 * 60 + m
+    }
+
     private fun resolveOrderedPlaces(
         days: List<TripDay>,
         places: List<Place>,
         planningMode: RoutePlanningMode,
         planningSuggestion: RoutePlanSuggestion?
     ): List<Place> {
+        // Zero-coord места ломают любые расстояния — отбрасываем их сразу,
+        // чтобы и routeOptimizer, и flattenDayOrders видели только осмысленные точки.
+        val withCoords = places.filter { it.latitude != 0.0 || it.longitude != 0.0 }
         if (planningMode == RoutePlanningMode.AI_ASSISTED && planningSuggestion != null) {
             return routePlanningAssistant.flattenDayOrders(
                 days = days,
-                places = places,
+                places = withCoords,
                 dayOrders = planningSuggestion.dayOrders
             )
         }
-        return orderPlacesForRoute(days, places)
+        return orderPlacesForRoute(days, withCoords)
     }
 
     private fun orderPlacesForRoute(
