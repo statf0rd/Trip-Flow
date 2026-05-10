@@ -1,13 +1,19 @@
 {
-  "name": "triloo-sync-backend",
-  "version": "0.1.0",
+  "name": "triloo-backend",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=18.18 <21"
+  },
   "scripts": {
     "start": "node src/index.js"
   },
   "dependencies": {
+    "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "nodemailer": "^6.9.16"
   }
 }

@@ -73,6 +73,7 @@ data class BackendUser(
     val avatarUrl: String? = null,
     val phoneNumber: String? = null,
     val preferredCurrency: String = "RUB",
+    val emailVerified: Boolean = false,
     val createdAt: Long,
     val lastLoginAt: Long
 )

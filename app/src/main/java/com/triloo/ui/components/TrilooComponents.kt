@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -217,6 +218,8 @@ fun TrilooCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    color: Color = MaterialTheme.colorScheme.surface,
+    border: BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -250,7 +253,8 @@ fun TrilooCard(
             .scale(scale)
             .then(clickableModifier),
         shape = TrilooShapes.card,
-        color = MaterialTheme.colorScheme.surface,
+        color = color,
+        border = border,
         shadowElevation = elevation,
         tonalElevation = 1.dp
     ) {

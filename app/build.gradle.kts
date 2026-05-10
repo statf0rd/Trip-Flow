@@ -48,7 +48,9 @@ fun readLocalProperty(name: String, defaultValue: String): String {
 
 val trilooBackendUrl = readLocalProperty(
     name = "TRILOO_BACKEND_URL",
-    defaultValue = "http://5.129.193.245:8091/"
+    // Backend Triloo переехал на HTTPS (Caddy + Lets Encrypt) — старый HTTP
+    // default ломал auth, потому что network_security_config теперь HTTPS-only.
+    defaultValue = "https://triloo.85.192.61.86.nip.io/"
 ).let { value ->
     if (value.endsWith("/")) value else "$value/"
 }
@@ -203,6 +205,9 @@ dependencies {
     // Splash Screen
     implementation(libs.androidx.splashscreen)
 
+    // Haze — backdrop-blur для liquid-glass нав-бара.
+    implementation(libs.haze)
+
     // Location / OCR
     implementation(libs.play.services.location)
     implementation(libs.mlkit.text.recognition)
@@ -210,10 +215,6 @@ dependencies {
 
     // Feature modules
     implementation(project(":feature-map"))
-
-    // QR / ZXing
-    implementation(libs.zxing.core)
-    implementation(libs.zxing.android.embedded)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

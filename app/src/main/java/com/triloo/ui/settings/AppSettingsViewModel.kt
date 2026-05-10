@@ -19,6 +19,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -43,21 +44,30 @@ class AppSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    val uiState: StateFlow<AppSettingsUiState> = repository.settings
-        .map {
-            AppSettingsUiState(
-                themeMode = it.themeMode,
-                defaultCurrency = it.defaultCurrency,
-                language = it.language,
-                notificationsEnabled = it.notificationsEnabled,
-                syncEnabled = it.syncEnabled
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppSettingsUiState()
+    val uiState: StateFlow<AppSettingsUiState> = combine(
+        repository.settings,
+        userProfileRepository.profile,
+        tripRepository.observeAllTrips(),
+        tripRepository.observeTotalDayCount(),
+        tripRepository.observeTotalPlaceCount()
+    ) { settings, profile, trips, dayCount, placeCount ->
+        AppSettingsUiState(
+            themeMode = settings.themeMode,
+            defaultCurrency = settings.defaultCurrency,
+            language = settings.language,
+            notificationsEnabled = settings.notificationsEnabled,
+            syncEnabled = settings.syncEnabled,
+            displayName = profile.displayName,
+            isAuthenticated = profile.isAuthenticated,
+            tripsCount = trips.size,
+            daysCount = dayCount,
+            placesCount = placeCount
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AppSettingsUiState()
+    )
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
@@ -146,6 +156,11 @@ class AppSettingsViewModel @Inject constructor(
  * Состояние экрана настроек приложения.
  */
 data class AppSettingsUiState(
+    val displayName: String = "",
+    val isAuthenticated: Boolean = false,
+    val tripsCount: Int = 0,
+    val daysCount: Int = 0,
+    val placesCount: Int = 0,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val defaultCurrency: String = "RUB",
     val language: AppLanguage = AppLanguage.RU,

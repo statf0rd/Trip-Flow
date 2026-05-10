@@ -48,6 +48,13 @@ interface PlaceDao {
     
     @Query("SELECT COUNT(*) FROM trip_days WHERE tripId = :tripId")
     suspend fun getTripDayCount(tripId: String): Int
+
+    // Глобальные счётчики для шапки экрана настроек («4 поездки · 21 дней · 37 мест»).
+    @Query("SELECT COUNT(*) FROM trip_days")
+    fun observeTotalDayCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM places")
+    fun observeTotalPlaceCount(): Flow<Int>
     
     // CRUD-операции для мест.
     

@@ -16,8 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.Login
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,7 +42,6 @@ import com.triloo.ui.components.SectionHeader
 import com.triloo.ui.components.TrilooButton
 import com.triloo.ui.components.TrilooCard
 import com.triloo.ui.components.TrilooChip
-import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.theme.Error
 import com.triloo.ui.theme.Slate500
 import com.triloo.ui.theme.Slate600
@@ -52,16 +51,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Экран групповых поездок со списком общих маршрутов и формой входа по коду или QR.
+ * Экран групповых поездок со списком общих маршрутов и формой входа по текстовому коду.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupTripsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
-    onScanInvite: () -> Unit,
-    qrResult: String? = null,
-    onConsumeQrResult: () -> Unit = {},
     viewModel: GroupTripsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -74,19 +70,11 @@ fun GroupTripsScreen(
         }
     }
 
-    LaunchedEffect(qrResult) {
-        if (!qrResult.isNullOrBlank()) {
-            viewModel.handleInviteQrPayload(qrResult)
-            onConsumeQrResult()
-        }
-    }
-
     GroupTripsContent(
         uiState = uiState,
         groupTrips = groupTrips,
         onNavigateBack = onNavigateBack,
         onNavigateToTrip = onNavigateToTrip,
-        onScanInvite = onScanInvite,
         onInviteCodeChange = viewModel::updateInviteCode,
         onDisplayNameChange = viewModel::updateDisplayName,
         onJoin = viewModel::joinByInviteCode
@@ -100,7 +88,6 @@ private fun GroupTripsContent(
     groupTrips: List<Trip>,
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
-    onScanInvite: () -> Unit,
     onInviteCodeChange: (String) -> Unit,
     onDisplayNameChange: (String) -> Unit,
     onJoin: () -> Unit
@@ -147,14 +134,9 @@ private fun GroupTripsContent(
                     displayName = uiState.displayName,
                     isJoining = uiState.isJoining,
                     error = uiState.error,
-                    inviteScanProgress = uiState.inviteScanProgress,
-                    inviteScanTotal = uiState.inviteScanTotal,
-                    inviteScanError = uiState.inviteScanError,
-                    isProcessingInvite = uiState.isProcessingInvite,
                     onInviteCodeChange = onInviteCodeChange,
                     onDisplayNameChange = onDisplayNameChange,
-                    onJoin = onJoin,
-                    onScanInvite = onScanInvite
+                    onJoin = onJoin
                 )
             }
 
@@ -211,14 +193,9 @@ private fun JoinByCodeCard(
     displayName: String,
     isJoining: Boolean,
     error: String?,
-    inviteScanProgress: Int,
-    inviteScanTotal: Int,
-    inviteScanError: String?,
-    isProcessingInvite: Boolean,
     onInviteCodeChange: (String) -> Unit,
     onDisplayNameChange: (String) -> Unit,
-    onJoin: () -> Unit,
-    onScanInvite: () -> Unit
+    onJoin: () -> Unit
 ) {
     TrilooCard(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -279,39 +256,9 @@ private fun JoinByCodeCard(
             onClick = onJoin,
             enabled = inviteCode.isNotBlank() && displayName.isNotBlank(),
             isLoading = isJoining,
-            icon = Icons.Rounded.QrCode2,
+            icon = Icons.Rounded.Login,
             modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        TrilooButton(
-            text = "Сканировать QR-приглашение",
-            onClick = onScanInvite,
-            enabled = !isProcessingInvite,
-            isLoading = isProcessingInvite,
-            style = ButtonStyle.Ghost,
-            icon = Icons.Rounded.QrCode2,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (inviteScanTotal > 0) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Сканировано $inviteScanProgress из $inviteScanTotal",
-                style = MaterialTheme.typography.bodySmall,
-                color = Slate600
-            )
-        }
-
-        inviteScanError?.let { message ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = Error
-            )
-        }
     }
 }
 
@@ -367,7 +314,6 @@ private fun GroupTripsScreenPreview() {
             ),
             onNavigateBack = {},
             onNavigateToTrip = {},
-            onScanInvite = {},
             onInviteCodeChange = {},
             onDisplayNameChange = {},
             onJoin = {}

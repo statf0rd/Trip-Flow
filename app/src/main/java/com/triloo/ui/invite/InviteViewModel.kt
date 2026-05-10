@@ -3,9 +3,6 @@ package com.triloo.ui.invite
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.triloo.data.relay.RelayPayloadType
-import com.triloo.data.relay.RelayQrCodec
-import com.triloo.data.relay.RelayRepository
 import com.triloo.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,11 +13,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Генерирует приглашение в поездку и упаковывает его в последовательность QR-чанков.
+ * Загружает приглашение в поездку: имя поездки и текстовый код для приглашения участников.
  */
 @HiltViewModel
 class InviteViewModel @Inject constructor(
-    private val relayRepository: RelayRepository,
     private val tripRepository: TripRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -40,24 +36,20 @@ class InviteViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val trip = tripRepository.getTripById(tripId)
-                val invitePackage = relayRepository.buildInvitePackage(tripId)
-                if (trip == null || invitePackage == null) {
+                if (trip == null) {
                     _uiState.update { it.copy(isLoading = false, error = "Поездка не найдена") }
                     return@launch
                 }
-                val json = relayRepository.encodeInvite(invitePackage)
-                val chunks = RelayQrCodec.encode(RelayPayloadType.INVITE, json)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         tripName = trip.name,
-                        inviteCode = trip.inviteCode,
-                        chunks = chunks
+                        inviteCode = trip.inviteCode
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = e.message ?: "Ошибка генерации приглашения")
+                    it.copy(isLoading = false, error = e.message ?: "Ошибка загрузки приглашения")
                 }
             }
         }
@@ -65,12 +57,11 @@ class InviteViewModel @Inject constructor(
 }
 
 /**
- * Состояние экрана приглашения: код, имя поездки и готовые QR-страницы.
+ * Состояние экрана приглашения: текстовый код и имя поездки.
  */
 data class InviteUiState(
     val tripName: String = "",
     val inviteCode: String = "",
-    val chunks: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
 )

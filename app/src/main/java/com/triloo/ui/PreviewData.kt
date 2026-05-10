@@ -14,7 +14,6 @@ import com.triloo.data.places.PlaceSuggestion
 import com.triloo.ui.auth.AuthUiState
 import com.triloo.ui.grouptrips.GroupTripsUiState
 import com.triloo.ui.invite.InviteUiState
-import com.triloo.ui.relay.RelayUiState
 import com.triloo.ui.settings.AppSettingsUiState
 import com.triloo.ui.tripdetails.AddExpenseUiState
 import com.triloo.ui.tripdetails.AddPlaceUiState
@@ -249,36 +248,12 @@ object PreviewData {
 
     val groupTripsState: GroupTripsUiState = GroupTripsUiState(
         inviteCode = "TRIL00",
-        displayName = "Аня",
-        inviteScanProgress = 1,
-        inviteScanTotal = 3
+        displayName = "Аня"
     )
 
     val inviteState: InviteUiState = InviteUiState(
         tripName = trip.name,
-        inviteCode = trip.inviteCode,
-        chunks = listOf("chunk-1", "chunk-2")
-    )
-
-    val relayState: RelayUiState = RelayUiState(
-        trip = trip,
-        isBluetoothSupported = true,
-        isBluetoothEnabled = true,
-        isHosting = true,
-        localDeviceName = "Pixel 8 Pro",
-        statusMessage = "Ожидание подключения по Bluetooth...",
-        devices = listOf(
-            com.triloo.data.relay.BluetoothRelayDevice(
-                name = "Galaxy S24",
-                address = "00:11:22:33:44:55",
-                isBonded = true
-            ),
-            com.triloo.data.relay.BluetoothRelayDevice(
-                name = "iPad test",
-                address = "11:22:33:44:55:66",
-                isBonded = false
-            )
-        )
+        inviteCode = trip.inviteCode
     )
 
     val authState: AuthUiState = AuthUiState()

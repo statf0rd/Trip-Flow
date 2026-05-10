@@ -56,10 +56,8 @@ materialIconsExtended = "1.7.8"
 
 # Splash Screen
 splashScreen = "1.0.1"
+haze = "1.0.2"
 
-# QR / ZXing
-zxingCore = "3.5.3"
-zxingEmbedded = "4.3.0"
 googleServices = "4.4.2"
 robolectric = "4.14.1"
 
@@ -140,9 +138,9 @@ firebase-crashlytics-ktx = { group = "com.google.firebase", name = "firebase-cra
 # Splash Screen
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashScreen" }
 
-# QR / ZXing
-zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
-zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingEmbedded" }
+# Haze — настоящий backdrop-blur для Compose (нужен для liquid-glass нав-бара).
+haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
+
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]

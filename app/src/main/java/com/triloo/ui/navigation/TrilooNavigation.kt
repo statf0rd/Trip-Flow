@@ -1,5 +1,7 @@
 package com.triloo.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,15 +16,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.triloo.ui.auth.AuthFlowScreen
+import com.triloo.ui.budget.BudgetScreen
 import com.triloo.ui.grouptrips.GroupTripsScreen
 import com.triloo.ui.invite.InviteScreen
-import com.triloo.ui.qr.QrScannerScreen
-import com.triloo.ui.relay.RelayScreen
 import com.triloo.ui.settings.SettingsScreen
 import com.triloo.ui.settings.PrivacyPolicyScreen
 import com.triloo.ui.tripdetails.AddExpenseScreen
@@ -42,9 +42,6 @@ sealed class Screen(val route: String) {
     object TripList : Screen("trips")
     object Auth : Screen("auth")
     object PrivacyPolicy : Screen("privacy-policy")
-    object QrScanner : Screen("qr-scan?mode={mode}") {
-        fun createRoute(mode: String) = "qr-scan?mode=$mode"
-    }
     object CreateTrip : Screen("trips/create?isGroupTrip={isGroupTrip}") {
         fun createRoute(isGroupTrip: Boolean) = "trips/create?isGroupTrip=$isGroupTrip"
     }
@@ -53,13 +50,11 @@ sealed class Screen(val route: String) {
     }
     object Settings : Screen("settings")
     object GroupTrips : Screen("group-trips")
+    object Budget : Screen("budget")
     object Invite : Screen("trips/{tripId}/invite") {
         fun createRoute(tripId: String) = "trips/$tripId/invite"
     }
-    object Relay : Screen("trips/{tripId}/relay") {
-        fun createRoute(tripId: String) = "trips/$tripId/relay"
-    }
-    
+
     object TripDetails : Screen("trips/{tripId}") {
         fun createRoute(tripId: String) = "trips/$tripId"
     }
@@ -94,6 +89,16 @@ private val overlayRoutes = setOf(
     Screen.EditExpense.route
 )
 
+// Корни табов нижней нав-панели. Переходы между ними должны быть быстрым
+// crossfade'ом, а не push-слайдом — иначе тап по табу ощущается как полная
+// перенастройка экрана (long delay + horizontal slide).
+private val tabRootRoutes = setOf(
+    Screen.TripList.route,
+    Screen.GroupTrips.route,
+    Screen.Budget.route,
+    Screen.Settings.route
+)
+
 private fun String?.presentation(): ScreenPresentation {
     return if (this != null && this in overlayRoutes) {
         ScreenPresentation.OVERLAY
@@ -102,47 +107,70 @@ private fun String?.presentation(): ScreenPresentation {
     }
 }
 
+private fun isTabSwitch(initial: String?, target: String?): Boolean =
+    initial != null && target != null && initial in tabRootRoutes && target in tabRootRoutes
+
 @Composable
 fun TrilooNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.TripList.route
+    startDestination: String = Screen.TripList.route,
+    onShowCreateTripSheet: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
+        // Между корнями табов используем `EnterTransition.None`/`ExitTransition.None`
+        // — мгновенная подмена контента без crossfade'а. Раньше тут стоял
+        // 140ms fadeIn+fadeOut, но он накладывался на 320ms-анимацию пилюли
+        // и инициализацию Hilt-VM нового экрана; на устройстве это субъективно
+        // ощущалось как «зависание перед открытием раздела» в 1-2 секунды.
+        // Material 3 bottom-nav рекомендует именно instant-swap: визуальный
+        // отклик дают пилюля и пружина FAB-кнопки в нав-баре.
         enterTransition = {
-            val initialPresentation = initialState.destination.route.presentation()
-            val targetPresentation = targetState.destination.route.presentation()
+            val initial = initialState.destination.route
+            val target = targetState.destination.route
+            val initialPresentation = initial.presentation()
+            val targetPresentation = target.presentation()
             when {
+                isTabSwitch(initial, target) -> EnterTransition.None
                 targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterBottomSheet()
                 initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterNavFromOverlay()
                 else -> TrilooMotion.enterNavForward()
             }
         },
         exitTransition = {
-            val initialPresentation = initialState.destination.route.presentation()
-            val targetPresentation = targetState.destination.route.presentation()
+            val initial = initialState.destination.route
+            val target = targetState.destination.route
+            val initialPresentation = initial.presentation()
+            val targetPresentation = target.presentation()
             when {
+                isTabSwitch(initial, target) -> ExitTransition.None
                 targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitNavForOverlay()
                 initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitBottomSheet()
                 else -> TrilooMotion.exitNavForward()
             }
         },
         popEnterTransition = {
-            val initialPresentation = initialState.destination.route.presentation()
-            val targetPresentation = targetState.destination.route.presentation()
+            val initial = initialState.destination.route
+            val target = targetState.destination.route
+            val initialPresentation = initial.presentation()
+            val targetPresentation = target.presentation()
             when {
+                isTabSwitch(initial, target) -> EnterTransition.None
                 initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterNavUnderOverlay()
                 targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.enterBottomSheet()
                 else -> TrilooMotion.enterNavBack()
             }
         },
         popExitTransition = {
-            val initialPresentation = initialState.destination.route.presentation()
-            val targetPresentation = targetState.destination.route.presentation()
+            val initial = initialState.destination.route
+            val target = targetState.destination.route
+            val initialPresentation = initial.presentation()
+            val targetPresentation = target.presentation()
             when {
+                isTabSwitch(initial, target) -> ExitTransition.None
                 initialPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitBottomSheet()
                 targetPresentation == ScreenPresentation.OVERLAY -> TrilooMotion.exitNavForOverlay()
                 else -> TrilooMotion.exitNavBack()
@@ -155,15 +183,10 @@ fun TrilooNavHost(
                 onNavigateToTrip = { tripId ->
                     navController.navigate(Screen.TripDetails.createRoute(tripId))
                 },
-                onNavigateToCreateTrip = { isGroupTrip ->
-                    navController.navigate(Screen.CreateTrip.createRoute(isGroupTrip))
-                },
-                onNavigateToGroupTrips = {
-                    navController.navigate(Screen.GroupTrips.route)
-                },
-                onNavigateToSettings = {
-                    navController.navigate(Screen.Settings.route)
-                }
+                // Создание поездки теперь триггерится глобальной шторкой,
+                // которую владеет `MainActivity` (см. `CreateTripModalSheet`).
+                // Внутрискриновая «Куда дальше?» делегирует ей же.
+                onCreateTrip = onShowCreateTripSheet
             )
         }
         
@@ -207,28 +230,19 @@ fun TrilooNavHost(
 
         // Групповые поездки.
         composable(Screen.GroupTrips.route) {
-            val qrResultFlow = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getStateFlow("qr_result", null)
-            val qrResult = qrResultFlow?.collectAsStateWithLifecycle()?.value
-
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 GroupTripsScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToTrip = { tripId ->
                         navController.navigate(Screen.TripDetails.createRoute(tripId))
-                    },
-                    onScanInvite = {
-                        navController.navigate(Screen.QrScanner.createRoute("invite"))
-                    },
-                    qrResult = qrResult,
-                    onConsumeQrResult = {
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("qr_result", null)
                     }
                 )
             }
+        }
+
+        // Глобальный экран бюджета — пока заглушка, см. BudgetScreen.kt.
+        composable(Screen.Budget.route) {
+            BudgetScreen()
         }
         
         // Создание поездки.
@@ -290,12 +304,6 @@ fun TrilooNavHost(
                 onNavigateToAddExpense = { id ->
                     navController.navigate(Screen.AddExpense.createRoute(id))
                 },
-                onNavigateToInvite = { id ->
-                    navController.navigate(Screen.Invite.createRoute(id))
-                },
-                onNavigateToRelay = { id ->
-                    navController.navigate(Screen.Relay.createRoute(id))
-                },
                 onNavigateToEditTrip = { id ->
                     navController.navigate(Screen.EditTrip.createRoute(id))
                 },
@@ -319,48 +327,6 @@ fun TrilooNavHost(
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 InviteScreen(
                     onNavigateBack = { navController.popBackStack() }
-                )
-            }
-        }
-
-        // Relay sync.
-        composable(
-            route = Screen.Relay.route,
-            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
-        ) {
-            SwipeBackContainer(onBack = { navController.popBackStack() }) {
-                RelayScreen(
-                    onNavigateBack = { navController.popBackStack() }
-                )
-            }
-        }
-
-        // QR-сканер.
-        composable(
-            route = Screen.QrScanner.route,
-            arguments = listOf(
-                navArgument("mode") {
-                    type = NavType.StringType
-                    defaultValue = "relay"
-                }
-            )
-        ) { backStackEntry ->
-            val mode = backStackEntry.arguments?.getString("mode") ?: "relay"
-            val title = when (mode) {
-                "invite" -> "Сканировать приглашение"
-                else -> "Сканировать QR"
-            }
-
-            SwipeBackContainer(onBack = { navController.popBackStack() }) {
-                QrScannerScreen(
-                    title = title,
-                    onNavigateBack = { navController.popBackStack() },
-                    onResult = { result ->
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("qr_result", result)
-                        navController.popBackStack()
-                    }
                 )
             }
         }

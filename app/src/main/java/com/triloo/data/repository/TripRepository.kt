@@ -32,6 +32,10 @@ class TripRepository @Inject constructor(
     
     fun observeAllTrips(): Flow<List<Trip>> = tripDao.observeAllTrips()
 
+    /** Глобальные счётчики для шапки настроек: «4 поездки · 21 день · 37 мест». */
+    fun observeTotalDayCount(): Flow<Int> = placeDao.observeTotalDayCount()
+    fun observeTotalPlaceCount(): Flow<Int> = placeDao.observeTotalPlaceCount()
+
     suspend fun getAllTrips(): List<Trip> = tripDao.getAllTrips()
     
     fun observeTripById(tripId: String): Flow<Trip?> = tripDao.observeTripById(tripId)

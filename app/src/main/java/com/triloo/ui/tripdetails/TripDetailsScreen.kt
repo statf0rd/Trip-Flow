@@ -59,8 +59,6 @@ fun TripDetailsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAddPlace: (String, String) -> Unit, // tripId, dayId
     onNavigateToAddExpense: (String) -> Unit,
-    onNavigateToInvite: (String) -> Unit,
-    onNavigateToRelay: (String) -> Unit,
     onNavigateToEditTrip: (String) -> Unit,
     onNavigateToEditPlace: (String) -> Unit = {},
     onNavigateToPlaceDetails: (String) -> Unit = {}, // placeId
@@ -68,6 +66,9 @@ fun TripDetailsScreen(
     viewModel: TripDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Поездка в архиве (`endDate < сегодня`) — все write-actions скрываем,
+    // оставляем только чтение и удаление всей поездки.
+    val isReadOnly = uiState.trip?.isPast == true
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -129,11 +130,9 @@ fun TripDetailsScreen(
                 TripDetailsTopBar(
                     trip = trip,
                     onNavigateBack = onNavigateBack,
-                    onShare = { onNavigateToInvite(trip.id) },
-                    onRelay = { onNavigateToRelay(trip.id) },
                     onEdit = { onNavigateToEditTrip(trip.id) },
                     onDelete = { showDeleteDialog = true },
-                    onOptimizeRoute = { viewModel.optimizeRoute() }
+                    isReadOnly = isReadOnly
                 )
             }
         },
@@ -158,6 +157,9 @@ fun TripDetailsScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
+                if (isReadOnly) {
+                    ArchivedTripBanner()
+                }
                 // Кастомная строка табов.
                 TrilooTabRow(
                     tabs = tabs,
@@ -187,7 +189,8 @@ fun TripDetailsScreen(
                                 onNavigateToAddPlace(tripId, dayId)
                             },
                             onDeletePlace = { placeId -> viewModel.deletePlace(placeId) },
-                            onOptimizeRoute = { viewModel.optimizeRoute() }
+                            onOptimizeRoute = { viewModel.optimizeRoute() },
+                            isReadOnly = isReadOnly
                         )
                         1 -> MapTab(
                             trip = uiState.trip!!,
@@ -233,16 +236,20 @@ fun TripDetailsScreen(
                             }
                         )
                         2 -> ExpensesTab(
+                            trip = uiState.trip!!,
                             expenses = uiState.expenses,
                             totalAmount = uiState.totalExpenses,
                             currency = uiState.trip!!.baseCurrency,
                             balances = uiState.balances,
-                            onExpenseClick = { expenseId -> 
-                                onNavigateToEditExpense(tripId, expenseId) 
+                            onExpenseClick = { expenseId ->
+                                // В архиве клик по записи не должен открывать
+                                // экран редактирования — игнорируем.
+                                if (!isReadOnly) onNavigateToEditExpense(tripId, expenseId)
                             },
                             onAddExpense = { onNavigateToAddExpense(tripId) },
                             onToggleExpenseSettled = viewModel::toggleExpenseSettled,
-                            onDeleteExpense = { expenseId -> viewModel.deleteExpense(expenseId) }
+                            onDeleteExpense = { expenseId -> viewModel.deleteExpense(expenseId) },
+                            isReadOnly = isReadOnly
                         )
                     }
                 }
@@ -292,18 +299,16 @@ fun TripDetailsScreen(
 private fun TripDetailsTopBar(
     trip: Trip,
     onNavigateBack: () -> Unit,
-    onShare: () -> Unit,
-    onRelay: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onOptimizeRoute: () -> Unit
+    isReadOnly: Boolean = false
 ) {
-    val dateFormatter = remember { 
-        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru")) 
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
     }
-    
+
     var showMenu by remember { mutableStateOf(false) }
-    
+
     TopAppBar(
         title = {
             Column {
@@ -314,8 +319,10 @@ private fun TripDetailsTopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                val subtitleBase = "${trip.destination} • ${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}"
+                val subtitle = if (isReadOnly) "$subtitleBase • Завершена" else subtitleBase
                 Text(
-                    text = "${trip.destination} • ${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -332,15 +339,9 @@ private fun TripDetailsTopBar(
             }
         },
         actions = {
-            if (trip.isGroupTrip) {
-                IconButton(onClick = onShare) {
-                    Icon(
-                        imageVector = Icons.Rounded.PersonAdd,
-                        contentDescription = "Пригласить"
-                    )
-                }
-            }
-            
+            // По запросу пользователя убрали из шапки иконку «пригласить» (PersonAdd),
+            // а из 3-точечного меню — пункты «Оптимизировать маршрут», «Поделиться»
+            // и «Bluetooth-синхронизация» (фича Relay/QR пересылки удалена из проекта).
             Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
@@ -348,78 +349,35 @@ private fun TripDetailsTopBar(
                         contentDescription = "Меню"
                     )
                 }
-                
+
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Редактировать") },
-                        onClick = {
-                            showMenu = false
-                            onEdit()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Rounded.Edit,
-                                contentDescription = null
-                            )
-                        }
-                    )
-                    
-                    DropdownMenuItem(
-                        text = { Text("Оптимизировать маршрут") },
-                        onClick = {
-                            showMenu = false
-                            onOptimizeRoute()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = null,
-                                tint = TealSecondary
-                            )
-                        }
-                    )
-                    
-                    if (trip.isGroupTrip) {
+                    if (!isReadOnly) {
                         DropdownMenuItem(
-                            text = { Text("Bluetooth-синхронизация") },
+                            text = { Text("Редактировать") },
                             onClick = {
                                 showMenu = false
-                                onRelay()
+                                onEdit()
                             },
                             leadingIcon = {
                                 Icon(
-                                imageVector = Icons.Rounded.Sync,
+                                    imageVector = Icons.Rounded.Edit,
                                     contentDescription = null
                                 )
                             }
                         )
 
-                        DropdownMenuItem(
-                            text = { Text("Поделиться") },
-                            onClick = {
-                                showMenu = false
-                                onShare()
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Share,
-                                    contentDescription = null
-                                )
-                            }
-                        )
+                        HorizontalDivider()
                     }
-                    
-                    HorizontalDivider()
-                    
+
                     DropdownMenuItem(
-                        text = { 
+                        text = {
                             Text(
                                 "Удалить поездку",
                                 color = Error
-                            ) 
+                            )
                         },
                         onClick = {
                             showMenu = false
@@ -440,6 +398,49 @@ private fun TripDetailsTopBar(
             containerColor = Color.Transparent
         )
     )
+}
+
+/**
+ * Шапка-баннер «Поездка завершена». Показывается на всех табах при
+ * `isReadOnly = true`. Использует tertiary-палитру (golden) — намеренно
+ * отличается от primary (coral) и secondary (teal), чтобы статус не путали с
+ * активной поездкой или чипом дней до старта.
+ */
+@Composable
+private fun ArchivedTripBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = TrilooShapes.Sm,
+        color = MaterialTheme.colorScheme.tertiaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Поездка завершена",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = "Журнальная запись — только просмотр.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -479,11 +480,6 @@ private fun TrilooTabRow(
                     .height(rowHeight)
                     .clip(TrilooShapes.Sm)
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = TrilooShapes.Sm
-                    )
             )
             Row(
                 modifier = Modifier
@@ -513,7 +509,9 @@ private fun TrilooTabRow(
                     )
                     val textColor by animateColorAsState(
                         targetValue = if (isSelected) {
-                            MaterialTheme.colorScheme.onSurface
+                            // По дизайну V1 — у выбранной вкладки текст того же coral-цвета,
+                            // что и иконка. Раньше был onSurface (белый), не совпадало с макетом.
+                            MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
@@ -575,11 +573,8 @@ private fun TripDetailsScreenPreview() {
                     TripDetailsTopBar(
                         trip = trip,
                         onNavigateBack = {},
-                        onShare = {},
-                        onRelay = {},
                         onEdit = {},
-                        onDelete = {},
-                        onOptimizeRoute = {}
+                        onDelete = {}
                     )
                 }
             }

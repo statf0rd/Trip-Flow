@@ -17,16 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,83 +42,44 @@ import com.triloo.ui.theme.TrilooMotion
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlinx.coroutines.launch
 
-private val UpcomingCardWidth = 280.dp
-private val UpcomingCardMinHeight = 176.dp
 private val QuickStatHeight = 72.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripListScreen(
     onNavigateToTrip: (String) -> Unit,
-    onNavigateToCreateTrip: (isGroupTrip: Boolean) -> Unit,
-    onNavigateToGroupTrips: () -> Unit,
-    onNavigateToSettings: () -> Unit,
+    onCreateTrip: () -> Unit,
     viewModel: TripListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-    var showCreateTripSheet by rememberSaveable { mutableStateOf(false) }
     var tripToDelete by remember { mutableStateOf<Trip?>(null) }
-    val createTripSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    
+
     Scaffold(
-        // TopAppBar намеренно отсутствует: hero-блок с приветствием и иконки
-        // действий теперь отображаются как первый item внутри LazyColumn,
-        // что экономит вертикальное пространство и поднимает контент.
-        floatingActionButton = {
-            if (uiState.hasTrips) {
-                TrilooFab(
-                    onClick = { showCreateTripSheet = true },
-                    icon = Icons.Rounded.Add,
-                    contentDescription = "Создать путешествие"
-                )
-            }
-        },
+        // TopAppBar и FAB намеренно отсутствуют: создание поездки теперь
+        // живёт в центральной FAB-кнопке нижней liquid-glass нав-панели
+        // (`LiquidGlassNavBar.centerActionIcon`), а не на этом экране.
+        // Иконка настроек убрана — Settings доступны как четвёртый таб бара.
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        
+
         if (isLoading) {
             TripListLoadingState(modifier = Modifier.padding(paddingValues))
         } else if (!uiState.hasTrips) {
             EmptyTripsState(
                 modifier = Modifier.padding(paddingValues),
-                onCreateTrip = { showCreateTripSheet = true }
+                onCreateTrip = onCreateTrip
             )
         } else {
             TripListContent(
                 uiState = uiState,
                 onTripClick = onNavigateToTrip,
                 onTripLongClick = { trip -> tripToDelete = trip },
-                onCreateTrip = { showCreateTripSheet = true },
+                onCreateTrip = onCreateTrip,
                 modifier = Modifier.padding(paddingValues)
             )
-        }
-    }
-
-    if (showCreateTripSheet) {
-        fun hideThen(action: () -> Unit) {
-            scope.launch {
-                createTripSheetState.hide()
-                showCreateTripSheet = false
-                action()
-            }
-        }
-
-        ModalBottomSheet(
-            onDismissRequest = { showCreateTripSheet = false },
-            sheetState = createTripSheetState
-        ) {
-            CreateTripTypeSheet(
-                onCreatePersonalTrip = { hideThen { onNavigateToCreateTrip(false) } },
-                onCreateGroupTrip = { hideThen { onNavigateToCreateTrip(true) } },
-                onJoinGroupTrip = { hideThen(onNavigateToGroupTrips) },
-                onOpenSettings = { hideThen(onNavigateToSettings) }
-            )
-            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 
@@ -171,11 +133,12 @@ private fun TripListContent(
         modifier = modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
     ) {
-        // Hero — только приветствие по времени суток. Иконки действий
-        // (Settings, Группы) скрыты с главного экрана и доступны через
-        // bottom-sheet, открываемый по FAB.
+        // Hero — только приветствие. Иконка «Настройки» убрана: Settings
+        // теперь доступны как четвёртый таб liquid-glass нав-бара.
         item(key = "hero") {
-            HomeHero(modifier = Modifier.padding(horizontal = 20.dp))
+            HomeHero(
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -200,25 +163,19 @@ private fun TripListContent(
             item(key = "upcoming-header") {
                 SectionHeader(title = "Предстоящие")
             }
-            item(key = "upcoming-row") {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(
-                        items = uiState.upcomingTrips,
-                        key = { trip -> trip.id }
-                    ) { trip ->
-                        UpcomingTripCard(
-                            trip = trip,
-                            onClick = { onTripClick(trip.id) },
-                            onLongClick = { onTripLongClick(trip) },
-                            modifier = Modifier
-                                .width(UpcomingCardWidth)
-                                .animateItem()
-                        )
-                    }
-                }
+            items(
+                items = uiState.upcomingTrips,
+                key = { trip -> "upcoming-${trip.id}" }
+            ) { trip ->
+                UpcomingTripCard(
+                    trip = trip,
+                    onClick = { onTripClick(trip.id) },
+                    onLongClick = { onTripLongClick(trip) },
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 6.dp)
+                )
+            }
+            item(key = "upcoming-spacer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
         } else {
@@ -254,7 +211,6 @@ private fun TripListContent(
                         onLongClick = { onTripLongClick(trip) },
                         modifier = Modifier
                             .padding(horizontal = 20.dp, vertical = 6.dp)
-                            .animateItem()
                     )
                 }
             }
@@ -393,7 +349,16 @@ private fun JournalPastTripCard(
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("LLLL", Locale.forLanguageTag("ru"))
     }
-    val gradient = remember(trip.destination) { gradientForDestination(trip.destination) }
+    // Сцена-фон выбирается под направление: горы Кавказа → бирюзовая
+    // композиция Эльбруса, Бали → закат с пальмой, Стамбул → силуэт
+    // мечети и т. д. Если совпадений нет — детерминированный fallback по
+    // hash'у строки. Старый «emoji-stamp» больше не нужен — сама сцена
+    // несёт визуальный смысл места.
+    val scene = remember(trip.destination) { selectJourneyScene(trip.destination) }
+    val isLight = remember(scene) { isJourneySceneLight(scene) }
+    val titleColor = if (isLight) Color(0xFF1A0A07) else Color.White
+    val subtitleColor = if (isLight) Color(0xFF1A0A07).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.92f)
+
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
@@ -406,17 +371,12 @@ private fun JournalPastTripCard(
             ),
         shape = TrilooShapes.Md
     ) {
-        Box(
-            modifier = Modifier.background(brush = Brush.linearGradient(gradient))
-        ) {
-            // Декоративный эмодзи как полупрозрачный «штамп» справа.
-            Text(
-                text = getDestinationEmoji(trip.destination),
-                style = MaterialTheme.typography.displayLarge,
+        Box {
+            JourneySceneBackground(
+                scene = scene,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 14.dp)
-                    .graphicsLayer { alpha = 0.7f }
+                    .matchParentSize()
+                    .heightIn(min = 132.dp)
             )
             Column(
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)
@@ -425,7 +385,7 @@ private fun JournalPastTripCard(
                     text = trip.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -434,22 +394,28 @@ private fun JournalPastTripCard(
                     Icon(
                         imageVector = Icons.Rounded.Place,
                         contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.9f),
+                        tint = subtitleColor,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = shortenDestination(trip.destination),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.92f),
+                        color = subtitleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    JournalChip(text = "${trip.durationDays} ${pluralizeDaysWord(trip.durationDays)}")
-                    JournalChip(text = trip.endDate.format(dateFormatter).replaceFirstChar { it.uppercase() })
+                    JournalChip(
+                        text = "${trip.durationDays} ${pluralizeDaysWord(trip.durationDays)}",
+                        isLight = isLight
+                    )
+                    JournalChip(
+                        text = trip.endDate.format(dateFormatter).replaceFirstChar { it.uppercase() },
+                        isLight = isLight
+                    )
                 }
             }
         }
@@ -457,16 +423,18 @@ private fun JournalPastTripCard(
 }
 
 @Composable
-private fun JournalChip(text: String) {
+private fun JournalChip(text: String, isLight: Boolean = false) {
+    val bg = if (isLight) Color(0xFF1A0A07).copy(alpha = 0.16f) else Color.White.copy(alpha = 0.22f)
+    val fg = if (isLight) Color(0xFF1A0A07) else Color.White
     Surface(
         shape = TrilooShapes.pill,
-        color = Color.White.copy(alpha = 0.22f)
+        color = bg
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
+            color = fg,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -512,11 +480,6 @@ private fun CurrentTripCard(
                     verticalAlignment = Alignment.Top
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        StatusBadge(
-                            text = "В ПОЕЗДКЕ",
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = trip.name,
                             style = MaterialTheme.typography.headlineSmall,
@@ -531,29 +494,6 @@ private fun CurrentTripCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                    }
-
-                    // Счётчик оставшихся дней.
-                    Surface(
-                        shape = TrilooShapes.Md,
-                        color = Color.White.copy(alpha = 0.2f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "$daysLeft",
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = pluralizeDays(daysLeft),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                        }
                     }
                 }
                 
@@ -572,8 +512,8 @@ private fun CurrentTripCard(
                     )
                     QuickStat(
                         icon = Icons.Rounded.Place,
-                        value = placeCount.toString(),
-                        label = pluralizePlaces(placeCount),
+                        value = "$placeCount ${pluralizePlaces(placeCount)}",
+                        label = "по плану",
                         modifier = Modifier.weight(1f)
                     )
                     QuickStat(
@@ -588,6 +528,11 @@ private fun CurrentTripCard(
     }
 }
 
+/**
+ * Маленькая плитка статистики внутри coral hero. Иконка в левом верхнем
+ * углу; снизу — однострочная подпись «<bold>value</bold> <faded>label</faded>»
+ * (например «День 1 из 2», «3 места по плану», «₽14.5K потрачено»).
+ */
 @Composable
 private fun QuickStat(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -598,42 +543,25 @@ private fun QuickStat(
     Surface(
         modifier = modifier.height(QuickStatHeight),
         shape = TrilooShapes.Sm,
-        color = Color.White.copy(alpha = 0.15f)
+        color = Color.White.copy(alpha = 0.18f)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
-            Column {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun UpcomingTripCard(
     trip: Trip,
@@ -641,117 +569,68 @@ private fun UpcomingTripCard(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val dateFormatter = remember {
-        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
-    }
     val daysUntil = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.startDate).toInt()
+    // Сцена-фон выбирается под направление — та же логика, что и в журнале
+    // прошедших поездок, чтобы будущая Бали и прошлая Бали выглядели
+    // одинаково узнаваемо.
+    val scene = remember(trip.destination) { selectJourneyScene(trip.destination) }
+    val isLight = remember(scene) { isJourneySceneLight(scene) }
+    val titleColor = if (isLight) Color(0xFF1A0A07) else Color.White
+    val subtitleColor = if (isLight) Color(0xFF1A0A07).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.92f)
 
-    TrilooCard(
-        modifier = modifier.heightIn(min = UpcomingCardMinHeight),
-        onClick = onClick,
-        onLongClick = onLongClick
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = TrilooShapes.Md
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        Box {
+            JourneySceneBackground(
+                scene = scene,
+                modifier = Modifier
+                    .matchParentSize()
+                    .heightIn(min = 132.dp)
+            )
+            Column(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
                 Text(
                     text = trip.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = shortenDestination(trip.destination),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Slate600,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Place,
+                        contentDescription = null,
+                        tint = subtitleColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = shortenDestination(trip.destination),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subtitleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                JournalChip(
+                    text = "через $daysUntil ${pluralizeDaysWord(daysUntil)}",
+                    isLight = isLight
                 )
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            DaysUntilBadge(days = daysUntil)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.DateRange,
-                contentDescription = null,
-                tint = Slate500,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "${trip.startDate.format(dateFormatter)} — ${trip.endDate.format(dateFormatter)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Slate600
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Text(
-                text = "${trip.durationDays} дн.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Slate500
-            )
-        }
-
-        if (trip.isGroupTrip) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Group,
-                    contentDescription = null,
-                    tint = TealSecondary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Групповая поездка",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TealSecondary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DaysUntilBadge(days: Int) {
-    Surface(
-        shape = TrilooShapes.Sm,
-        color = TealSubtle
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "через",
-                style = MaterialTheme.typography.labelSmall,
-                color = TealSecondary
-            )
-            Text(
-                text = days.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                color = TealSecondary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = pluralizeDaysWord(days),
-                style = MaterialTheme.typography.labelSmall,
-                color = TealSecondary
-            )
         }
     }
 }
@@ -832,136 +711,6 @@ private fun EmptyTripsState(
 }
 
 @Composable
-private fun CreateTripTypeSheet(
-    onCreatePersonalTrip: () -> Unit,
-    onCreateGroupTrip: () -> Unit,
-    onJoinGroupTrip: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-    ) {
-        Text(
-            text = "Что хотите сделать?",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Создайте свою поездку или присоединитесь к чужой по коду",
-            style = MaterialTheme.typography.bodySmall,
-            color = Slate600
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        CreateTripTypeItem(
-            icon = Icons.Rounded.Person,
-            iconTint = Slate700,
-            iconBackground = Slate100,
-            title = "Личная поездка",
-            description = "План и расходы только для вас",
-            onClick = onCreatePersonalTrip
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        CreateTripTypeItem(
-            icon = Icons.Rounded.Group,
-            iconTint = TealSecondary,
-            iconBackground = TealSubtle,
-            title = "Групповая поездка",
-            description = "Приглашения по коду и общие расходы",
-            onClick = onCreateGroupTrip
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        CreateTripTypeItem(
-            icon = Icons.Rounded.QrCodeScanner,
-            iconTint = GoldenDark,
-            iconBackground = GoldenSubtle,
-            title = "Присоединиться по коду",
-            description = "Введите код или отсканируйте QR от организатора",
-            onClick = onJoinGroupTrip
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        TextButton(
-            onClick = onOpenSettings,
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Settings,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Настройки")
-        }
-    }
-}
-
-@Composable
-private fun CreateTripTypeItem(
-    icon: ImageVector,
-    iconTint: Color,
-    iconBackground: Color,
-    title: String,
-    description: String,
-    onClick: () -> Unit
-) {
-    TrilooCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = TrilooShapes.Sm,
-                color = iconBackground
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.padding(10.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Slate600
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = Slate400
-            )
-        }
-    }
-}
-
-@Composable
 private fun TripListLoadingState(modifier: Modifier = Modifier) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -982,26 +731,21 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Скелетон ближайших поездок.
+        // Скелетон ближайших поездок — вертикальные полноширинные карточки.
         item {
             SectionHeader(title = "Предстоящие")
         }
+        items(2) {
+            Spacer(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .fillMaxWidth()
+                    .height(132.dp)
+                    .clip(TrilooShapes.Md)
+                    .shimmerEffect()
+            )
+        }
         item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                userScrollEnabled = false
-            ) {
-                items(3) {
-                    Spacer(
-                        modifier = Modifier
-                            .width(UpcomingCardWidth)
-                            .height(UpcomingCardMinHeight)
-                            .clip(TrilooShapes.Md)
-                            .shimmerEffect()
-                    )
-                }
-            }
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -1022,17 +766,44 @@ private fun TripListLoadingState(modifier: Modifier = Modifier) {
     }
 }
 
-@Preview(showBackground = true)
+// Превью оборачиваем в Surface c background-цветом темы — иначе Android Studio
+// показывает экранный фон чисто белым и карточки сливаются с подложкой,
+// хотя в реальном приложении подложка `Slate50` тёплая и контрастная.
+@Preview(name = "Trip list — light", showBackground = true, heightDp = 900)
 @Composable
 private fun TripListScreenPreview() {
-    TrilooTheme {
-        TripListContent(
-            uiState = PreviewData.tripListState,
-            onTripClick = {},
-            onTripLongClick = {},
-            onCreateTrip = {},
-            modifier = Modifier.fillMaxSize()
-        )
+    TrilooTheme(darkTheme = false) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            TripListContent(
+                uiState = PreviewData.tripListState,
+                onTripClick = {},
+                onTripLongClick = {},
+                onCreateTrip = {},
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Preview(name = "Trip list — dark", showBackground = true, heightDp = 900)
+@Composable
+private fun TripListScreenPreviewDark() {
+    TrilooTheme(darkTheme = true) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            TripListContent(
+                uiState = PreviewData.tripListState,
+                onTripClick = {},
+                onTripLongClick = {},
+                onCreateTrip = {},
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 

@@ -1,6 +1,9 @@
 package com.triloo.ui.invite
 
-import androidx.compose.foundation.Image
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,43 +12,51 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.triloo.ui.PreviewData
 import com.triloo.ui.components.ButtonStyle
 import com.triloo.ui.components.TrilooButton
-import com.triloo.ui.qr.generateQrBitmap
+import com.triloo.ui.components.TrilooCard
 import com.triloo.ui.theme.Error
 import com.triloo.ui.theme.TrilooTheme
+import kotlinx.coroutines.launch
 
 /**
- * Экран, который показывает код приглашения и перелистываемые QR-фрагменты для входа в поездку.
+ * Экран приглашения: показывает текстовый код приглашения и кнопки скопировать/поделиться.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +79,9 @@ private fun InviteContent(
     onNavigateBack: () -> Unit,
     onRefreshInvite: () -> Unit
 ) {
-    var chunkIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -109,7 +122,8 @@ private fun InviteContent(
                     containerColor = Color.Transparent
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -121,7 +135,7 @@ private fun InviteContent(
         ) {
             if (uiState.isLoading) {
                 Text(
-                    text = "Генерация приглашения...",
+                    text = "Загрузка приглашения...",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -137,58 +151,88 @@ private fun InviteContent(
                 return@Column
             }
 
-            val chunks = uiState.chunks
-            LaunchedEffect(chunks.size) {
-                if (chunkIndex > (chunks.size - 1).coerceAtLeast(0)) {
-                    chunkIndex = 0
-                }
-            }
-            val currentChunk = chunks.getOrNull(chunkIndex)
-            val qrBitmap: ImageBitmap? = remember(currentChunk) {
-                currentChunk?.let { generateQrBitmap(it) }
-            }
+            Text(
+                text = "Поделитесь этим кодом с участниками поездки. Они смогут ввести его в разделе «Групповые поездки», чтобы присоединиться.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-            if (qrBitmap != null) {
-                Box(
-                    modifier = Modifier
-                        .size(300.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TrilooCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(bitmap = qrBitmap, contentDescription = "Invite QR")
-                }
-
-                if (chunks.size > 1) {
                     Text(
-                        text = "QR ${chunkIndex + 1} из ${chunks.size}",
+                        text = "Код приглашения",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TrilooButton(
-                            text = "Назад",
-                            onClick = { chunkIndex = (chunkIndex - 1).coerceAtLeast(0) },
-                            enabled = chunkIndex > 0,
-                            style = ButtonStyle.Ghost
-                        )
-                        TrilooButton(
-                            text = "Вперёд",
-                            onClick = {
-                                chunkIndex = (chunkIndex + 1).coerceAtMost(chunks.size - 1)
-                            },
-                            enabled = chunkIndex < chunks.size - 1,
-                            style = ButtonStyle.Ghost
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(vertical = 20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.inviteCode.ifBlank { "—" },
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
             }
 
-            if (uiState.inviteCode.isNotBlank()) {
-                Text(
-                    text = "Код приглашения: ${uiState.inviteCode}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TrilooButton(
+                    text = "Скопировать",
+                    onClick = {
+                        if (uiState.inviteCode.isBlank()) return@TrilooButton
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as? ClipboardManager
+                        clipboard?.setPrimaryClip(
+                            ClipData.newPlainText("Код приглашения", uiState.inviteCode)
+                        )
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Код скопирован")
+                        }
+                    },
+                    enabled = uiState.inviteCode.isNotBlank(),
+                    icon = Icons.Rounded.ContentCopy,
+                    modifier = Modifier.weight(1f)
+                )
+                TrilooButton(
+                    text = "Поделиться",
+                    onClick = {
+                        if (uiState.inviteCode.isBlank()) return@TrilooButton
+                        val message = buildString {
+                            append("Присоединяйтесь к поездке")
+                            if (uiState.tripName.isNotBlank()) {
+                                append(" «${uiState.tripName}»")
+                            }
+                            append(" в Triloo. Код приглашения: ${uiState.inviteCode}")
+                        }
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, message)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(intent, "Поделиться кодом")
+                        )
+                    },
+                    enabled = uiState.inviteCode.isNotBlank(),
+                    icon = Icons.Rounded.Share,
+                    style = ButtonStyle.Secondary,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }

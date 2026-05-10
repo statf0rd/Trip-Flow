@@ -16,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,7 +26,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.onFocusChanged
@@ -140,6 +141,18 @@ private fun CreateTripContent(
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
 
+    // Wizard-стейт: 1 → Куда, 2 → Даты, 3 → Бюджет и жильё. Дизайн V2 разбивает
+    // длинную форму на три шага с прогресс-баром и нижней CTA «Далее / Сохранить».
+    var currentStep by rememberSaveable { mutableStateOf(1) }
+    val totalSteps = 3
+    val stepCanAdvance = when (currentStep) {
+        1 -> uiState.destination.isNotBlank()
+        2 -> uiState.startDate != null && uiState.endDate != null &&
+            !uiState.endDate.isBefore(uiState.startDate)
+        else -> uiState.isValid
+    }
+    var accommodationType by rememberSaveable { mutableStateOf<String?>(null) }
+
     LaunchedEffect(uiState.error) {
         uiState.error?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -160,17 +173,35 @@ private fun CreateTripContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (uiState.isEditing) "Редактировать путешествие" else "Новое путешествие",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+                        text = if (uiState.isEditing) {
+                            "Редактирование"
+                        } else {
+                            "Шаг $currentStep / $totalSteps"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = {
+                            if (currentStep > 1) currentStep -= 1 else onNavigateBack()
+                        }
+                    ) {
                         Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Закрыть"
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Назад"
                         )
+                    }
+                },
+                actions = {
+                    if (!uiState.isEditing) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Закрыть"
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -192,17 +223,43 @@ private fun CreateTripContent(
                 }
                 .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // === HERO 1: Куда вы едете? ===
+            // Progress + название текущего шага.
+            CreateTripStepper(
+                currentStep = currentStep,
+                stepTitles = listOf("Куда", "Даты", "Бюджет")
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Заголовок и подзаголовок текущего шага — основной фокус V2-дизайна.
+            val stepTitle = when (currentStep) {
+                1 -> "Куда вы едете?"
+                2 -> "Когда поездка?"
+                else -> "Бюджет и жильё"
+            }
+            val stepSubtitle = when (currentStep) {
+                1 -> "Выберите город или страну — отель и детали можно настроить дальше."
+                2 -> "Поставьте даты заезда и отъезда. Срок поездки посчитается сам."
+                else -> "Сколько готовы потратить и где остановитесь — позже можно изменить."
+            }
             Text(
-                text = "Куда вы едете?",
+                text = stepTitle,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stepSubtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (currentStep == 1) {
             Column {
                 TrilooTextField(
                     value = uiState.destination,
@@ -322,95 +379,55 @@ private fun CreateTripContent(
                 )
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            } // конец step 1
 
-            // === HERO 2: Когда? ===
-            Text(
-                text = "Когда?",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Единая range-карточка вместо двух отдельных date-полей.
-            DateRangeCard(
-                startDate = uiState.startDate,
-                endDate = uiState.endDate,
-                onRangeSelected = { start, end ->
-                    onStartDateChange(start)
-                    onEndDateChange(end)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // === Базовая валюта — компактно ===
-            Text(
-                text = "Базовая валюта",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            CompactCurrencyRow(
-                selectedCurrency = uiState.baseCurrency,
-                onCurrencySelected = onCurrencyChange
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // === Опциональные доп. параметры (Отель + Бюджет) ===
-            var optionalExpanded by rememberSaveable {
-                mutableStateOf(uiState.hotelName.isNotBlank() || uiState.budgetInput.isNotBlank())
-            }
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { optionalExpanded = !optionalExpanded },
-                shape = TrilooShapes.Md,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Tune,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Дополнительно",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Отель и бюджет",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            if (currentStep == 2) {
+                // Единая range-карточка вместо двух отдельных date-полей.
+                DateRangeCard(
+                    startDate = uiState.startDate,
+                    endDate = uiState.endDate,
+                    onRangeSelected = { start, end ->
+                        onStartDateChange(start)
+                        onEndDateChange(end)
                     }
-                    Icon(
-                        imageVector = if (optionalExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // === Базовая валюта — компактно ===
+                Text(
+                    text = "Базовая валюта",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                CompactCurrencyRow(
+                    selectedCurrency = uiState.baseCurrency,
+                    onCurrencySelected = onCurrencyChange
+                )
             }
 
-            AnimatedVisibility(
-                visible = optionalExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
+            if (currentStep == 3) {
+                BudgetCard(
+                    value = uiState.budgetInput,
+                    currency = uiState.baseCurrency,
+                    onValueChange = onBudgetChange
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "Жильё",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Column {
-                    Spacer(modifier = Modifier.height(16.dp))
 
             Column {
                 TrilooTextField(
@@ -523,43 +540,43 @@ private fun CreateTripContent(
                     hotelAddress = uiState.hotelAddress
                 )
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            TrilooTextField(
-                value = uiState.budgetInput,
-                onValueChange = onBudgetChange,
-                label = "Бюджет",
-                placeholder = "100000",
-                leadingIcon = Icons.Rounded.AccountBalanceWallet,
-                suffix = uiState.baseCurrency,
-                modifier = Modifier
-                    .bringIntoViewRequester(bringIntoViewRequester)
-                    .onFocusChanged { focusState ->
-                        isBudgetFieldFocused = focusState.isFocused
-                    },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() }
-                )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Тип жилья — сетка 2×3 «Отель / Airbnb / Хостел / У друзей / Квартира / Бесплатно».
+            AccommodationTypeGrid(
+                selected = accommodationType,
+                onSelect = { type -> accommodationType = if (accommodationType == type) null else type }
             )
-                }
+                } // конец Column step 3
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
+            // Нижняя CTA: «Далее» на шагах 1–2, «Сохранить» на шаге 3.
             TrilooButton(
-                text = if (uiState.isEditing) "Сохранить изменения" else "Создать путешествие",
-                onClick = onSaveTrip,
-                enabled = uiState.isValid,
-                isLoading = uiState.isCreating,
-                icon = Icons.Rounded.Check,
+                text = when {
+                    uiState.isEditing -> "Сохранить изменения"
+                    currentStep < totalSteps -> "Далее"
+                    else -> "Сохранить"
+                },
+                onClick = {
+                    if (currentStep < totalSteps && !uiState.isEditing) {
+                        currentStep += 1
+                    } else {
+                        onSaveTrip()
+                    }
+                },
+                enabled = stepCanAdvance,
+                isLoading = currentStep == totalSteps && uiState.isCreating,
+                icon = if (currentStep < totalSteps && !uiState.isEditing) {
+                    Icons.AutoMirrored.Rounded.ArrowForward
+                } else {
+                    Icons.Rounded.Check
+                },
                 modifier = Modifier.fillMaxWidth()
             )
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -1175,8 +1192,8 @@ private fun HotelRecommendationCard(
 /**
  * Обложка карточки рекомендации отеля. Если есть photoUrl — показываем
  * AsyncImage; иначе генерируем стабильный градиент по хешу названия и
- * крупно рисуем эмодзи ✦ + первую букву отеля. Поверх — pill-чипы с
- * рейтингом (слева) и источником (справа).
+ * крупно рисуем первую букву отеля без декоративных emoji-стикеров.
+ * Поверх — pill-чипы с рейтингом (слева) и источником (справа).
  */
 @Composable
 private fun HotelCardCover(
@@ -1220,22 +1237,13 @@ private fun HotelCardCover(
                         androidx.compose.ui.graphics.Brush.linearGradient(colors = gradient)
                     )
             )
-            // Декоративная буква + эмодзи в правом нижнем углу.
             Text(
-                text = hotelName.firstOrNull()?.uppercase() ?: "🏨",
+                text = hotelName.firstOrNull()?.uppercase() ?: "H",
                 style = MaterialTheme.typography.displayLarge,
                 color = Color.White.copy(alpha = 0.85f),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .align(Alignment.Center)
-            )
-            Text(
-                text = "🏨",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = 12.dp)
-                    .graphicsLayer { alpha = 0.65f }
             )
         }
 
@@ -1514,6 +1522,248 @@ private fun DestinationMapPicker(
                         .size(40.dp)
                         .align(Alignment.Center)
                 )
+            }
+        }
+    }
+}
+
+// ──────────────────────── Wizard helpers ────────────────────────
+
+/**
+ * Прогресс-бар + три подписи «Куда / Даты / Бюджет». Активная секция
+ * подсвечивается coral-цветом, пройденные — primary-сatин-вариантом, грядущие
+ * — приглушённым outline. Соответствует V2-дизайну создания поездки.
+ */
+@Composable
+private fun CreateTripStepper(
+    currentStep: Int,
+    stepTitles: List<String>
+) {
+    val total = stepTitles.size
+    Column {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(total) { idx ->
+                val isActive = idx + 1 == currentStep
+                val isPassed = idx + 1 < currentStep
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(3.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp))
+                        .background(
+                            when {
+                                isActive -> MaterialTheme.colorScheme.primary
+                                isPassed -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            }
+                        )
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            stepTitles.forEachIndexed { idx, title ->
+                val isActive = idx + 1 == currentStep
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                    textAlign = if (idx == 0) {
+                        androidx.compose.ui.text.style.TextAlign.Start
+                    } else if (idx == stepTitles.lastIndex) {
+                        androidx.compose.ui.text.style.TextAlign.End
+                    } else {
+                        androidx.compose.ui.text.style.TextAlign.Center
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Бюджет-карточка V2: крупный «€1 200» сверху, под ним слайдер с тремя
+ * якорями-метками «экономно / средне / с размахом». Конвертация в условные
+ * единицы (≈ 130k ₽) опущена — для неё нужна актуальная котировка курса,
+ * добавим, когда подтянем сюда currency-API.
+ */
+@Composable
+private fun BudgetCard(
+    value: String,
+    currency: String,
+    onValueChange: (String) -> Unit
+) {
+    val numeric = remember(value) { value.replace(",", ".").toDoubleOrNull() ?: 0.0 }
+    // Якоря для слайдера: 0 → 0 (no budget), 0.33 → ~30k, 0.66 → ~150k,
+    // 1.0 → ~500k. Пользователь может ввести вручную — тогда слайдер
+    // подстраивается под введённое значение.
+    val maxBudget = 500_000.0
+    val sliderPos = (numeric / maxBudget).toFloat().coerceIn(0f, 1f)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = TrilooShapes.Md,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "БЮДЖЕТ НА ПОЕЗДКУ",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = currencySymbol(currency),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                BasicEditableAmount(
+                    value = value,
+                    onValueChange = onValueChange
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Slider(
+                value = sliderPos,
+                onValueChange = { newPos ->
+                    val newAmount = (newPos * maxBudget).toInt()
+                    val rounded = (newAmount / 50) * 50  // округляем до 50
+                    onValueChange(if (rounded == 0) "" else rounded.toString())
+                },
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "экономно",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "средне",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "с размахом",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BasicEditableAmount(value: String, onValueChange: (String) -> Unit) {
+    androidx.compose.foundation.text.BasicTextField(
+        value = value.ifBlank { "0" },
+        onValueChange = { raw ->
+            val digits = raw.filter { it.isDigit() }
+            onValueChange(digits)
+        },
+        textStyle = MaterialTheme.typography.headlineMedium.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
+        ),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+        singleLine = true
+    )
+}
+
+private fun currencySymbol(currency: String): String = when (currency.uppercase()) {
+    "EUR" -> "€"
+    "USD" -> "$"
+    "GBP" -> "£"
+    "JPY", "CNY" -> "¥"
+    "RUB" -> "₽"
+    "TRY" -> "₺"
+    else -> currency
+}
+
+/**
+ * Сетка 2×3 типов жилья: Отель / Airbnb / Хостел / У друзей / Квартира /
+ * Бесплатно. Локальное состояние выбора — выбор пока не сохраняется в Trip
+ * (нужно расширение модели), сейчас даёт пользователю ментальный «фильтр»
+ * перед поиском конкретного места.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AccommodationTypeGrid(
+    selected: String?,
+    onSelect: (String) -> Unit
+) {
+    val items = listOf(
+        "Отель" to "Booking",
+        "Airbnb" to "Квартира",
+        "Хостел" to "Бюджет",
+        "У друзей" to "Бесплатно",
+        "Квартира" to "Долгий срок",
+        "Кемпинг" to "На природе"
+    )
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        maxItemsInEachRow = 2
+    ) {
+        items.forEach { (title, sub) ->
+            val isSelected = selected == title
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(TrilooShapes.Md)
+                    .clickable { onSelect(title) },
+                shape = TrilooShapes.Md,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                },
+                border = if (isSelected) {
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                    )
+                } else null
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    Text(
+                        text = sub,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

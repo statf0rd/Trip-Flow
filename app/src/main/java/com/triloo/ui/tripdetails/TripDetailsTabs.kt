@@ -19,7 +19,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -131,7 +133,8 @@ fun PlanTab(
     onEditPlace: (String) -> Unit = {},
     onAddPlace: (String) -> Unit,
     onDeletePlace: (String) -> Unit = {},
-    onOptimizeRoute: () -> Unit = {}
+    onOptimizeRoute: () -> Unit = {},
+    isReadOnly: Boolean = false
 ) {
     if (days.isEmpty()) {
         EmptyState(
@@ -144,7 +147,10 @@ fun PlanTab(
         val schedules = remember(sortedDays, places) {
             buildDaySchedules(sortedDays, places)
         }
-        val showOptimizeBanner = remember(places) { places.size >= 3 }
+        // В read-only «Оптимизировать маршрут» прячется — это write-action.
+        val showOptimizeBanner = remember(places, isReadOnly) {
+            !isReadOnly && places.size >= 3
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
@@ -163,7 +169,8 @@ fun PlanTab(
                     onPlaceClick = onPlaceClick,
                     onEditPlace = onEditPlace,
                     onAddPlace = { onAddPlace(day.id) },
-                    onDeletePlace = onDeletePlace
+                    onDeletePlace = onDeletePlace,
+                    isReadOnly = isReadOnly
                 )
             }
         }
@@ -240,12 +247,21 @@ private fun DayCard(
     onPlaceClick: (String) -> Unit,
     onEditPlace: (String) -> Unit,
     onAddPlace: () -> Unit,
-    onDeletePlace: (String) -> Unit
+    onDeletePlace: (String) -> Unit,
+    isReadOnly: Boolean = false
 ) {
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag("ru"))
     }
     var isExpanded by remember { mutableStateOf(true) }
+    val totalPlaces = remember(schedule) { schedule.scheduled.size + schedule.unscheduled.size }
+    val daySubtitle = remember(day, totalPlaces, isExpanded) {
+        val date = day.date.format(dateFormatter)
+        // Когда день свёрнут — добавляем счётчик мест в сабтайтл («четверг, 7 мая · 1 место»).
+        if (!isExpanded && totalPlaces > 0) {
+            "$date · $totalPlaces ${pluralizePlacesShort(totalPlaces)}"
+        } else date
+    }
 
     TrilooCard(onClick = { isExpanded = !isExpanded }) {
         // Заголовок дня.
@@ -255,22 +271,24 @@ private fun DayCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Бейдж с номером дня.
-                Surface(
-                    shape = CircleShape,
-                    color = CoralSubtle
+                // Круглый бейдж с номером дня — компактный, фиксированный размер.
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(CoralSubtle),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "${day.dayNumber}",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.width(12.dp))
-                
+
                 Column {
                     Text(
                         text = day.title ?: "День ${day.dayNumber}",
@@ -278,7 +296,7 @@ private fun DayCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = day.date.format(dateFormatter),
+                        text = daySubtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -310,32 +328,51 @@ private fun DayCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 if (schedule.isEmpty) {
-                    // Пустое состояние дня.
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(TrilooShapes.Sm)
-                            .clickable(onClick = onAddPlace),
-                        shape = TrilooShapes.Sm,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                    if (isReadOnly) {
+                        // Поездка завершена — место для дня осталось пустым,
+                        // показываем нейтральный текст без CTA.
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(TrilooShapes.Sm),
+                            shape = TrilooShapes.Sm,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.AddLocation,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Добавить место",
+                                text = "Без событий",
+                                modifier = Modifier.padding(16.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    } else {
+                        // Пустое состояние дня.
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(TrilooShapes.Sm)
+                                .clickable(onClick = onAddPlace),
+                            shape = TrilooShapes.Sm,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AddLocation,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Добавить место",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 } else {
@@ -344,22 +381,32 @@ private fun DayCard(
                         unscheduled = schedule.unscheduled,
                         onPlaceClick = onPlaceClick,
                         onEditPlace = onEditPlace,
-                        onDeletePlace = onDeletePlace
+                        onDeletePlace = onDeletePlace,
+                        isReadOnly = isReadOnly
                     )
 
-                    // Кнопка добавления ещё одного места.
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(
-                        onClick = onAddPlace,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Добавить")
+                    if (!isReadOnly) {
+                        // Кнопка добавления ещё одного места — совпадает по цвету с
+                        // primary-цветом приложения (coral), как в дизайне.
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = onAddPlace,
+                            modifier = Modifier.align(Alignment.End),
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Добавить",
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -373,7 +420,8 @@ private fun DayTimeline(
     unscheduled: List<Place>,
     onPlaceClick: (String) -> Unit,
     onEditPlace: (String) -> Unit,
-    onDeletePlace: (String) -> Unit
+    onDeletePlace: (String) -> Unit,
+    isReadOnly: Boolean = false
 ) {
     val sortedScheduled = segments.sortedBy { it.startMinutes }
     val context = LocalContext.current
@@ -401,7 +449,8 @@ private fun DayTimeline(
                         blockHeight = blockHeight,
                         onClick = { onPlaceClick(item.place.id) },
                         onEdit = { onEditPlace(item.place.id) },
-                        onDelete = { onDeletePlace(item.place.id) }
+                        onDelete = { onDeletePlace(item.place.id) },
+                        isReadOnly = isReadOnly
                     )
                     is TimelineGap -> TimelineGapRow(
                         item = item,
@@ -428,7 +477,8 @@ private fun DayTimeline(
                     timeRange = null,
                     onClick = { onPlaceClick(place.id) },
                     onEdit = { onEditPlace(place.id) },
-                    onDelete = { onDeletePlace(place.id) }
+                    onDelete = { onDeletePlace(place.id) },
+                    isReadOnly = isReadOnly
                 )
             }
         }
@@ -445,23 +495,11 @@ private data class TimelineGap(
 ) : TimelineItem
 
 private fun buildTimelineItems(events: List<PlaceSegment>): List<TimelineItem> {
-    if (events.isEmpty()) return emptyList()
-    val items = mutableListOf<TimelineItem>()
-    var lastEnd = events.first().startMinutes
-    events.forEach { event ->
-        if (event.startMinutes > lastEnd) {
-            items.add(
-                TimelineGap(
-                    startMinutes = lastEnd,
-                    minutes = event.startMinutes - lastEnd
-                )
-            )
-        }
-        items.add(event)
-        val end = event.startMinutes + event.durationMinutes
-        if (end > lastEnd) lastEnd = end
-    }
-    return items
+    // Раньше между событиями вставлялись TimelineGap'ы («Окно X · свободно»)
+    // — пользователь попросил убрать эту плашку из UI, поэтому возвращаем
+    // только события. TimelineGap / TimelineGapRow / превью остаются в коде
+    // как dead-code на случай возврата.
+    return events
 }
 
 @Composable
@@ -471,7 +509,8 @@ private fun TimelineEventRow(
     blockHeight: Dp,
     onClick: () -> Unit,
     onEdit: () -> Unit = {},
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isReadOnly: Boolean = false
 ) {
     val railLabel = formatMinutesToTime(item.startMinutes, displayFormat)
     val endLabel = formatMinutesToTime(item.startMinutes + item.durationMinutes, displayFormat)
@@ -500,7 +539,8 @@ private fun TimelineEventRow(
             onClick = onClick,
             onEdit = onEdit,
             onDelete = onDelete,
-            modifier = Modifier.heightIn(min = blockHeight)
+            modifier = Modifier.heightIn(min = blockHeight),
+            isReadOnly = isReadOnly
         )
     }
 }
@@ -538,11 +578,31 @@ private fun TimelineGapRow(
                 .fillMaxWidth()
                 .heightIn(min = blockHeight),
             shape = TrilooShapes.Sm,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            color = Color.Transparent
         ) {
+            // Пунктирная рамка вокруг «окна» — отличает свободный слот от
+            // плотной карточки места и совпадает с дизайном (V1-мокап).
+            val outline = MaterialTheme.colorScheme.outlineVariant
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .drawBehind {
+                        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 1.5.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                floatArrayOf(10f, 10f),
+                                0f
+                            )
+                        )
+                        drawRoundRect(
+                            color = outline,
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                                12.dp.toPx(),
+                                12.dp.toPx()
+                            ),
+                            style = stroke
+                        )
+                    }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -557,10 +617,11 @@ private fun TimelineGapRow(
                     Text(
                         text = gapLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "$railLabel — $endLabel",
+                        text = "$railLabel — $endLabel · свободно",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -677,7 +738,8 @@ private fun TimelineEventCard(
     onClick: () -> Unit,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isReadOnly: Boolean = false
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -723,7 +785,7 @@ private fun TimelineEventCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = place.address ?: place.category.displayName,
+                            text = buildPlaceSubtitle(place),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -733,18 +795,20 @@ private fun TimelineEventCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = "Редактировать",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    if (!isReadOnly) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Редактировать",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
                     if (place.isVisited) {
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
@@ -754,16 +818,18 @@ private fun TimelineEventCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                     }
-                    IconButton(
-                        onClick = { showDeleteDialog = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Удалить",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    if (!isReadOnly) {
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Удалить",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1413,6 +1479,22 @@ private fun InfoChip(
     }
 }
 
+/**
+ * Сабтайтл места в плане: «Категория · Адрес». Если адреса нет — только категория,
+ * если адрес совпадает с именем — только категория. Адрес режем по первой запятой,
+ * чтобы длинный «Южная дорога, дом 15, корп 2…» влезал в одну строку.
+ */
+private fun buildPlaceSubtitle(place: com.triloo.data.model.Place): String {
+    val category = place.category.displayName
+    val rawAddress = place.address?.trim().orEmpty()
+    val shortAddress = rawAddress
+        .split(',')
+        .firstOrNull()
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() && !it.equals(place.name, ignoreCase = true) }
+    return if (shortAddress != null) "$category · $shortAddress" else category
+}
+
 private fun pluralizePlacesShort(count: Int): String {
     return when {
         count % 100 in 11..19 -> "мест"
@@ -1985,6 +2067,7 @@ private fun formatHeatmapScore(score: Float): String {
 
 @Composable
 fun ExpensesTab(
+    trip: Trip,
     expenses: List<Expense>,
     totalAmount: Double,
     currency: String,
@@ -1992,53 +2075,368 @@ fun ExpensesTab(
     onExpenseClick: (String) -> Unit,
     onAddExpense: () -> Unit,
     onToggleExpenseSettled: (String, Boolean) -> Unit = { _, _ -> },
-    onDeleteExpense: (String) -> Unit = {}
+    onDeleteExpense: (String) -> Unit = {},
+    isReadOnly: Boolean = false
 ) {
     if (expenses.isEmpty()) {
-        EmptyState(
-            emoji = "💰",
-            title = "Нет расходов",
-            subtitle = "Добавьте первый расход, чтобы отслеживать бюджет поездки",
-            actionText = "Добавить расход",
-            onAction = onAddExpense
-        )
+        if (isReadOnly) {
+            EmptyState(
+                emoji = "💰",
+                title = "Нет расходов",
+                subtitle = "В этой поездке расходы не записывались"
+            )
+        } else {
+            EmptyState(
+                emoji = "💰",
+                title = "Нет расходов",
+                subtitle = "Добавьте первый расход, чтобы отслеживать бюджет поездки",
+                actionText = "Добавить расход",
+                onAction = onAddExpense
+            )
+        }
     } else {
+        // Группируем траты по дате — для секций «2 АВГ · СЕГОДНЯ» в дизайне.
+        val grouped = remember(expenses) {
+            expenses
+                .sortedByDescending { it.date }
+                .groupBy { it.date }
+                .toList()
+        }
+        // Раскладка категорий в проценты — для пончика и легенды.
+        val breakdown = remember(expenses) { expenseCategoryBreakdown(expenses) }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Итоговая карточка по расходам.
-            item {
-                ExpenseSummaryCard(
+            item(key = "donut") {
+                ExpensesDonutCard(
                     totalAmount = totalAmount,
                     currency = currency,
-                    expenseCount = expenses.size
+                    breakdown = breakdown
                 )
-                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            if (balances.isNotEmpty()) {
-                item {
-                    BalancesCard(balances = balances)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-            
-            // Список расходов.
-            items(expenses, key = { it.id }) { expense ->
-                ExpenseItem(
-                    expense = expense,
-                    baseCurrency = currency,
-                    onClick = { onExpenseClick(expense.id) },
-                    onToggleSettled = { settled ->
-                        onToggleExpenseSettled(expense.id, settled)
-                    },
-                    onDelete = { onDeleteExpense(expense.id) }
+            item(key = "kpis") {
+                ExpensesKpiRow(
+                    trip = trip,
+                    totalAmount = totalAmount,
+                    currency = currency,
+                    expenses = expenses,
+                    balances = balances
                 )
+            }
+
+            grouped.forEach { (date, dayExpenses) ->
+                item(key = "header-$date") {
+                    ExpensesDateHeader(date = date)
+                }
+                items(dayExpenses, key = { it.id }) { expense ->
+                    ExpenseItem(
+                        expense = expense,
+                        baseCurrency = currency,
+                        onClick = { onExpenseClick(expense.id) },
+                        onToggleSettled = { settled ->
+                            onToggleExpenseSettled(expense.id, settled)
+                        },
+                        onDelete = { onDeleteExpense(expense.id) },
+                        isReadOnly = isReadOnly
+                    )
+                }
             }
         }
     }
+}
+
+// ───────────────────── donut + breakdown ─────────────────────
+
+private data class ExpenseSlice(
+    val category: ExpenseCategory,
+    val amount: Double,
+    val percent: Float
+)
+
+/** Локальная плюрализация дней — pluralizeDaysWord живёт в TripListScreen.kt и приватная. */
+private fun pluralizeDaysShortLocal(count: Int): String = when {
+    count % 100 in 11..19 -> "дней"
+    count % 10 == 1 -> "день"
+    count % 10 in 2..4 -> "дня"
+    else -> "дней"
+}
+
+private fun expenseCategoryBreakdown(expenses: List<Expense>): List<ExpenseSlice> {
+    if (expenses.isEmpty()) return emptyList()
+    val sums = expenses.groupBy { it.category }
+        .mapValues { (_, list) -> list.sumOf { it.amountInBaseCurrency } }
+    val total = sums.values.sum().takeIf { it > 0 } ?: return emptyList()
+    return sums.entries
+        .map { (cat, amount) ->
+            ExpenseSlice(
+                category = cat,
+                amount = amount,
+                percent = ((amount / total) * 100.0).toFloat()
+            )
+        }
+        .sortedByDescending { it.amount }
+}
+
+@Composable
+private fun ExpensesDonutCard(
+    totalAmount: Double,
+    currency: String,
+    breakdown: List<ExpenseSlice>
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = TrilooShapes.Md,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                DonutChart(slices = breakdown, modifier = Modifier.fillMaxSize())
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Всего",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatCurrency(totalAmount, currency),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                breakdown.take(4).forEach { slice ->
+                    DonutLegendRow(slice = slice)
+                }
+                if (breakdown.size > 4) {
+                    val rest = breakdown.drop(4).sumOf { it.percent.toDouble() }.toFloat()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.outline)
+                        )
+                        Text(
+                            text = "Другое",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${rest.toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonutLegendRow(slice: ExpenseSlice) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(Color(slice.category.colorHex))
+        )
+        Text(
+            text = slice.category.displayName,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "${slice.percent.toInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun DonutChart(
+    slices: List<ExpenseSlice>,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        if (slices.isEmpty()) return@Canvas
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 12.dp.toPx())
+        val gap = 2f
+        var startAngle = -90f
+        slices.forEach { slice ->
+            val sweep = (slice.percent / 100f) * 360f - gap
+            if (sweep > 0) {
+                drawArc(
+                    color = Color(slice.category.colorHex),
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = Offset(stroke.width / 2, stroke.width / 2),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width - stroke.width,
+                        size.height - stroke.width
+                    ),
+                    style = stroke
+                )
+            }
+            startAngle += sweep + gap
+        }
+    }
+}
+
+// ───────────────────── KPI row ─────────────────────
+
+@Composable
+private fun ExpensesKpiRow(
+    trip: Trip,
+    totalAmount: Double,
+    currency: String,
+    expenses: List<Expense>,
+    balances: List<Balance>
+) {
+    // Бюджет
+    val budgetTile = trip.budget?.takeIf { it > 0 }?.let { budget ->
+        val percent = ((totalAmount / budget) * 100).toInt().coerceAtLeast(0)
+        KpiTileData(
+            label = "Бюджет",
+            value = formatCurrency(budget, currency),
+            sub = "$percent% потрачено",
+            accent = TealSecondary
+        )
+    }
+    // В день — общий потраченный делим на дни от старта поездки до сегодня (но не больше длины поездки).
+    val perDayTile = run {
+        val startDate = trip.startDate
+        val endDate = trip.endDate
+        val today = java.time.LocalDate.now()
+        val effectiveEnd = if (today.isBefore(endDate)) today else endDate
+        val daysElapsed = java.time.temporal.ChronoUnit.DAYS.between(startDate, effectiveEnd).toInt() + 1
+        val days = daysElapsed.coerceAtLeast(1)
+        val avg = totalAmount / days
+        KpiTileData(
+            label = "В день",
+            value = formatCurrency(avg, currency),
+            sub = "$days ${pluralizeDaysShortLocal(days)} в пути",
+            accent = CoralPrimary
+        )
+    }
+    // Долг — первый ненулевой баланс, как в дизайне «Аня → Я».
+    val debtTile = balances.firstOrNull { it.amount > 0 }?.let { balance ->
+        KpiTileData(
+            label = "Долг",
+            value = formatCurrency(balance.amount, balance.currency),
+            sub = "${balance.fromUserName} → ${balance.toUserName}",
+            accent = GoldenAccent
+        )
+    }
+
+    val tiles = listOfNotNull(budgetTile, perDayTile, debtTile)
+    if (tiles.isEmpty()) return
+
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        tiles.forEach { tile ->
+            KpiTile(tile, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+private data class KpiTileData(
+    val label: String,
+    val value: String,
+    val sub: String,
+    val accent: Color
+)
+
+@Composable
+private fun KpiTile(data: KpiTileData, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = TrilooShapes.Md,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = data.label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = data.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = data.accent,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = data.sub,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpensesDateHeader(date: java.time.LocalDate) {
+    val today = java.time.LocalDate.now()
+    val rel = when {
+        date == today -> "Сегодня"
+        date == today.minusDays(1) -> "Вчера"
+        else -> null
+    }
+    val formatter = remember {
+        DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru"))
+    }
+    Text(
+        text = buildString {
+            append(date.format(formatter))
+            if (rel != null) {
+                append(" · ")
+                append(rel)
+            }
+        }.uppercase(),
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold
+    )
 }
 
 @Composable
@@ -2157,7 +2555,8 @@ private fun ExpenseItem(
     baseCurrency: String,
     onClick: () -> Unit,
     onToggleSettled: (Boolean) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isReadOnly: Boolean = false
 ) {
     val dateFormatter = remember { 
         DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("ru")) 
@@ -2255,7 +2654,7 @@ private fun ExpenseItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (expense.splitType != SplitType.PAYER_ONLY) {
+                if (expense.splitType != SplitType.PAYER_ONLY && !isReadOnly) {
                     TextButton(
                         onClick = { onToggleSettled(!expense.isSettled) },
                         contentPadding = PaddingValues(top = 4.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
@@ -2274,20 +2673,22 @@ private fun ExpenseItem(
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            // Кнопка удаления — touch target 48dp (a11y), иконка визуально 18dp.
-            IconButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Удалить",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
+
+            if (!isReadOnly) {
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Кнопка удаления — touch target 48dp (a11y), иконка визуально 18dp.
+                IconButton(
+                    onClick = { showDeleteDialog = true },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Удалить",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
@@ -2651,6 +3052,7 @@ private fun ExpensesTabPreview() {
     val total = TripDetailsPreviewData.expenses.sumOf { it.amountInBaseCurrency }
     PreviewContainer {
         ExpensesTab(
+            trip = TripDetailsPreviewData.trip,
             expenses = TripDetailsPreviewData.expenses,
             totalAmount = total,
             currency = TripDetailsPreviewData.trip.baseCurrency,

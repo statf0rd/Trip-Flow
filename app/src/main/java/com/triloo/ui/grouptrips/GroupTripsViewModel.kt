@@ -3,11 +3,6 @@ package com.triloo.ui.grouptrips
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.triloo.data.model.Participant
-import com.triloo.data.model.ParticipantRole
-import com.triloo.data.relay.RelayQrCodec
-import com.triloo.data.relay.RelayQrCollector
-import com.triloo.data.relay.RelayPayloadType
-import com.triloo.data.relay.RelayRepository
 import com.triloo.data.repository.TripRepository
 import com.triloo.data.sync.RemoteTripInviteRepository
 import com.triloo.data.user.UserProfileRepository
@@ -23,19 +18,17 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Управляет входом в групповые поездки и собирает QR-приглашения из нескольких чанков.
+ * Управляет входом в групповые поездки по текстовому коду приглашения.
  */
 @HiltViewModel
 class GroupTripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val userProfileRepository: UserProfileRepository,
-    private val relayRepository: RelayRepository,
     private val remoteTripInviteRepository: RemoteTripInviteRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupTripsUiState())
     val uiState: StateFlow<GroupTripsUiState> = _uiState.asStateFlow()
-    private val inviteCollector = RelayQrCollector()
 
     val groupTrips = tripRepository.observeAllTrips()
         .map { trips -> trips.filter { it.isGroupTrip } }
@@ -134,80 +127,6 @@ class GroupTripsViewModel @Inject constructor(
     fun consumeJoinedTripNavigation() {
         _uiState.update { it.copy(joinedTripId = null) }
     }
-
-    fun handleInviteQrPayload(payload: String) {
-        val chunk = RelayQrCodec.parse(payload)
-        if (chunk == null || chunk.type != RelayPayloadType.INVITE) {
-            inviteCollector.reset()
-            _uiState.update {
-                it.copy(
-                    inviteScanError = "Это не QR-приглашение Triloo",
-                    inviteScanProgress = 0,
-                    inviteScanTotal = 0
-                )
-            }
-            return
-        }
-
-        if (!inviteCollector.addChunk(chunk)) {
-            inviteCollector.reset()
-            _uiState.update {
-                it.copy(
-                    inviteScanError = "QR-код относится к другой сессии",
-                    inviteScanProgress = 0,
-                    inviteScanTotal = 0
-                )
-            }
-            return
-        }
-
-        val (received, total) = inviteCollector.progress()
-        _uiState.update { it.copy(inviteScanProgress = received, inviteScanTotal = total, inviteScanError = null) }
-
-        if (!inviteCollector.isComplete()) return
-        val jsonPayload = inviteCollector.assemblePayload() ?: run {
-            _uiState.update { it.copy(inviteScanError = "Не удалось собрать пакет") }
-            inviteCollector.reset()
-            return
-        }
-
-        inviteCollector.reset()
-        _uiState.update { it.copy(isProcessingInvite = true, inviteScanError = null) }
-
-        viewModelScope.launch {
-            try {
-                val invitePackage = relayRepository.decodeInvite(jsonPayload)
-                relayRepository.mergeInvitePackage(invitePackage)
-
-                val profile = userProfileRepository.getProfile()
-                val displayName = profile.displayName.ifBlank { "Участник" }
-                tripRepository.addParticipant(
-                    Participant(
-                        tripId = invitePackage.trip.id,
-                        userId = profile.userId,
-                        displayName = displayName,
-                        role = ParticipantRole.MEMBER
-                    )
-                )
-
-                _uiState.update {
-                    it.copy(
-                        isProcessingInvite = false,
-                        joinedTripId = invitePackage.trip.id,
-                        inviteScanProgress = 0,
-                        inviteScanTotal = 0
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isProcessingInvite = false,
-                        inviteScanError = e.message ?: "Не удалось импортировать приглашение"
-                    )
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -218,12 +137,8 @@ data class GroupTripsUiState(
     val displayName: String = "",
     val lastAutofillName: String = "",
     val isJoining: Boolean = false,
-    val isProcessingInvite: Boolean = false,
     val joinedTripId: String? = null,
-    val error: String? = null,
-    val inviteScanProgress: Int = 0,
-    val inviteScanTotal: Int = 0,
-    val inviteScanError: String? = null
+    val error: String? = null
 ) {
     val isJoinEnabled: Boolean
         get() = inviteCode.isNotBlank() && displayName.isNotBlank() && !isJoining
