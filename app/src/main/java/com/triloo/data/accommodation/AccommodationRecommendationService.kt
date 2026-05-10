@@ -7,6 +7,7 @@ import com.triloo.data.places.PlacesService
 import com.triloo.data.remote.GeoapifyApi
 import com.triloo.data.remote.GeoapifyGeocodeFeature
 import com.triloo.data.remote.GeoapifyPlaceFeature
+import com.triloo.data.remote.GeoapifyPlacesResponse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
@@ -25,32 +26,47 @@ class AccommodationRecommendationService @Inject constructor(
     private val placesService: PlacesService,
     private val gson: Gson
 ) {
-
     suspend fun recommend(request: AccommodationRequest): List<AccommodationRecommendation> {
         val destination = request.destination.trim()
+        android.util.Log.d(
+            TAG,
+            "recommend: destination=\"$destination\" budget=${request.budget} ${request.currency} " +
+                "nights=${request.nights} hasKey=${hasValidGeoapifyKey()}"
+        )
         if (destination.isBlank() || !hasValidGeoapifyKey()) return emptyList()
 
         val candidates = loadCandidates(destination)
-        if (candidates.isEmpty()) return emptyList()
+        if (candidates.isEmpty()) {
+            android.util.Log.w(TAG, "recommend: no candidates → returning empty")
+            return emptyList()
+        }
 
         val heuristicRecommendations = rankHeuristically(request, candidates)
         val aiRecommendations = rankWithAi(request, candidates)
+        android.util.Log.d(
+            TAG,
+            "recommend: heuristic=${heuristicRecommendations.size} ai=${aiRecommendations?.size ?: -1}"
+        )
 
         val merged = mergeRankings(
             aiRecommendations = aiRecommendations,
             heuristicRecommendations = heuristicRecommendations
         )
+        android.util.Log.d(TAG, "recommend: merged=${merged.size}")
 
-        // Обогащаем рекомендации реальными фото через Yandex Search.
+        // Обогащаем рекомендации только фото, которые вернул провайдер мест.
+        // HTML-скрейпинг сайтов здесь намеренно не используем: он часто цепляет
+        // промо-баннеры, логотипы или случайные кадры вместо фото конкретного отеля.
         // Параллельно дёргаем фото для каждой карточки и подменяем photoUrl.
-        return enrichWithPhotos(merged)
+        val enriched = enrichWithPhotos(merged)
+        android.util.Log.d(TAG, "recommend: enriched=${enriched.size} returning")
+        return enriched
     }
 
     /**
      * Параллельно подгружает фото для каждой рекомендации через Yandex Search
-     * (по name + lat/lng). Если рекомендация уже имеет photoUrl (например,
-     * пришло от AI с готовым URL), оставляем как есть. На отсутствие сети /
-     * совпадения карточка получает null → UI покажет градиент-фолбэк.
+     * по name + lat/lng. Если ничего не найдено, UI покажет аккуратный fallback
+     * без emoji-стикеров.
      */
     private suspend fun enrichWithPhotos(
         recommendations: List<AccommodationRecommendation>
@@ -77,8 +93,38 @@ class AccommodationRecommendationService @Inject constructor(
     }
 
     private suspend fun loadCandidates(destination: String): List<AccommodationCandidate> = coroutineScope {
-        val destinationContext = resolveDestinationContext(destination) ?: return@coroutineScope emptyList()
-        val response = runCatching {
+        val destinationContext = resolveDestinationContext(destination)
+            ?: run {
+                android.util.Log.w(TAG, "loadCandidates: destinationContext=null for \"$destination\"")
+                return@coroutineScope emptyList()
+            }
+        android.util.Log.d(
+            TAG,
+            "loadCandidates: filter=${destinationContext.filter} bias=${destinationContext.bias}"
+        )
+        val response = loadAccommodationPlaces(destinationContext)
+            ?: return@coroutineScope emptyList()
+
+        val rawCount = response.features.size
+        val parsed = response.features.mapNotNull { it.toCandidate() }
+        val filtered = parsed.filter { it.looksLikeAccommodation() }
+        val distinct = filtered.distinctBy { it.placeId }
+        val taken = distinct.take(MAX_DETAILS_REQUESTS)
+        android.util.Log.d(
+            TAG,
+            "loadCandidates: raw=$rawCount → parsed=${parsed.size} → filtered=${filtered.size} → distinct=${distinct.size} → taken=${taken.size}"
+        )
+        taken
+    }
+
+    private suspend fun loadAccommodationPlaces(
+        destinationContext: DestinationContext
+    ): GeoapifyPlacesResponse? {
+        val primary = retryOnNetworkError(
+            op = "loadCandidates.searchPlaces.primary",
+            attempts = 1,
+            logFinalFailure = false
+        ) {
             geoapifyApi.searchPlaces(
                 categories = "accommodation",
                 filter = destinationContext.filter,
@@ -86,33 +132,84 @@ class AccommodationRecommendationService @Inject constructor(
                 limit = MAX_CANDIDATES,
                 apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
             )
-        }.getOrNull() ?: return@coroutineScope emptyList()
+        }
+        if (primary != null && primary.features.isNotEmpty()) {
+            return primary
+        }
 
-        response.features
-            .mapNotNull { it.toCandidate() }
-            .filter { it.looksLikeAccommodation() }
-            .distinctBy { it.placeId }
-            .take(MAX_DETAILS_REQUESTS)
+        val fallbackFilter = destinationContext.toCircleFilter(FALLBACK_RADIUS_METERS)
+        android.util.Log.w(
+            TAG,
+            "loadCandidates.searchPlaces: primary ${primary?.features?.size ?: -1} features; " +
+                "trying fallback filter=$fallbackFilter limit=$FALLBACK_CANDIDATES"
+        )
+        val fallback = retryOnNetworkError("loadCandidates.searchPlaces.fallback") {
+            geoapifyApi.searchPlaces(
+                categories = "accommodation",
+                filter = fallbackFilter,
+                bias = destinationContext.bias,
+                limit = FALLBACK_CANDIDATES,
+                apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
+            )
+        }
+
+        return fallback ?: primary
     }
 
     private suspend fun resolveDestinationContext(destination: String): DestinationContext? {
-        val cityMatch = runCatching {
+        val cityMatch = retryOnNetworkError("resolveDestinationContext.city") {
             geoapifyApi.geocodeSearch(
                 text = destination,
                 type = "city",
                 apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
             )
-        }.getOrNull()?.features?.firstOrNull()
+        }?.features?.firstOrNull()
 
-        val resolved = cityMatch ?: runCatching {
+        val resolved = cityMatch ?: retryOnNetworkError("resolveDestinationContext.fallback") {
             geoapifyApi.geocodeSearch(
                 text = destination,
                 type = null,
                 apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
             )
-        }.getOrNull()?.features?.firstOrNull()
+        }?.features?.firstOrNull()
 
         return resolved?.toDestinationContext()
+    }
+
+    /**
+     * Несколько попыток на сетевые ошибки (Geoapify за Cloudflare периодически
+     * рвёт соединение посередине body). Возвращает null, если все попытки
+     * провалились.
+     */
+    private suspend fun <T> retryOnNetworkError(
+        op: String,
+        attempts: Int = 3,
+        logFinalFailure: Boolean = true,
+        block: suspend () -> T
+    ): T? {
+        var lastError: Throwable? = null
+        val safeAttempts = attempts.coerceAtLeast(1)
+        repeat(safeAttempts) { attempt ->
+            try {
+                return block()
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                lastError = error
+                android.util.Log.w(
+                    TAG,
+                    "$op: attempt ${attempt + 1}/$safeAttempts failed: " +
+                        "${error.javaClass.simpleName}: ${error.message}"
+                )
+                if (attempt < safeAttempts - 1) {
+                    kotlinx.coroutines.delay(400L * (attempt + 1))
+                }
+            }
+        }
+        if (logFinalFailure) {
+            android.util.Log.e(TAG, "$op: all $safeAttempts attempts failed", lastError)
+        }
+        return null
     }
 
     private suspend fun rankWithAi(
@@ -310,8 +407,14 @@ class AccommodationRecommendationService @Inject constructor(
         val latitude = coordinates[1]
         return DestinationContext(
             filter = "place:$placeId",
-            bias = "proximity:$longitude,$latitude"
+            bias = "proximity:$longitude,$latitude",
+            longitude = longitude,
+            latitude = latitude
         )
+    }
+
+    private fun DestinationContext.toCircleFilter(radiusMeters: Int): String {
+        return "circle:$longitude,$latitude,$radiusMeters"
     }
 
     private fun GeoapifyPlaceFeature.toCandidate(): AccommodationCandidate? {
@@ -425,8 +528,11 @@ class AccommodationRecommendationService @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "AccommReco"
         private const val MAX_DETAILS_REQUESTS = 8
         private const val MAX_CANDIDATES = 18
+        private const val FALLBACK_CANDIDATES = 8
+        private const val FALLBACK_RADIUS_METERS = 8_000
         private const val MAX_RECOMMENDATIONS = 4
         private val ACCOMMODATION_KEYWORDS = listOf(
             "hotel",
@@ -528,7 +634,9 @@ enum class RecommendationSource {
 
 private data class DestinationContext(
     val filter: String,
-    val bias: String?
+    val bias: String?,
+    val longitude: Double,
+    val latitude: Double
 )
 
 private data class AccommodationCandidate(

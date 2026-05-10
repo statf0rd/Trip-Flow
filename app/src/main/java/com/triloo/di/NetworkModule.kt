@@ -16,6 +16,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -43,7 +44,7 @@ object NetworkModule {
         }
         return OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .addInterceptor(logger)
             .build()
@@ -65,10 +66,38 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @Named("GeoapifyOkHttp")
+    fun provideGeoapifyOkHttpClient(): OkHttpClient {
+        // Geoapify за Cloudflare периодически рвёт сокет посередине gzip-тела
+        // (видно как SocketException: Socket closed внутри InflaterSource).
+        // Просим identity-кодировку, чтобы тело шло без сжатия и не зависало
+        // на InflaterSource.refill, плюс HTTP/1.1, чтобы каждый запрос шёл
+        // по отдельному соединению.
+        val logger = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        }
+        val identityEncoding = okhttp3.Interceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("Accept-Encoding", "identity")
+                .build()
+            chain.proceed(request)
+        }
+        return OkHttpClient.Builder()
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor(identityEncoding)
+            .addInterceptor(logger)
+            .build()
+    }
+
+    @Provides
+    @Singleton
     @Named("GeoapifyRetrofit")
     fun provideGeoapifyRetrofit(
         gson: Gson,
-        okHttpClient: OkHttpClient
+        @Named("GeoapifyOkHttp") okHttpClient: OkHttpClient
     ): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://api.geoapify.com/")
