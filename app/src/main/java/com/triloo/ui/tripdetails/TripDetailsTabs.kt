@@ -482,12 +482,6 @@ private fun DayTimeline(
 
     if (unscheduled.isNotEmpty()) {
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Без времени",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             unscheduled.forEach { place ->
                 TimelineEventCard(
