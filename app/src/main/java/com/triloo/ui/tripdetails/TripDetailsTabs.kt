@@ -2117,45 +2117,69 @@ fun ExpensesTab(
         // Раскладка категорий в проценты — для пончика и легенды.
         val breakdown = remember(expenses) { expenseCategoryBreakdown(expenses) }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item(key = "donut") {
-                ExpensesDonutCard(
-                    totalAmount = totalAmount,
-                    currency = currency,
-                    breakdown = breakdown
-                )
-            }
-
-            item(key = "kpis") {
-                ExpensesKpiRow(
-                    trip = trip,
-                    totalAmount = totalAmount,
-                    currency = currency,
-                    expenses = expenses,
-                    balances = balances
-                )
-            }
-
-            grouped.forEach { (date, dayExpenses) ->
-                item(key = "header-$date") {
-                    ExpensesDateHeader(date = date)
-                }
-                items(dayExpenses, key = { it.id }) { expense ->
-                    ExpenseItem(
-                        expense = expense,
-                        baseCurrency = currency,
-                        onClick = { onExpenseClick(expense.id) },
-                        onToggleSettled = { settled ->
-                            onToggleExpenseSettled(expense.id, settled)
-                        },
-                        onDelete = { onDeleteExpense(expense.id) },
-                        isReadOnly = isReadOnly
+        // Box, чтобы поверх LazyColumn повесить FAB «+». Раньше при первом
+        // расходе экран переключался с EmptyState (с кнопкой) на список без
+        // affordance'а добавления — приходилось возвращаться назад в поездку,
+        // чтобы открыть AddExpense. FAB решает это и не отнимает места у
+        // списка. В read-only режиме FAB прячем — write-action.
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = 16.dp,
+                    // 56 (FAB) + 20 (внешний padding) + 16 (запас под последний
+                    // ExpenseItem, чтобы FAB его не накрывал).
+                    bottom = if (isReadOnly) 16.dp else 92.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item(key = "donut") {
+                    ExpensesDonutCard(
+                        totalAmount = totalAmount,
+                        currency = currency,
+                        breakdown = breakdown
                     )
                 }
+
+                item(key = "kpis") {
+                    ExpensesKpiRow(
+                        trip = trip,
+                        totalAmount = totalAmount,
+                        currency = currency,
+                        expenses = expenses,
+                        balances = balances
+                    )
+                }
+
+                grouped.forEach { (date, dayExpenses) ->
+                    item(key = "header-$date") {
+                        ExpensesDateHeader(date = date)
+                    }
+                    items(dayExpenses, key = { it.id }) { expense ->
+                        ExpenseItem(
+                            expense = expense,
+                            baseCurrency = currency,
+                            onClick = { onExpenseClick(expense.id) },
+                            onToggleSettled = { settled ->
+                                onToggleExpenseSettled(expense.id, settled)
+                            },
+                            onDelete = { onDeleteExpense(expense.id) },
+                            isReadOnly = isReadOnly
+                        )
+                    }
+                }
+            }
+
+            if (!isReadOnly) {
+                TrilooFab(
+                    onClick = onAddExpense,
+                    contentDescription = "Добавить расход",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 20.dp)
+                )
             }
         }
     }
