@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -271,18 +272,23 @@ private fun DayCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Круглый бейдж с номером дня — компактный, фиксированный размер.
+                // Круглый бейдж с номером дня. Раньше тут был CoralSubtle
+                // (coral @ 12%) поверх тёмной карточки + coral-текст — в dark-
+                // теме получалась мутная коричневая «пилюля» с почти не-
+                // читаемой цифрой того же оттенка (три тонко-разных слоя
+                // одного цвета). Сделал solid CoralPrimary + белая цифра —
+                // высокий контраст, бейдж читается как акцент, без слоёв.
                 Box(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(CoralSubtle),
+                        .background(CoralPrimary),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "${day.dayNumber}",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -346,33 +352,45 @@ private fun DayCard(
                             )
                         }
                     } else {
-                        // Пустое состояние дня.
+                        // Пустое состояние дня — пилюля выходит за оба
+                        // padding'а TrilooCard'а:
+                        //   • по горизонтали — через `Modifier.layout`:
+                        //     меряем surface с шириной `parentMax + 32dp`,
+                        //     ставим на `place(-16dp)` → края совпадают с
+                        //     краями карточки. Column'у репортим обычную
+                        //     ширину, чтобы layout не сломался.
+                        //   • по вертикали — через `offset(y = 16.dp)`:
+                        //     визуально опускаем в зону bottom-padding'а
+                        //     Column'а, нижний край совпадает с нижним краем
+                        //     карточки. Высота карточки при этом не растёт.
                         Surface(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(TrilooShapes.Sm)
+                                .layout { measurable, constraints ->
+                                    val pad = 16.dp.roundToPx()
+                                    val expanded = constraints.maxWidth + pad * 2
+                                    val placeable = measurable.measure(
+                                        constraints.copy(
+                                            minWidth = expanded,
+                                            maxWidth = expanded
+                                        )
+                                    )
+                                    layout(constraints.maxWidth, placeable.height) {
+                                        placeable.place(-pad, 0)
+                                    }
+                                }
+                                .offset(y = 16.dp)
                                 .clickable(onClick = onAddPlace),
-                            shape = TrilooShapes.Sm,
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AddLocation,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Добавить место",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "Добавить место",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
                         }
                     }
                 } else {

@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -118,14 +121,27 @@ class MainActivity : ComponentActivity() {
                         // дальше?» внутри списка поездок.
                         var showCreateSheet by rememberSaveable { mutableStateOf(false) }
 
+                        // .imePadding() читает анимированный WindowInsets.ime и
+                        // плавно сжимает NavHost снизу синхронно с системной
+                        // IME-анимацией. Без него edge-to-edge окно при
+                        // adjustResize ресайзится «прыжком» — контент дёргается
+                        // в момент показа/скрытия клавиатуры.
                         TrilooNavHost(
                             navController = navController,
-                            modifier = Modifier,
+                            modifier = Modifier.imePadding(),
                             onShowCreateTripSheet = { showCreateSheet = true }
                         )
 
                         val currentEntry by navController.currentBackStackEntryAsState()
                         val currentRoute = currentEntry?.destination?.route
+
+                        // Прячем нав-бар, когда поднята клавиатура: иначе он
+                        // либо перекрывается ею (если без imePadding'а), либо
+                        // прилипает прямо к её краю (с imePadding'ом) — оба
+                        // варианта выглядят неряшливо, и активные поля ввода
+                        // всё равно живут внутри контента, а не на табах.
+                        val density = LocalDensity.current
+                        val isImeVisible = WindowInsets.ime.getBottom(density) > 0
 
                         // Список табов один-к-одному по дизайну App Shell:
                         // Поездки / Группы / Бюджет / Настройки. По центру
@@ -139,9 +155,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         // Бар показываем только на корнях табов: на детальных
-                        // и оверлейных экранах он бы перекрывал контент.
+                        // и оверлейных экранах он бы перекрывал контент. Плюс
+                        // прячем при поднятой клавиатуре.
                         val activeIndex = tabs.indexOfFirst { it.id == currentRoute }
-                        if (activeIndex >= 0) {
+                        if (activeIndex >= 0 && !isImeVisible) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
