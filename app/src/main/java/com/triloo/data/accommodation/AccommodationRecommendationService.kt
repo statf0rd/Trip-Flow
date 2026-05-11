@@ -137,23 +137,40 @@ class AccommodationRecommendationService @Inject constructor(
             return primary
         }
 
-        val fallbackFilter = destinationContext.toCircleFilter(FALLBACK_RADIUS_METERS)
-        android.util.Log.w(
-            TAG,
-            "loadCandidates.searchPlaces: primary ${primary?.features?.size ?: -1} features; " +
-                "trying fallback filter=$fallbackFilter limit=$FALLBACK_CANDIDATES"
-        )
-        val fallback = retryOnNetworkError("loadCandidates.searchPlaces.fallback") {
-            geoapifyApi.searchPlaces(
-                categories = "accommodation",
-                filter = fallbackFilter,
-                bias = destinationContext.bias,
-                limit = FALLBACK_CANDIDATES,
-                apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
+        // Эскалирующий fallback по радиусам. 8 км покрывает города; 25 км —
+        // пригороды и небольшие районы; 80 км — крупные регионы вроде Республики
+        // Алтай, где центр-точка попадает в безлюдную зону и в 8 км Geoapify
+        // не индексирует ни одного объекта. На каждом радиусе делаем одну
+        // попытку: сами эскалации играют роль ретрая на транзиентных ошибках,
+        // а 45 c readTimeout × 3 радиуса × 3 ретрая дали бы недопустимый общий
+        // wait в худшем случае.
+        var lastFallback: GeoapifyPlacesResponse? = null
+        FALLBACK_RADII_METERS.forEachIndexed { index, radius ->
+            val fallbackFilter = destinationContext.toCircleFilter(radius)
+            android.util.Log.w(
+                TAG,
+                "loadCandidates.searchPlaces: primary ${primary?.features?.size ?: -1} features; " +
+                    "fallback ${index + 1}/${FALLBACK_RADII_METERS.size} filter=$fallbackFilter limit=$FALLBACK_CANDIDATES"
             )
+            val response = retryOnNetworkError(
+                op = "loadCandidates.searchPlaces.fallback.${radius}m",
+                attempts = 1
+            ) {
+                geoapifyApi.searchPlaces(
+                    categories = "accommodation",
+                    filter = fallbackFilter,
+                    bias = destinationContext.bias,
+                    limit = FALLBACK_CANDIDATES,
+                    apiKey = BuildConfig.APP_GEOAPIFY_API_KEY
+                )
+            }
+            if (response != null && response.features.isNotEmpty()) {
+                return response
+            }
+            if (response != null) lastFallback = response
         }
 
-        return fallback ?: primary
+        return lastFallback ?: primary
     }
 
     private suspend fun resolveDestinationContext(destination: String): DestinationContext? {
@@ -532,7 +549,7 @@ class AccommodationRecommendationService @Inject constructor(
         private const val MAX_DETAILS_REQUESTS = 8
         private const val MAX_CANDIDATES = 18
         private const val FALLBACK_CANDIDATES = 8
-        private const val FALLBACK_RADIUS_METERS = 8_000
+        private val FALLBACK_RADII_METERS = listOf(8_000, 25_000, 80_000)
         private const val MAX_RECOMMENDATIONS = 4
         private val ACCOMMODATION_KEYWORDS = listOf(
             "hotel",
