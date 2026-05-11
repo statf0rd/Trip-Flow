@@ -23,11 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
@@ -43,7 +40,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private val QuickStatHeight = 72.dp
+private val QuickStatHeight = 80.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -530,8 +527,10 @@ private fun CurrentTripCard(
 
 /**
  * Маленькая плитка статистики внутри coral hero. Иконка в левом верхнем
- * углу; снизу — однострочная подпись «<bold>value</bold> <faded>label</faded>»
- * (например «День 1 из 2», «3 места по плану», «₽14.5K потрачено»).
+ * углу; снизу — двухстрочная подпись: жирный value и приглушённый label
+ * под ним (например «День 1» / «из 2», «3 места» / «по плану», «₽14.5K» /
+ * «потрачено»). Одной строкой не делаем — при трёх плитках в ряд на узких
+ * экранах любая из подписей не помещается ни на каком разумном кегле.
  */
 @Composable
 private fun QuickStat(
@@ -557,25 +556,23 @@ private fun QuickStat(
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
-            Text(
-                text = buildAnnotatedString {
-                    withStyle(
-                        SpanStyle(
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    ) {
-                        append(value)
-                    }
-                    append(' ')
-                    withStyle(SpanStyle(color = Color.White.copy(alpha = 0.78f))) {
-                        append(label)
-                    }
-                },
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.78f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
