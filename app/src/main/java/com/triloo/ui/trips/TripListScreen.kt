@@ -557,6 +557,25 @@ private fun QuickStat(
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    ) {
+                        append(value)
+                    }
+                    append(' ')
+                    withStyle(SpanStyle(color = Color.White.copy(alpha = 0.78f))) {
+                        append(label)
+                    }
+                },
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
