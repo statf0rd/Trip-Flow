@@ -610,10 +610,18 @@ private fun executeRelayAction(
 
 private fun bluetoothPermissions(): Array<String> {
     return when {
+        // По стандарту Android 12+ с usesPermissionFlags="neverForLocation"
+        // ACCESS_FINE_LOCATION не нужен. На практике Samsung One UI 4 / 5 и
+        // некоторые сборки MIUI всё равно валят запрос с
+        //   E BluetoothUtils: Need ACCESS_FINE_LOCATION permission to get scan results
+        // даже когда BLUETOOTH_SCAN выдан. Поэтому просим оба permission'а —
+        // на стоковом Android это не больно, а на Samsung без этого discovery
+        // не возвращает результатов.
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> arrayOf(
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_ADVERTISE
+            Manifest.permission.BLUETOOTH_ADVERTISE,
+            Manifest.permission.ACCESS_FINE_LOCATION
         )
 
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> arrayOf(
