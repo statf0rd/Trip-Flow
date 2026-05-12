@@ -67,7 +67,16 @@ class TripRepository @Inject constructor(
     }
     
     suspend fun deleteTrip(tripId: String) {
-        requireTripManagementPermission(tripId, "удалять поездку")
+        // Удаление поездки — локальное действие на этом устройстве, доступно
+        // даже MEMBER'у и даже когда текущий пользователь не в participants
+        // (поездка пришла извне через BT-relay). Без этого Samsung-гость
+        // не мог снести с себя «Бабах» / «Туапсе» — requireRole бросал
+        // IllegalStateException, исключение тонуло в viewModelScope, поездка
+        // оставалась. logDeletion ставит запись в deletion_log, чтобы при
+        // следующей синхронизации удаление пропагировалось на остальные
+        // устройства — это сознательный trade-off: если MEMBER снёс поездку
+        // у себя и потом синхронизировался с хостом, у хоста она тоже
+        // исчезнет. Альтернатива — «leave trip» — добавим, когда понадобится.
         logDeletion(tripId, RelayEntityType.TRIP, tripId)
         tripDao.deleteTripById(tripId)
         tripDao.deleteParticipantsByTrip(tripId)
