@@ -252,6 +252,12 @@ class RelayRepository @Inject constructor(
         val local = tripDao.getTripById(trip.id)
         return if (local == null) {
             tripDao.insertTrip(trip)
+            // Если эту поездку мы у себя ранее удаляли — `deletion_log`
+            // помнит TRIP-удаление и попытается «прокрутить» его при
+            // следующем sync'е, удалив поездку и на других устройствах.
+            // На приёме = «получили обратно» — старую запись чистим, иначе
+            // удаление будет циклически воскрешать-удалять trip между парами.
+            deletionLogDao.deleteDeletionsForTrip(trip.id)
             1 to 0
         } else if (trip.updatedAt > local.updatedAt) {
             tripDao.updateTrip(trip)

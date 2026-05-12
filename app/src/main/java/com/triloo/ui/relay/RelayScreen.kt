@@ -103,7 +103,13 @@ fun RelayScreen(
             onRequireDiscoverable = {
                 discoverableLauncher.launch(
                     Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                        putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
+                        // 3600c — максимум, который Android принимает без
+                        // обрезки в системные дефолты (часто 120/300). При
+                        // 120c пользователь успевал зайти на гостевое
+                        // устройство, дать permission'ы, нажать «Найти», и
+                        // окно discoverable уже истекало — host оставался в
+                        // RFCOMM-слушании, но другие телефоны его не видели.
+                        putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 3600)
                     }
                 )
             }
