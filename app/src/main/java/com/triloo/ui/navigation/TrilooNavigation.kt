@@ -58,6 +58,10 @@ sealed class Screen(val route: String) {
     object Relay : Screen("trips/{tripId}/relay") {
         fun createRoute(tripId: String) = "trips/$tripId/relay"
     }
+    // Receive-only Bluetooth relay для нового участника: открывается из
+    // «Группы», у пользователя ещё нет поездки. tripId не передаём — VM
+    // увидит null и переключится в режим discovery.
+    object RelayJoin : Screen("relay/join")
 
     object TripDetails : Screen("trips/{tripId}") {
         fun createRoute(tripId: String) = "trips/$tripId"
@@ -239,6 +243,9 @@ fun TrilooNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToTrip = { tripId ->
                         navController.navigate(Screen.TripDetails.createRoute(tripId))
+                    },
+                    onNavigateToJoinByBluetooth = {
+                        navController.navigate(Screen.RelayJoin.route)
                     }
                 )
             }
@@ -343,6 +350,17 @@ fun TrilooNavHost(
             route = Screen.Relay.route,
             arguments = listOf(navArgument("tripId") { type = NavType.StringType })
         ) {
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                RelayScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
+
+        // Bluetooth-онбординг: гость без поездки принимает её из чужого
+        // hosting'а. Тот же RelayScreen, но без tripId — VM внутри увидит null
+        // и отдаст isReceiveOnly = true, UI спрячет host-секцию.
+        composable(route = Screen.RelayJoin.route) {
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 RelayScreen(
                     onNavigateBack = { navController.popBackStack() }

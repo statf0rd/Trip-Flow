@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Login
@@ -58,6 +59,7 @@ import java.util.Locale
 fun GroupTripsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
+    onNavigateToJoinByBluetooth: () -> Unit = {},
     viewModel: GroupTripsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,6 +77,7 @@ fun GroupTripsScreen(
         groupTrips = groupTrips,
         onNavigateBack = onNavigateBack,
         onNavigateToTrip = onNavigateToTrip,
+        onNavigateToJoinByBluetooth = onNavigateToJoinByBluetooth,
         onInviteCodeChange = viewModel::updateInviteCode,
         onDisplayNameChange = viewModel::updateDisplayName,
         onJoin = viewModel::joinByInviteCode
@@ -88,6 +91,7 @@ private fun GroupTripsContent(
     groupTrips: List<Trip>,
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
+    onNavigateToJoinByBluetooth: () -> Unit,
     onInviteCodeChange: (String) -> Unit,
     onDisplayNameChange: (String) -> Unit,
     onJoin: () -> Unit
@@ -138,6 +142,10 @@ private fun GroupTripsContent(
                     onDisplayNameChange = onDisplayNameChange,
                     onJoin = onJoin
                 )
+            }
+
+            item {
+                JoinByBluetoothCard(onClick = onNavigateToJoinByBluetooth)
             }
 
             item {
@@ -262,6 +270,42 @@ private fun JoinByCodeCard(
     }
 }
 
+/**
+ * Альтернативный способ присоединиться: офлайн, через Bluetooth-relay.
+ * Карточка маленькая по сравнению с JoinByCode — кода и имени тут не нужно,
+ * они приедут вместе со снапшотом поездки. Сам экран Relay сам спросит
+ * Bluetooth-permission'ы и предложит выбрать устройство для подключения.
+ */
+@Composable
+private fun JoinByBluetoothCard(onClick: () -> Unit) {
+    TrilooCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Rounded.Bluetooth,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Принять поездку по Bluetooth",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Без интернета — подключитесь к телефону организатора, и поездка появится у вас.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate600
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun GroupTripItem(
     trip: Trip,
@@ -314,6 +358,7 @@ private fun GroupTripsScreenPreview() {
             ),
             onNavigateBack = {},
             onNavigateToTrip = {},
+            onNavigateToJoinByBluetooth = {},
             onInviteCodeChange = {},
             onDisplayNameChange = {},
             onJoin = {}

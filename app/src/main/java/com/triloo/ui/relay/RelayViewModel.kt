@@ -32,15 +32,19 @@ class RelayViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val tripId: String = savedStateHandle.get<String>("tripId")
-        ?: throw IllegalArgumentException("tripId is required")
+    // tripId может быть null — это режим «гость без поездки»: экран открыт из
+    // вкладки «Групповые поездки» для офлайн-присоединения к чужой поездке.
+    // При null хостинг недоступен (нечего шарить), connect шлёт пустой
+    // tripId, и хост на той стороне распознаёт это как «новый участник».
+    private val tripId: String? = savedStateHandle.get<String>("tripId")
+    val isReceiveOnly: Boolean = tripId == null
 
-    private val _uiState = MutableStateFlow(RelayUiState())
+    private val _uiState = MutableStateFlow(RelayUiState(isReceiveOnly = isReceiveOnly))
     val uiState: StateFlow<RelayUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            _uiState.update { it.copy(trip = tripRepository.getTripById(tripId)) }
+            _uiState.update { it.copy(trip = tripId?.let { id -> tripRepository.getTripById(id) }) }
         }
 
         viewModelScope.launch {
@@ -77,25 +81,37 @@ class RelayViewModel @Inject constructor(
     fun refreshBluetoothState() {
         bluetoothRelayManager.refreshState()
         viewModelScope.launch {
-            _uiState.update { it.copy(trip = tripRepository.getTripById(tripId)) }
+            _uiState.update { it.copy(trip = tripId?.let { id -> tripRepository.getTripById(id) }) }
         }
     }
 
     fun startHosting() {
+        // В режиме «гость без поездки» хостить нечего — UI этой кнопки не
+        // показывает, но защищаемся от случайного вызова.
+        val hostTripId = tripId ?: run {
+            _uiState.update { it.copy(syncError = "Нет поездки, которую можно расшарить") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(syncError = null) }
             try {
-                val trip = tripRepository.getTripById(tripId)
+                val trip = tripRepository.getTripById(hostTripId)
                 if (trip == null) {
                     _uiState.update { it.copy(syncError = "Поездка не найдена") }
                     return@launch
                 }
                 bluetoothRelayManager.startHosting { request ->
-                    if (request.tripId != tripId) {
+                    // Пустой tripId у запроса — это онбординг нового участника
+                    // (вариант 1 нашего протокола): хост отдаёт ту поездку,
+                    // которая у него сейчас в активной сессии hosting'а.
+                    // Если запрос содержит конкретный tripId, и он не совпадает
+                    // с нашим, отбиваем — нельзя «подсунуть» чужую поездку.
+                    if (request.tripId.isNotEmpty() && request.tripId != hostTripId) {
                         throw IllegalStateException("Другая поездка запрашивает синхронизацию")
                     }
-                    val sinceCursor = request.knownChangeCursor.takeIf { request.hasCompleteSnapshot && it > 0L }
-                    val relayPackage = relayRepository.buildPackage(tripId, sinceCursor)
+                    val sinceCursor = request.knownChangeCursor
+                        .takeIf { request.hasCompleteSnapshot && it > 0L && request.tripId == hostTripId }
+                    val relayPackage = relayRepository.buildPackage(hostTripId, sinceCursor)
                         ?: throw IllegalStateException("Поездка не найдена")
                     relayRepository.encodePackage(relayPackage)
                 }
@@ -123,6 +139,19 @@ class RelayViewModel @Inject constructor(
     fun connect(address: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(syncError = null) }
+            // В режиме «гость без поездки» tripId == null — шлём пустую строку,
+            // хост распознаёт это как онбординг и отдаёт свой текущий снимок.
+            // В обычном режиме передаём наш tripId + cursor: если поездка уже
+            // есть локально, получим только дельту.
+            if (tripId == null) {
+                bluetoothRelayManager.connect(
+                    address = address,
+                    tripId = "",
+                    knownChangeCursor = 0L,
+                    hasCompleteSnapshot = false
+                )
+                return@launch
+            }
             val syncState = relaySyncMetadataRepository.getTripSyncState(tripId)
             val hasLocalSnapshot = tripRepository.getTripById(tripId) != null && syncState.hasCompleteSnapshot
             bluetoothRelayManager.connect(
@@ -234,6 +263,7 @@ class RelayViewModel @Inject constructor(
  */
 data class RelayUiState(
     val trip: Trip? = null,
+    val isReceiveOnly: Boolean = false,
     val isBluetoothSupported: Boolean = true,
     val isBluetoothEnabled: Boolean = false,
     val isHosting: Boolean = false,

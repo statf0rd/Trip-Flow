@@ -188,7 +188,12 @@ private fun RelayContent(
     onClearError: () -> Unit,
     onClearMergeResult: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    // В receive-only режиме (гость без поездки, экран открыт из «Группы»)
+    // показываем сразу таб «Получить» и не даём переключиться на «Отправить»:
+    // у гостя нет поездки, расшаривать нечего.
+    var selectedTab by remember(uiState.isReceiveOnly) {
+        mutableIntStateOf(if (uiState.isReceiveOnly) 1 else 0)
+    }
     val errorMessage = uiState.syncError ?: uiState.transportError
     val isBusy = uiState.isConnecting || uiState.isTransferring || uiState.isApplyingPackage
 
@@ -255,19 +260,23 @@ private fun RelayContent(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("Отправить") },
-                    icon = { Icon(Icons.Rounded.CloudUpload, contentDescription = null) }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("Получить") },
-                    icon = { Icon(Icons.Rounded.CloudDownload, contentDescription = null) }
-                )
+            // В receive-only TabRow прячем целиком — оставлять одну вкладку
+            // «Получить» бессмысленно и шумно.
+            if (!uiState.isReceiveOnly) {
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Отправить") },
+                        icon = { Icon(Icons.Rounded.CloudUpload, contentDescription = null) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Получить") },
+                        icon = { Icon(Icons.Rounded.CloudDownload, contentDescription = null) }
+                    )
+                }
             }
 
             Column(
