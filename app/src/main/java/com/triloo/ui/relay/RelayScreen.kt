@@ -446,7 +446,7 @@ private fun ReceiveTab(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Поиск покажет соседние или уже спаренные устройства. Выберите телефон, который сейчас ждёт подключение.",
+                text = "Найдём только те устройства, что сейчас открыли «Стать видимым». Выберите телефон, который ждёт подключение.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Slate800
             )

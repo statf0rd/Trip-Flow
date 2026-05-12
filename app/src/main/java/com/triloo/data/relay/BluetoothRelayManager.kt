@@ -128,7 +128,6 @@ class BluetoothRelayManager @Inject constructor(
                                 ?.takeUnless { it == "Ищем устройства поблизости..." }
                         )
                     }
-                    refreshBondedDevices()
                 }
 
                 BluetoothDevice.ACTION_FOUND -> {
@@ -159,13 +158,15 @@ class BluetoothRelayManager @Inject constructor(
             // Bluetooth включился: сбрасываем устаревший «Включите Bluetooth»,
             // если он остался от прошлого выключенного состояния. Другие
             // сообщения (Hosting/Discovery/...) оставляем — их пишут активные
-            // флоу, и их перетирать нельзя.
+            // флоу, и их перетирать нельзя. Список устройств сюда не
+            // подмешиваем — он наполняется только при активном discovery
+            // через ACTION_FOUND, чтобы UI не путал юзера старыми спаренными
+            // наушниками/часами.
             _state.update { current ->
                 if (current.statusMessage == "Включите Bluetooth") {
                     current.copy(statusMessage = null)
                 } else current
             }
-            refreshBondedDevices()
         } else {
             stopAll()
             _state.update {
@@ -195,7 +196,10 @@ class BluetoothRelayManager @Inject constructor(
         connectJob?.cancel()
         connectJob = null
         closeClientSocket()
-        refreshBondedDevices(clearDiscovered = true)
+        // Перед каждым новым скан-проходом обнуляем список устройств — раньше
+        // тут досыпались спаренные наушники/часы, и юзер тапал по ним вместо
+        // нужного телефона. Реальные кандидаты прилетят через ACTION_FOUND.
+        _state.update { it.copy(devices = emptyList()) }
 
         runCatching {
             if (bluetoothAdapter.isDiscovering) {
@@ -528,27 +532,6 @@ class BluetoothRelayManager @Inject constructor(
             }
         }
         return null
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun refreshBondedDevices(clearDiscovered: Boolean = false) {
-        val bluetoothAdapter = adapter ?: return
-        val bonded = runCatching {
-            bluetoothAdapter.bondedDevices.orEmpty().map { it.toRelayDevice() }
-        }.getOrDefault(emptyList())
-
-        _state.update { current ->
-            val base = if (clearDiscovered) {
-                bonded
-            } else {
-                mergeDevices(current.devices, bonded)
-            }
-            current.copy(
-                devices = base.sortedWith(
-                    compareByDescending<BluetoothRelayDevice> { it.isBonded }.thenBy { it.name }
-                )
-            )
-        }
     }
 
     private fun addOrUpdateDevice(device: BluetoothDevice) {
