@@ -82,6 +82,17 @@ class RelayRepository @Inject constructor(
             sinceCursor ?: 0L
         )
 
+        // Диагностика расхождения участников между хостом и гостем после BT
+        // sync (хост: 1, гость: 2). Логируем, кого реально кладём в пакет —
+        // чтобы сравнить с финальным набором на принимающей стороне.
+        android.util.Log.d(
+            TAG,
+            "buildPackage: tripId=$tripId delta=$isDelta participants=${participants.size}" +
+                " names=${participants.joinToString { "${it.displayName}/${it.role}" }}" +
+                " days=${tripDays.size} places=${places.size} expenses=${expenses.size}" +
+                " deletions=${deletions.size}"
+        )
+
         return RelayPackage(
             createdAt = System.currentTimeMillis(),
             deviceId = deviceId,
@@ -151,6 +162,15 @@ class RelayRepository @Inject constructor(
     }
 
     suspend fun mergePackage(relayPackage: RelayPackage): RelayMergeResult {
+        android.util.Log.d(
+            TAG,
+            "mergePackage: tripId=${relayPackage.trip.id} delta=${relayPackage.isDelta}" +
+                " incomingParticipants=${relayPackage.participants.size}" +
+                " names=${relayPackage.participants.joinToString { "${it.displayName}/${it.role}" }}" +
+                " days=${relayPackage.tripDays.size} places=${relayPackage.places.size}" +
+                " expenses=${relayPackage.expenses.size} deletions=${relayPackage.deletions.size}"
+        )
+
         var inserted = 0
         var updated = 0
         var deleted = 0
@@ -195,6 +215,13 @@ class RelayRepository @Inject constructor(
                 }
             }
         }
+
+        val totalLocalParticipants = tripDao.getParticipants(relayPackage.trip.id).size
+        android.util.Log.d(
+            TAG,
+            "mergePackage.done: tripId=${relayPackage.trip.id} inserted=$inserted updated=$updated" +
+                " deleted=$deleted localParticipantsAfter=$totalLocalParticipants"
+        )
 
         return RelayMergeResult(
             inserted = inserted,
@@ -347,5 +374,9 @@ class RelayRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "RelayRepo"
     }
 }
