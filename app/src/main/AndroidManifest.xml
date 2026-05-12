@@ -22,7 +22,16 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!--
+      `neverForLocation` важен на Samsung/Xiaomi/MIUI: без него OEM-прошивки
+      на Android 12+ иногда тихо режут результаты сканирования (даже если
+      permission выдан), считая, что приложение пытается определить локацию
+      через BT. Мы локацию через BT не выводим — рядом стоящие телефоны
+      сравниваем по адресу/имени, а не по геопозиции.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
