@@ -23,6 +23,7 @@ import com.triloo.ui.auth.AuthFlowScreen
 import com.triloo.ui.budget.BudgetScreen
 import com.triloo.ui.grouptrips.GroupTripsScreen
 import com.triloo.ui.invite.InviteScreen
+import com.triloo.ui.relay.RelayScreen
 import com.triloo.ui.settings.SettingsScreen
 import com.triloo.ui.settings.PrivacyPolicyScreen
 import com.triloo.ui.tripdetails.AddExpenseScreen
@@ -53,6 +54,9 @@ sealed class Screen(val route: String) {
     object Budget : Screen("budget")
     object Invite : Screen("trips/{tripId}/invite") {
         fun createRoute(tripId: String) = "trips/$tripId/invite"
+    }
+    object Relay : Screen("trips/{tripId}/relay") {
+        fun createRoute(tripId: String) = "trips/$tripId/relay"
     }
 
     object TripDetails : Screen("trips/{tripId}") {
@@ -307,6 +311,9 @@ fun TrilooNavHost(
                 onNavigateToEditTrip = { id ->
                     navController.navigate(Screen.EditTrip.createRoute(id))
                 },
+                onNavigateToRelay = { id ->
+                    navController.navigate(Screen.Relay.createRoute(id))
+                },
                 onNavigateToPlaceDetails = { placeId ->
                     navController.navigate(Screen.PlaceDetails.createRoute(placeId))
                 },
@@ -326,6 +333,18 @@ fun TrilooNavHost(
         ) {
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 InviteScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
+
+        // Bluetooth-синхронизация поездки.
+        composable(
+            route = Screen.Relay.route,
+            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+        ) {
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                RelayScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

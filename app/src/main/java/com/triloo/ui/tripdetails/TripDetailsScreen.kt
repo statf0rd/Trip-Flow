@@ -60,6 +60,7 @@ fun TripDetailsScreen(
     onNavigateToAddPlace: (String, String) -> Unit, // tripId, dayId
     onNavigateToAddExpense: (String) -> Unit,
     onNavigateToEditTrip: (String) -> Unit,
+    onNavigateToRelay: (String) -> Unit = {},
     onNavigateToEditPlace: (String) -> Unit = {},
     onNavigateToPlaceDetails: (String) -> Unit = {}, // placeId
     onNavigateToEditExpense: (String, String) -> Unit = { _, _ -> }, // tripId, expenseId
@@ -131,6 +132,7 @@ fun TripDetailsScreen(
                     trip = trip,
                     onNavigateBack = onNavigateBack,
                     onEdit = { onNavigateToEditTrip(trip.id) },
+                    onRelay = { onNavigateToRelay(trip.id) },
                     onDelete = { showDeleteDialog = true },
                     isReadOnly = isReadOnly
                 )
@@ -300,6 +302,7 @@ private fun TripDetailsTopBar(
     trip: Trip,
     onNavigateBack: () -> Unit,
     onEdit: () -> Unit,
+    onRelay: () -> Unit,
     onDelete: () -> Unit,
     isReadOnly: Boolean = false
 ) {
@@ -339,9 +342,9 @@ private fun TripDetailsTopBar(
             }
         },
         actions = {
-            // По запросу пользователя убрали из шапки иконку «пригласить» (PersonAdd),
-            // а из 3-точечного меню — пункты «Оптимизировать маршрут», «Поделиться»
-            // и «Bluetooth-синхронизация» (фича Relay/QR пересылки удалена из проекта).
+            // В меню: «Редактировать» и «Bluetooth-синхронизация» — обе
+            // write-action'а, прячем в read-only. «Удалить» доступна всегда:
+            // даже архивную поездку юзер должен мочь убрать с устройства.
             Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
@@ -364,6 +367,20 @@ private fun TripDetailsTopBar(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Rounded.Edit,
+                                    contentDescription = null
+                                )
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Bluetooth-синхронизация") },
+                            onClick = {
+                                showMenu = false
+                                onRelay()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Bluetooth,
                                     contentDescription = null
                                 )
                             }
@@ -574,6 +591,7 @@ private fun TripDetailsScreenPreview() {
                         trip = trip,
                         onNavigateBack = {},
                         onEdit = {},
+                        onRelay = {},
                         onDelete = {}
                     )
                 }

@@ -10,6 +10,21 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!--
+      Bluetooth-relay sync: API ≤ 30 использует legacy BLUETOOTH/BLUETOOTH_ADMIN
+      + ACCESS_FINE_LOCATION (он уже выше). API 31+ — runtime-perm'ы SCAN/
+      CONNECT/ADVERTISE (neverForLocation мы не ставим, иначе нельзя
+      сканировать другие устройства, привязанные к гео).
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
