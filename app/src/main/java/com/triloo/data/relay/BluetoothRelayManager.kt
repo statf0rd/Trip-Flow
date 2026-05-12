@@ -134,6 +134,15 @@ class BluetoothRelayManager @Inject constructor(
                     intent.extractBluetoothDevice()?.let(::addOrUpdateDevice)
                 }
 
+                // ACTION_FOUND часто прилетает раньше, чем устройство сообщило
+                // своё имя — в первом кадре у нас name == null, и UI рисует
+                // только MAC-адрес. Когда OS позже разрешит имя (через 100-
+                // 500 мс), приходит ACTION_NAME_CHANGED — апдейтим запись по
+                // адресу, имя подтянется в список без перезапуска поиска.
+                BluetoothDevice.ACTION_NAME_CHANGED -> {
+                    intent.extractBluetoothDevice()?.let(::addOrUpdateDevice)
+                }
+
                 BluetoothAdapter.ACTION_STATE_CHANGED -> refreshState()
             }
         }
@@ -547,7 +556,21 @@ class BluetoothRelayManager @Inject constructor(
     ): List<BluetoothRelayDevice> {
         val byAddress = LinkedHashMap<String, BluetoothRelayDevice>()
         current.forEach { byAddress[it.address] = it }
-        incoming.forEach { byAddress[it.address] = it }
+        incoming.forEach { newDevice ->
+            val existing = byAddress[newDevice.address]
+            // Если входящая запись пришла только с MAC'ом (displayName ==
+            // address), а у нас уже есть та же запись с реальным именем —
+            // имя не теряем. Это важно для ACTION_FOUND/ACTION_NAME_CHANGED:
+            // часто первое событие приходит без имени, второе уже с именем,
+            // но в редких сборках одна сторона может прислать пустоту назад.
+            val newIsMacOnly = newDevice.name == newDevice.address
+            val existingHasName = existing != null && existing.name != existing.address
+            byAddress[newDevice.address] = if (newIsMacOnly && existingHasName) {
+                existing!!.copy(isBonded = newDevice.isBonded)
+            } else {
+                newDevice
+            }
+        }
         return byAddress.values.toList()
     }
 
@@ -557,6 +580,7 @@ class BluetoothRelayManager @Inject constructor(
             addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_NAME_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
 
