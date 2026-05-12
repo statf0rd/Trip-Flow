@@ -1220,51 +1220,21 @@ fun MapTab(
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
 
+            // Пилюля геошаринга в правом нижнем углу карты. Раньше висела в
+            // TopEnd, но там перебивала info-чипы и название поездки. Снизу
+            // справа корнер свободен: BottomCenter-блок с RouteModesPanel
+            // центрирован и не уходит за правый край. Развёрнутая плашка
+            // подсказки в этом положении растёт ВВЕРХ — для этого порядок в
+            // Column'е инвертирован (AnimatedVisibility идёт первым, пилюля —
+            // последней, поэтому пилюля всегда стоит в нижней точке колонки).
             Column(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 12.dp, end = 12.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 12.dp, end = 12.dp)
                     .widthIn(max = 320.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
-                    shape = TrilooShapes.pill,
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 6.dp,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier.clickable { sharingExpanded = !sharingExpanded }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (locationSharingActive) {
-                                Icons.Rounded.LocationOn
-                            } else {
-                                Icons.Rounded.LocationOff
-                            },
-                            contentDescription = if (sharingExpanded) "Скрыть" else "Геошаринг",
-                            tint = sharingTint,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = if (locationSharingActive) "Геошаринг" else "Геошаринг выкл",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Icon(
-                            imageVector = if (sharingExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
                 AnimatedVisibility(visible = sharingExpanded) {
                     bannerText?.let { text ->
                         Surface(
@@ -1305,6 +1275,43 @@ fun MapTab(
                                 }
                             }
                         }
+                    }
+                }
+
+                Surface(
+                    shape = TrilooShapes.pill,
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.clickable { sharingExpanded = !sharingExpanded }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (locationSharingActive) {
+                                Icons.Rounded.LocationOn
+                            } else {
+                                Icons.Rounded.LocationOff
+                            },
+                            contentDescription = if (sharingExpanded) "Скрыть" else "Геошаринг",
+                            tint = sharingTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = if (locationSharingActive) "Геошаринг" else "Геошаринг выкл",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            imageVector = if (sharingExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
