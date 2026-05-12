@@ -195,6 +195,12 @@ class BluetoothRelayManager @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
+        android.util.Log.d(
+            TAG,
+            "startDiscovery: adapter=${adapter != null} enabled=${adapter?.isEnabled}" +
+                " hostingActive=${hostJob?.isActive == true}" +
+                " connectingActive=${connectJob?.isActive == true}"
+        )
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
             setError("Сначала включите Bluetooth")
@@ -215,9 +221,11 @@ class BluetoothRelayManager @Inject constructor(
                 bluetoothAdapter.cancelDiscovery()
             }
             bluetoothAdapter.startDiscovery()
-        }.onFailure {
+        }.onFailure { error ->
+            android.util.Log.w(TAG, "startDiscovery: failed", error)
             setError("Не удалось запустить поиск устройств")
         }.onSuccess { started ->
+            android.util.Log.d(TAG, "startDiscovery: result=$started")
             if (!started) {
                 setError("Не удалось запустить поиск устройств")
             }
@@ -250,6 +258,7 @@ class BluetoothRelayManager @Inject constructor(
         //    изменений гостя.
         payloadProvider: suspend (BluetoothRelaySyncRequest, guestPackage: String?) -> String
     ) {
+        android.util.Log.d(TAG, "startHosting: adapter=${adapter != null} enabled=${adapter?.isEnabled}")
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
             setError("Сначала включите Bluetooth")
@@ -362,6 +371,7 @@ class BluetoothRelayManager @Inject constructor(
         // отдаёт его хосту до получения ответа.
         guestPayloadProvider: suspend () -> String? = { null }
     ) {
+        android.util.Log.d(TAG, "connect: address=$address tripId=$tripId hasSnapshot=$hasCompleteSnapshot")
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
             setError("Сначала включите Bluetooth")
@@ -569,6 +579,11 @@ class BluetoothRelayManager @Inject constructor(
 
     private fun addOrUpdateDevice(device: BluetoothDevice) {
         val relayDevice = device.toRelayDevice()
+        android.util.Log.d(
+            TAG,
+            "addOrUpdateDevice: name=${relayDevice.name} address=${relayDevice.address}" +
+                " bonded=${relayDevice.isBonded}"
+        )
         _state.update { current ->
             current.copy(devices = mergeDevices(current.devices, listOf(relayDevice)))
         }
@@ -870,6 +885,7 @@ class BluetoothRelayManager @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "BtRelay"
         private val SERVICE_UUID: UUID =
             UUID.fromString("4cf14d9b-cb79-4b27-90df-f69a8b1450c5")
         private const val SERVICE_NAME = "TripFlowRelay"
