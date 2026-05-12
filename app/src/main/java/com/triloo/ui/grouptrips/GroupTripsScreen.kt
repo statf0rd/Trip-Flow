@@ -125,7 +125,15 @@ private fun GroupTripsContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            // bottom = 100.dp — резерв под плавающий LiquidGlassNavBar
+            // (70dp высота + 18dp отступ + insets), без него последние карточки
+            // уходят под нав-бар на корневых табах.
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 16.dp,
+                bottom = 100.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {

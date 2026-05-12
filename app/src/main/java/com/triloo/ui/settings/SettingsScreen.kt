@@ -317,7 +317,9 @@ private fun SettingsContent(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            // Зазор под плавающий LiquidGlassNavBar на корневом табе —
+            // 32dp перекрывалось, последний пункт меню уходил под бар.
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 
