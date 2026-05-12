@@ -156,6 +156,15 @@ class BluetoothRelayManager @Inject constructor(
         }
 
         if (bluetoothAdapter?.isEnabled == true) {
+            // Bluetooth включился: сбрасываем устаревший «Включите Bluetooth»,
+            // если он остался от прошлого выключенного состояния. Другие
+            // сообщения (Hosting/Discovery/...) оставляем — их пишут активные
+            // флоу, и их перетирать нельзя.
+            _state.update { current ->
+                if (current.statusMessage == "Включите Bluetooth") {
+                    current.copy(statusMessage = null)
+                } else current
+            }
             refreshBondedDevices()
         } else {
             stopAll()
