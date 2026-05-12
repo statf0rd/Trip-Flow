@@ -243,7 +243,12 @@ class BluetoothRelayManager @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun startHosting(
-        payloadProvider: suspend (BluetoothRelaySyncRequest) -> String
+        // Колбэк-провайдер пакета. Получает sync-request гостя и его пакет
+        // (или null — гость без локальной копии поездки). Должен:
+        // 1) применить guestPackage в локальную БД хоста (если он не null);
+        // 2) собрать и вернуть свой пакет — уже с учётом смерженных
+        //    изменений гостя.
+        payloadProvider: suspend (BluetoothRelaySyncRequest, guestPackage: String?) -> String
     ) {
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
@@ -349,7 +354,13 @@ class BluetoothRelayManager @Inject constructor(
         address: String,
         tripId: String,
         knownChangeCursor: Long,
-        hasCompleteSnapshot: Boolean
+        hasCompleteSnapshot: Boolean,
+        // Опциональный провайдер пакета гостя. В режиме онбординга или когда у
+        // гостя нет локальной копии поездки — возвращает null, и тогда после
+        // sync-request шлётся маркер FRAME_NO_PACKAGE. В остальных случаях
+        // гость сам строит свой снапшот через RelayRepository.buildPackage и
+        // отдаёт его хосту до получения ответа.
+        guestPayloadProvider: suspend () -> String? = { null }
     ) {
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
@@ -402,6 +413,19 @@ class BluetoothRelayManager @Inject constructor(
                     knownChangeCursor = knownChangeCursor,
                     hasCompleteSnapshot = hasCompleteSnapshot
                 )
+                // Двунаправленный обмен: после sync-request'а гость шлёт свой
+                // снапшот (или NO_PACKAGE для онбординга), чтобы хост сначала
+                // смерджил его, а потом вернул объединённую версию. Если
+                // guestPayloadProvider бросит — отбиваем коннект, лучше упасть,
+                // чем отдать неполный/некорректный пакет.
+                val guestOutgoing = runCatching { guestPayloadProvider() }
+                    .getOrElse { error ->
+                        throw IOException(
+                            "Не удалось подготовить локальный пакет для отправки",
+                            error
+                        )
+                    }
+                writeOutgoingPackage(socket, guestOutgoing, tripId)
                 val payload = readIncomingPackage(socket, tripId)
                 val transferId = UUID.randomUUID().toString()
                 activeIncomingSockets[transferId] = socket
@@ -628,10 +652,15 @@ class BluetoothRelayManager @Inject constructor(
     private suspend fun sendPayloadAndAwaitAck(
         socket: BluetoothSocket,
         remoteName: String,
-        payloadProvider: suspend (BluetoothRelaySyncRequest) -> String
+        payloadProvider: suspend (BluetoothRelaySyncRequest, guestPackage: String?) -> String
     ): BluetoothRelayAckStatusMessage {
         val syncRequest = readSyncRequest(socket, remoteName)
-        val payload = payloadProvider(syncRequest)
+        // Сразу за sync-request гость присылает свой пакет (или маркер «нет»).
+        // Ключ шифрования общий — derive по tripId из sync-request'а; на
+        // онбординге tripId пустой, ключ тоже общий, маркер NO_PACKAGE
+        // обходит расшифровку.
+        val guestPackage = readOptionalIncomingPackage(socket, syncRequest.tripId)
+        val payload = payloadProvider(syncRequest, guestPackage)
         val output = DataOutputStream(socket.outputStream)
         val input = DataInputStream(socket.inputStream)
 
@@ -712,6 +741,63 @@ class BluetoothRelayManager @Inject constructor(
         return String(decrypted, Charsets.UTF_8)
     }
 
+    /**
+     * Читает optional-frame пакета: либо FRAME_PACKAGE с зашифрованным телом
+     * (после расшифровки возвращается plain JSON), либо FRAME_NO_PACKAGE без
+     * тела — тогда возвращаем null. Используется host'ом для входящего пакета
+     * гостя в двусторонней синхронизации.
+     */
+    private fun readOptionalIncomingPackage(
+        socket: BluetoothSocket,
+        tripId: String
+    ): String? {
+        val input = DataInputStream(socket.inputStream)
+        val magic = input.readUTF()
+        val version = input.readInt()
+        val frame = input.readUTF()
+        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION) {
+            throw IOException("Несовместимый формат Bluetooth relay")
+        }
+        return when (frame) {
+            FRAME_NO_PACKAGE -> null
+            FRAME_PACKAGE -> {
+                val length = input.readInt()
+                if (length <= 0) throw IOException("Пустой пакет синхронизации")
+                val encrypted = ByteArray(length)
+                input.readFully(encrypted)
+                val key = RelayEncryption.deriveKey(tripId)
+                val decrypted = RelayEncryption.decrypt(encrypted, key)
+                String(decrypted, Charsets.UTF_8)
+            }
+            else -> throw IOException("Несовместимый формат Bluetooth relay")
+        }
+    }
+
+    /**
+     * Пишет в socket optional-frame пакета: либо FRAME_PACKAGE с шифровкой,
+     * либо FRAME_NO_PACKAGE без тела (для онбординга/гостей без локальной
+     * копии). Парный к readOptionalIncomingPackage.
+     */
+    private fun writeOutgoingPackage(
+        socket: BluetoothSocket,
+        payload: String?,
+        tripId: String
+    ) {
+        val output = DataOutputStream(socket.outputStream)
+        output.writeUTF(PROTOCOL_MAGIC)
+        output.writeInt(PROTOCOL_VERSION)
+        if (payload == null) {
+            output.writeUTF(FRAME_NO_PACKAGE)
+        } else {
+            output.writeUTF(FRAME_PACKAGE)
+            val key = RelayEncryption.deriveKey(tripId)
+            val encrypted = RelayEncryption.encrypt(payload.toByteArray(Charsets.UTF_8), key)
+            output.writeInt(encrypted.size)
+            output.write(encrypted)
+        }
+        output.flush()
+    }
+
     private fun writeAckResponse(
         socket: BluetoothSocket,
         status: BluetoothRelayAckStatus,
@@ -788,9 +874,16 @@ class BluetoothRelayManager @Inject constructor(
             UUID.fromString("4cf14d9b-cb79-4b27-90df-f69a8b1450c5")
         private const val SERVICE_NAME = "TripFlowRelay"
         private const val PROTOCOL_MAGIC = "TRILOO_BT"
-        private const val PROTOCOL_VERSION = 4
+        // v5: добавили двусторонний обмен пакетами. Гость после
+        // FRAME_SYNC_REQUEST шлёт либо FRAME_PACKAGE со своим снапшотом,
+        // либо FRAME_NO_PACKAGE (онбординг/нет локальной поездки). Хост
+        // мерджит и шлёт свой пакет назад. Версия инкрементнута, чтобы
+        // старые сборки сразу видели «несовместимый формат» вместо
+        // зависания на чтении.
+        private const val PROTOCOL_VERSION = 5
         private const val FRAME_SYNC_REQUEST = "SYNC_REQUEST"
         private const val FRAME_PACKAGE = "PACKAGE"
+        private const val FRAME_NO_PACKAGE = "NO_PACKAGE"
         private const val FRAME_RESPONSE = "RESPONSE"
     }
 }

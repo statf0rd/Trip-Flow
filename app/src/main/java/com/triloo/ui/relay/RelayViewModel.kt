@@ -100,7 +100,7 @@ class RelayViewModel @Inject constructor(
                     _uiState.update { it.copy(syncError = "Поездка не найдена") }
                     return@launch
                 }
-                bluetoothRelayManager.startHosting { request ->
+                bluetoothRelayManager.startHosting { request, guestPackage ->
                     // Пустой tripId у запроса — это онбординг нового участника
                     // (вариант 1 нашего протокола): хост отдаёт ту поездку,
                     // которая у него сейчас в активной сессии hosting'а.
@@ -108,6 +108,16 @@ class RelayViewModel @Inject constructor(
                     // с нашим, отбиваем — нельзя «подсунуть» чужую поездку.
                     if (request.tripId.isNotEmpty() && request.tripId != hostTripId) {
                         throw IllegalStateException("Другая поездка запрашивает синхронизацию")
+                    }
+                    // Двунаправленный sync: если гость прислал свой пакет,
+                    // сначала мерджим его в БД хоста. Если в guestPackage
+                    // прилетела поездка с другим id (например, гость хостит
+                    // несколько поездок и прислал «не ту»), мерджить её
+                    // безопасно — она просто появится в БД, но в ответ всё
+                    // равно уйдёт пакет hostTripId.
+                    if (guestPackage != null) {
+                        val decoded = relayRepository.decodePackage(guestPackage)
+                        relayRepository.mergePackage(decoded)
                     }
                     val sinceCursor = request.knownChangeCursor
                         .takeIf { request.hasCompleteSnapshot && it > 0L && request.tripId == hostTripId }
@@ -148,7 +158,9 @@ class RelayViewModel @Inject constructor(
                     address = address,
                     tripId = "",
                     knownChangeCursor = 0L,
-                    hasCompleteSnapshot = false
+                    hasCompleteSnapshot = false,
+                    // Онбординг: локальной поездки нет, шлём NO_PACKAGE.
+                    guestPayloadProvider = { null }
                 )
                 return@launch
             }
@@ -158,7 +170,16 @@ class RelayViewModel @Inject constructor(
                 address = address,
                 tripId = tripId,
                 knownChangeCursor = if (hasLocalSnapshot) syncState.lastMergedChangeCursor else 0L,
-                hasCompleteSnapshot = hasLocalSnapshot
+                hasCompleteSnapshot = hasLocalSnapshot,
+                // Гость со своей копией поездки: собираем полный снапшот и
+                // отдаём хосту, чтобы он мог смержить наши локальные правки
+                // (например — добавленных участников) к себе перед тем, как
+                // прислать назад объединённую версию.
+                guestPayloadProvider = {
+                    relayRepository.buildPackage(tripId)?.let {
+                        relayRepository.encodePackage(it)
+                    }
+                }
             )
         }
     }
