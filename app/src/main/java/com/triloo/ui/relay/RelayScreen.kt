@@ -148,21 +148,30 @@ fun RelayScreen(
 
     fun requestOrRun(action: PendingRelayAction) {
         val permissions = bluetoothPermissions()
-        if (!context.hasBluetoothPermissions()) {
+        val hasPerms = context.hasBluetoothPermissions()
+        val btOn = context.isBluetoothEnabled()
+        android.util.Log.d(
+            "RelayScreen",
+            "requestOrRun: action=$action hasPerms=$hasPerms btOn=$btOn isBusy=${uiState.isConnecting || uiState.isTransferring || uiState.isApplyingPackage}"
+        )
+        if (!hasPerms) {
             pendingAction = action
             if (permissions.isNotEmpty()) {
+                android.util.Log.d("RelayScreen", "requestOrRun: launching permission dialog for ${permissions.joinToString()}")
                 permissionLauncher.launch(permissions)
             }
             return
         }
 
-        if (!context.isBluetoothEnabled()) {
+        if (!btOn) {
             pendingAction = action
+            android.util.Log.d("RelayScreen", "requestOrRun: launching enable-bluetooth dialog")
             enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
 
         pendingAction = null
+        android.util.Log.d("RelayScreen", "requestOrRun: running action directly")
         runGrantedAction(action)
     }
 
@@ -468,10 +477,18 @@ private fun ReceiveTab(
                     Text("Остановить поиск")
                 }
             } else {
+                val discoveryEnabled = uiState.isBluetoothSupported && !isBusy
+                android.util.Log.d(
+                    "RelayScreen",
+                    "ReceiveTab render: discoveryEnabled=$discoveryEnabled btSupported=${uiState.isBluetoothSupported} isBusy=$isBusy isApplyingPackage=${uiState.isApplyingPackage} isConnecting=${uiState.isConnecting} isTransferring=${uiState.isTransferring}"
+                )
                 Button(
-                    onClick = onStartDiscovery,
+                    onClick = {
+                        android.util.Log.d("RelayScreen", "ReceiveTab: «Найти устройства» tapped")
+                        onStartDiscovery()
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = uiState.isBluetoothSupported && !isBusy
+                    enabled = discoveryEnabled
                 ) {
                     Icon(Icons.Rounded.Devices, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -604,12 +621,25 @@ private fun executeRelayAction(
     viewModel: RelayViewModel,
     onRequireDiscoverable: () -> Unit
 ) {
-    if (!uiState.isBluetoothSupported) return
-    if (!context.isBluetoothEnabled()) return
+    android.util.Log.d(
+        "RelayScreen",
+        "executeRelayAction: action=$action btSupported=${uiState.isBluetoothSupported} btOn=${context.isBluetoothEnabled()}"
+    )
+    if (!uiState.isBluetoothSupported) {
+        android.util.Log.w("RelayScreen", "executeRelayAction: aborted — bluetooth not supported")
+        return
+    }
+    if (!context.isBluetoothEnabled()) {
+        android.util.Log.w("RelayScreen", "executeRelayAction: aborted — bluetooth not enabled")
+        return
+    }
 
     when (action) {
         PendingRelayAction.Host -> onRequireDiscoverable()
-        PendingRelayAction.Scan -> viewModel.startDiscovery()
+        PendingRelayAction.Scan -> {
+            android.util.Log.d("RelayScreen", "executeRelayAction: calling viewModel.startDiscovery()")
+            viewModel.startDiscovery()
+        }
         is PendingRelayAction.Connect -> viewModel.connect(action.address)
     }
 }

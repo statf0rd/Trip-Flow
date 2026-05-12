@@ -624,7 +624,13 @@ class BluetoothRelayManager @Inject constructor(
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            appContext.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            // ACTION_FOUND / ACTION_NAME_CHANGED / ACTION_STATE_CHANGED шлёт
+            // системный процесс `com.android.bluetooth` (uid=1002). С флагом
+            // RECEIVER_NOT_EXPORTED Android 13+ глушит эти broadcast'ы как
+            // «Exported Denial» — UI запускает discovery, BtRelay видит
+            // result=true, но ни одно найденное устройство до нас не доходит,
+            // и пользователь видит «кнопка не работает».
+            appContext.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
             appContext.registerReceiver(discoveryReceiver, filter)

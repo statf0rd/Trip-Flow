@@ -449,6 +449,12 @@ private fun CurrentTripCard(
 ) {
     val daysLeft = ChronoUnit.DAYS.between(java.time.LocalDate.now(), trip.endDate).toInt()
     val interactionSource = remember { MutableInteractionSource() }
+    // Тот же scene-маппер, что и у UpcomingTripCard/JournalPastTripCard —
+    // чтобы coral hero нёс визуал направления, а не плоский градиент.
+    val scene = remember(trip.destination) { selectJourneyScene(trip.destination) }
+    val isLight = remember(scene) { isJourneySceneLight(scene) }
+    val titleColor = if (isLight) Color(0xFF1A0A07) else Color.White
+    val subtitleColor = if (isLight) Color(0xFF1A0A07).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.9f)
 
     Surface(
         modifier = modifier
@@ -461,16 +467,28 @@ private fun CurrentTripCard(
             ),
         shape = TrilooShapes.Lg,
     ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(CoralPrimary, CoralLight)
+        Box {
+            JourneySceneBackground(
+                scene = scene,
+                modifier = Modifier.matchParentSize()
+            )
+            // Лёгкий вертикальный скрим снизу, чтобы плашки QuickStat
+            // не «сливались» со светлыми участками сцены и сохранялась
+            // глубина hero-карточки.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = if (isLight) {
+                                listOf(Color.Transparent, Color(0xFF1A0A07).copy(alpha = 0.18f))
+                            } else {
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.28f))
+                            }
+                        )
                     )
-                )
-                .padding(20.dp)
-        ) {
-            Column {
+            )
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -480,22 +498,22 @@ private fun CurrentTripCard(
                         Text(
                             text = trip.name,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
+                            color = titleColor,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = shortenDestination(trip.destination),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = subtitleColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 // Быстрая сводка по поездке.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -505,18 +523,21 @@ private fun CurrentTripCard(
                         icon = Icons.Rounded.CalendarToday,
                         value = "День ${trip.durationDays - daysLeft}",
                         label = "из ${trip.durationDays}",
+                        isLight = isLight,
                         modifier = Modifier.weight(1f)
                     )
                     QuickStat(
                         icon = Icons.Rounded.Place,
                         value = "$placeCount ${pluralizePlaces(placeCount)}",
                         label = "по плану",
+                        isLight = isLight,
                         modifier = Modifier.weight(1f)
                     )
                     QuickStat(
                         icon = Icons.Rounded.Payments,
                         value = formatCurrentTripAmount(totalSpent, trip.baseCurrency),
                         label = "потрачено",
+                        isLight = isLight,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -526,23 +547,38 @@ private fun CurrentTripCard(
 }
 
 /**
- * Маленькая плитка статистики внутри coral hero. Иконка в левом верхнем
- * углу; снизу — двухстрочная подпись: жирный value и приглушённый label
- * под ним (например «День 1» / «из 2», «3 места» / «по плану», «₽14.5K» /
- * «потрачено»). Одной строкой не делаем — при трёх плитках в ряд на узких
- * экранах любая из подписей не помещается ни на каком разумном кегле.
+ * Маленькая плитка статистики внутри hero-карточки текущей поездки.
+ * Иконка в левом верхнем углу; снизу — двухстрочная подпись: жирный
+ * value и приглушённый label под ним (например «День 1» / «из 2»,
+ * «3 места» / «по плану», «₽14.5K» / «потрачено»). Одной строкой не
+ * делаем — при трёх плитках в ряд на узких экранах любая из подписей не
+ * помещается ни на каком разумном кегле. `isLight` приходит из выбранной
+ * scene: на светлых сценах (Париж, Санторини и т.п.) переключаемся на
+ * тёмный текст и плашку, иначе оставляем белый/полупрозрачно-белый.
  */
 @Composable
 private fun QuickStat(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLight: Boolean = false
 ) {
+    val plateColor = if (isLight) {
+        Color(0xFF1A0A07).copy(alpha = 0.18f)
+    } else {
+        Color.White.copy(alpha = 0.18f)
+    }
+    val fg = if (isLight) Color(0xFF1A0A07) else Color.White
+    val labelColor = if (isLight) {
+        Color(0xFF1A0A07).copy(alpha = 0.78f)
+    } else {
+        Color.White.copy(alpha = 0.78f)
+    }
     Surface(
         modifier = modifier.height(QuickStatHeight),
         shape = TrilooShapes.Sm,
-        color = Color.White.copy(alpha = 0.18f)
+        color = plateColor
     ) {
         Column(
             modifier = Modifier
@@ -553,14 +589,14 @@ private fun QuickStat(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = fg,
                 modifier = Modifier.size(16.dp)
             )
             Column {
                 Text(
                     text = value,
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
+                    color = fg,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -568,7 +604,7 @@ private fun QuickStat(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.78f),
+                    color = labelColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
