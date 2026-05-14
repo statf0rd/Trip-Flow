@@ -116,7 +116,10 @@ class TripRepository @Inject constructor(
     
     fun observeParticipants(tripId: String): Flow<List<Participant>> =
         tripDao.observeParticipants(tripId)
-    
+
+    fun observeAllParticipants(): Flow<List<Participant>> =
+        tripDao.observeAllParticipants()
+
     suspend fun getParticipants(tripId: String): List<Participant> =
         tripDao.getParticipants(tripId)
     

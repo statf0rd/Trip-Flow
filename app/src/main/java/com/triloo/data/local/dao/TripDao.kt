@@ -98,7 +98,10 @@ interface TripDao {
     
     @Query("SELECT * FROM participants WHERE tripId = :tripId")
     fun observeParticipants(tripId: String): Flow<List<Participant>>
-    
+
+    @Query("SELECT * FROM participants")
+    fun observeAllParticipants(): Flow<List<Participant>>
+
     @Query("SELECT * FROM participants WHERE tripId = :tripId")
     suspend fun getParticipants(tripId: String): List<Participant>
     
