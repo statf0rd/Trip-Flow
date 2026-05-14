@@ -61,11 +61,20 @@ data class IncomingBluetoothRelayPayload(
     val deviceName: String
 )
 
-data class BluetoothRelaySyncRequest(
+/**
+ * Описывает входящий intent — первый фрейм, который хост шлёт гостю сразу
+ * после успешного RFCOMM-коннекта. Содержит данные, нужные UI для показа
+ * экрана согласия («$sender хочет поделиться $trip — Принять?»). После
+ * подтверждения мы запишем хоста как Participant'а через
+ * upsertParticipantFromRelay, поэтому senderUserId/senderDisplayName тут —
+ * это не имя BT-устройства, а профиль пользователя.
+ */
+data class IncomingTransferIntent(
+    val senderUserId: String,
+    val senderDisplayName: String,
+    val senderBtName: String,
     val tripId: String,
-    val knownChangeCursor: Long,
-    val hasCompleteSnapshot: Boolean,
-    val deviceName: String
+    val tripName: String
 )
 
 enum class BluetoothRelayAckStatus {
@@ -75,8 +84,32 @@ enum class BluetoothRelayAckStatus {
 }
 
 /**
+ * Сигнал «передача завершилась успехом» — менеджер эмитит его, когда host
+ * получает APPLIED ack от гостя (после `sendTrip`) или когда мы как
+ * получающая сторона успешно применили пакет и отправили APPLIED ack
+ * (`acknowledgeIncomingTransfer`). UI подписывается на этот SharedFlow, чтобы
+ * зафиксировать «передача завершилась»-метку независимо от того, как
+ * менеджер потом перетрёт `statusMessage`.
+ */
+data class BluetoothRelayOutgoingAck(
+    val status: BluetoothRelayAckStatus,
+    val deviceName: String?,
+    val timestampMs: Long = System.currentTimeMillis()
+)
+
+/**
  * Передаёт relay-пакеты между устройствами по Bluetooth Classic RFCOMM
  * и ждёт подтверждение результата применения на принимающей стороне.
+ *
+ * Архитектура v7:
+ *   • host (владелец поездки) — RFCOMM-CLIENT: сканирует, тапает пира,
+ *     открывает RFCOMM-сокет, шлёт INTENT, ждёт CONSENT, шлёт PACKAGE,
+ *     ждёт ACK.
+ *   • guest (принимающий) — RFCOMM-SERVER: становится discoverable,
+ *     слушает входящие коннекты, после accept() читает INTENT, дёргает
+ *     `consentProvider` (UI показывает «Принять?»), при OK читает PACKAGE,
+ *     эмитит наверх в `incomingPayloads`, после применения VM зовёт
+ *     `acknowledgeIncomingTransfer` который шлёт ACK.
  */
 @Singleton
 class BluetoothRelayManager @Inject constructor(
@@ -99,13 +132,26 @@ class BluetoothRelayManager @Inject constructor(
     private val _incomingPayloads = MutableSharedFlow<IncomingBluetoothRelayPayload>(extraBufferCapacity = 1)
     val incomingPayloads = _incomingPayloads.asSharedFlow()
 
+    // SharedFlow «успешный ack» — фиксируется UI'ем (см. RelayViewModel), чтобы
+    // показывать сцену Completed даже после того, как менеджер сбросит
+    // statusMessage в "Ожидание поездки..." на следующей итерации accept().
+    private val _outgoingAcks = MutableSharedFlow<BluetoothRelayOutgoingAck>(extraBufferCapacity = 4)
+    val outgoingAcks = _outgoingAcks.asSharedFlow()
+
     private val activeIncomingSockets = ConcurrentHashMap<String, BluetoothSocket>()
 
     private var receiverRegistered = false
-    private var hostJob: Job? = null
+    private var receiveJob: Job? = null
     private var connectJob: Job? = null
     private var serverSocket: BluetoothServerSocket? = null
     private var clientSocket: BluetoothSocket? = null
+
+    // Метка момента последнего APPLIED-ack. Используется в sendTrip() для того,
+    // чтобы подавить "Не удалось подключиться..."-баннер, когда socket падает
+    // через несколько сотен мс после реального успеха (RFCOMM любит закрывать
+    // сокет сразу после ACK на стороне POCO/Xiaomi).
+    @Volatile
+    private var lastSuccessfulAckAt: Long = 0L
 
     private val discoveryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -166,11 +212,9 @@ class BluetoothRelayManager @Inject constructor(
         if (bluetoothAdapter?.isEnabled == true) {
             // Bluetooth включился: сбрасываем устаревший «Включите Bluetooth»,
             // если он остался от прошлого выключенного состояния. Другие
-            // сообщения (Hosting/Discovery/...) оставляем — их пишут активные
-            // флоу, и их перетирать нельзя. Список устройств сюда не
-            // подмешиваем — он наполняется только при активном discovery
-            // через ACTION_FOUND, чтобы UI не путал юзера старыми спаренными
-            // наушниками/часами.
+            // сообщения оставляем — их пишут активные флоу, и их перетирать
+            // нельзя. Список устройств сюда не подмешиваем — он наполняется
+            // только при активном discovery через ACTION_FOUND.
             _state.update { current ->
                 if (current.statusMessage == "Включите Bluetooth") {
                     current.copy(statusMessage = null)
@@ -198,7 +242,7 @@ class BluetoothRelayManager @Inject constructor(
         android.util.Log.d(
             TAG,
             "startDiscovery: adapter=${adapter != null} enabled=${adapter?.isEnabled}" +
-                " hostingActive=${hostJob?.isActive == true}" +
+                " receivingActive=${receiveJob?.isActive == true}" +
                 " connectingActive=${connectJob?.isActive == true}"
         )
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
@@ -207,14 +251,26 @@ class BluetoothRelayManager @Inject constructor(
             return
         }
 
-        stopHosting()
-        connectJob?.cancel()
-        connectJob = null
-        closeClientSocket()
-        // Перед каждым новым скан-проходом обнуляем список устройств — раньше
-        // тут досыпались спаренные наушники/часы, и юзер тапал по ним вместо
-        // нужного телефона. Реальные кандидаты прилетят через ACTION_FOUND.
-        _state.update { it.copy(devices = emptyList()) }
+        // Если уже идёт активная передача (хост→гость) — не дёргаем discovery,
+        // иначе `connectJob?.cancel()` ниже убьёт коннект посреди handshake'а.
+        // Auto-restart в `RelayScreen.LaunchedEffect` гейтится по isConnecting/
+        // isTransferring, но между `sendTrip()` (synchronous) и моментом, когда
+        // coroutine выставит isConnecting=true, есть окно ~20мс — именно сюда
+        // приходит auto-start и убивал коннект до фикса.
+        if (connectJob?.isActive == true) {
+            android.util.Log.d(TAG, "startDiscovery: skipped — connect in flight")
+            return
+        }
+
+        // Хост — RFCOMM-client. Гасим возможный зависший receive — мы либо
+        // ищем, либо принимаем. connectJob НЕ трогаем (см. guard выше).
+        stopReceiving()
+        // Devices НЕ очищаем при auto-restart: список заполнялся ACTION_FOUND'ом
+        // и paired-but-not-nearby устройства туда не попадают (broadcast только
+        // для текущих в эфире). Постоянный сброс в []  каждые 12-15с при
+        // авто-перезапуске discovery даёт UI-мерцание «список → 0 → список».
+        // Сейчас оставляем как есть: новые ACTION_FOUND'ы upsert'ятся через
+        // mergeDevices, стейл'ные просто пересоздадутся.
 
         runCatching {
             if (bluetoothAdapter.isDiscovering) {
@@ -249,16 +305,29 @@ class BluetoothRelayManager @Inject constructor(
         }
     }
 
+    /**
+     * Гость зовёт ОДИН раз при входе на экран «Принять по Bluetooth».
+     * Открывает RFCOMM server socket, в бесконечном цикле accept'ит входящие
+     * коннекты. Для каждого:
+     *   1) читает INTENT-фрейм (sender + trip),
+     *   2) дёргает `consentProvider(intent)` — UI показывает «Принять?»
+     *      и suspend'ится до тапа/таймаута,
+     *   3) шлёт CONSENT-фрейм с accepted+guestUserId+guestDisplayName,
+     *   4) если accepted=true, читает PACKAGE и эмитит наверх — VM
+     *      применяет и зовёт acknowledgeIncomingTransfer (ack уже здесь
+     *      пишется на сокет внутри `writeAckResponse`).
+     */
     @SuppressLint("MissingPermission")
-    fun startHosting(
-        // Колбэк-провайдер пакета. Получает sync-request гостя и его пакет
-        // (или null — гость без локальной копии поездки). Должен:
-        // 1) применить guestPackage в локальную БД хоста (если он не null);
-        // 2) собрать и вернуть свой пакет — уже с учётом смерженных
-        //    изменений гостя.
-        payloadProvider: suspend (BluetoothRelaySyncRequest, guestPackage: String?) -> String
+    fun startReceiving(
+        guestUserId: String,
+        guestDisplayName: String,
+        consentProvider: suspend (IncomingTransferIntent) -> Boolean
     ) {
-        android.util.Log.d(TAG, "startHosting: adapter=${adapter != null} enabled=${adapter?.isEnabled}")
+        android.util.Log.d(
+            TAG,
+            "startReceiving: adapter=${adapter != null} enabled=${adapter?.isEnabled}" +
+                " guestUserId=$guestUserId"
+        )
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
             setError("Сначала включите Bluetooth")
@@ -266,12 +335,12 @@ class BluetoothRelayManager @Inject constructor(
         }
 
         stopDiscovery()
-        stopHosting()
+        stopReceiving()
         connectJob?.cancel()
         connectJob = null
         closeClientSocket()
 
-        hostJob = scope.launch {
+        receiveJob = scope.launch {
             try {
                 val listeningSocket = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord(
                     SERVICE_NAME,
@@ -283,49 +352,25 @@ class BluetoothRelayManager @Inject constructor(
                         isHosting = true,
                         isTransferring = false,
                         connectedDeviceName = null,
-                        statusMessage = "Ожидание подключения по Bluetooth...",
+                        statusMessage = "Ожидание поездки от другого устройства...",
                         error = null
                     )
                 }
 
                 while (isActive) {
                     val socket = listeningSocket.accept() ?: continue
-                    val remoteName = socket.remoteDevice.displayName()
-                    _state.update {
-                        it.copy(
-                            isTransferring = true,
-                            connectedDeviceName = remoteName,
-                            statusMessage = "Согласовываем пакет с $remoteName...",
-                            error = null
-                        )
-                    }
-
-                    runCatching {
-                        sendPayloadAndAwaitAck(socket, remoteName, payloadProvider)
-                    }.onSuccess { ack ->
-                        _state.update {
-                            it.copy(
-                                isTransferring = false,
-                                connectedDeviceName = remoteName,
-                                statusMessage = ack.toStatusMessage(remoteName),
-                                error = ack.toErrorMessage()
-                            )
-                        }
-                    }.onFailure { error ->
-                        _state.update {
-                            it.copy(
-                                isTransferring = false,
-                                connectedDeviceName = remoteName,
-                                statusMessage = "Ожидание подключения по Bluetooth...",
-                                error = error.message ?: "Не удалось отправить пакет"
-                            )
-                        }
-                    }.also {
-                        closeSocket(socket)
-                    }
+                    val remoteBtName = socket.remoteDevice.displayName()
+                    android.util.Log.d(TAG, "startReceiving: accepted from $remoteBtName")
+                    handleIncomingConnection(
+                        socket = socket,
+                        remoteBtName = remoteBtName,
+                        guestUserId = guestUserId,
+                        guestDisplayName = guestDisplayName,
+                        consentProvider = consentProvider
+                    )
                 }
             } catch (_: IOException) {
-                // Ожидаемое завершение при stopHosting/выключении Bluetooth.
+                // Ожидаемое завершение при stopReceiving/выключении Bluetooth.
             } catch (_: SecurityException) {
                 setError("Нет доступа к Bluetooth. Проверьте разрешения.")
             } finally {
@@ -336,16 +381,92 @@ class BluetoothRelayManager @Inject constructor(
                         isTransferring = false,
                         connectedDeviceName = null,
                         statusMessage = current.statusMessage
-                            ?.takeUnless { it == "Ожидание подключения по Bluetooth..." }
+                            ?.takeUnless { it == "Ожидание поездки от другого устройства..." }
                     )
                 }
             }
         }
     }
 
-    fun stopHosting() {
-        hostJob?.cancel()
-        hostJob = null
+    /**
+     * Обрабатывает один входящий RFCOMM-коннект: INTENT → consent → PACKAGE
+     * → эмит наверх. ACK пишется отдельно через `acknowledgeIncomingTransfer`,
+     * когда VM применит пакет и решит итог. Выделено в отдельную функцию,
+     * чтобы исключения внутри одного коннекта не валили весь accept()-цикл.
+     */
+    private suspend fun handleIncomingConnection(
+        socket: BluetoothSocket,
+        remoteBtName: String,
+        guestUserId: String,
+        guestDisplayName: String,
+        consentProvider: suspend (IncomingTransferIntent) -> Boolean
+    ) {
+        try {
+            val intent = readIntent(socket, remoteBtName)
+            android.util.Log.d(
+                TAG,
+                "handleIncomingConnection: intent senderUserId=${intent.senderUserId}" +
+                    " tripId=${intent.tripId} tripName=${intent.tripName}"
+            )
+            _state.update {
+                it.copy(
+                    isTransferring = true,
+                    connectedDeviceName = intent.senderDisplayName.ifBlank { remoteBtName },
+                    statusMessage = "Запрос от ${intent.senderDisplayName.ifBlank { remoteBtName }}...",
+                    error = null
+                )
+            }
+
+            val accepted = runCatching { consentProvider(intent) }.getOrElse { false }
+            android.util.Log.d(TAG, "handleIncomingConnection: consent=$accepted")
+            sendConsent(socket, accepted, guestUserId, guestDisplayName)
+            if (!accepted) {
+                closeSocket(socket)
+                _state.update {
+                    it.copy(
+                        isTransferring = false,
+                        connectedDeviceName = null,
+                        statusMessage = "Ожидание поездки от другого устройства..."
+                    )
+                }
+                return
+            }
+
+            _state.update {
+                it.copy(
+                    statusMessage = "Принимаем поездку от ${intent.senderDisplayName.ifBlank { remoteBtName }}..."
+                )
+            }
+            val payload = readPackage(socket, intent.tripId)
+            val transferId = UUID.randomUUID().toString()
+            activeIncomingSockets[transferId] = socket
+            _incomingPayloads.emit(
+                IncomingBluetoothRelayPayload(
+                    transferId = transferId,
+                    payload = payload,
+                    deviceName = intent.senderDisplayName.ifBlank { remoteBtName }
+                )
+            )
+        } catch (error: IOException) {
+            android.util.Log.w(TAG, "handleIncomingConnection: io error ${error.message}")
+            closeSocket(socket)
+            _state.update {
+                it.copy(
+                    isTransferring = false,
+                    connectedDeviceName = null,
+                    statusMessage = "Ожидание поездки от другого устройства...",
+                    error = error.message ?: "Не удалось принять пакет"
+                )
+            }
+        } catch (_: SecurityException) {
+            closeSocket(socket)
+            setError("Нет доступа к Bluetooth. Проверьте разрешения.")
+        }
+    }
+
+    fun stopReceiving() {
+        receiveJob?.cancel()
+        receiveJob = null
         closeServerSocket()
         _state.update { current ->
             current.copy(
@@ -353,25 +474,33 @@ class BluetoothRelayManager @Inject constructor(
                 isTransferring = false,
                 connectedDeviceName = null,
                 statusMessage = current.statusMessage
-                    ?.takeUnless { it == "Ожидание подключения по Bluetooth..." }
+                    ?.takeUnless { it == "Ожидание поездки от другого устройства..." }
             )
         }
     }
 
+    /**
+     * Хост зовёт когда тапает пира в кластере. Открывает RFCOMM client socket,
+     * шлёт INTENT, ждёт CONSENT. Если consent=accepted, дёргает
+     * `onGuestIdentified(guestUserId, guestDisplayName)` для записи гостя
+     * в Participant'ы, потом строит payload через `packageProvider`, шифрует
+     * и шлёт PACKAGE, ждёт ACK. Успех/провал отражается в state и outgoingAcks.
+     */
     @SuppressLint("MissingPermission")
-    fun connect(
+    fun sendTrip(
         address: String,
         tripId: String,
-        knownChangeCursor: Long,
-        hasCompleteSnapshot: Boolean,
-        // Опциональный провайдер пакета гостя. В режиме онбординга или когда у
-        // гостя нет локальной копии поездки — возвращает null, и тогда после
-        // sync-request шлётся маркер FRAME_NO_PACKAGE. В остальных случаях
-        // гость сам строит свой снапшот через RelayRepository.buildPackage и
-        // отдаёт его хосту до получения ответа.
-        guestPayloadProvider: suspend () -> String? = { null }
+        tripName: String,
+        senderUserId: String,
+        senderDisplayName: String,
+        onGuestIdentified: suspend (guestUserId: String, guestDisplayName: String) -> Unit,
+        packageProvider: suspend () -> String
     ) {
-        android.util.Log.d(TAG, "connect: address=$address tripId=$tripId hasSnapshot=$hasCompleteSnapshot")
+        android.util.Log.d(
+            TAG,
+            "sendTrip: address=$address tripId=$tripId tripName=$tripName" +
+                " senderUserId=$senderUserId senderName=$senderDisplayName"
+        )
         val bluetoothAdapter = adapter ?: return setError("Bluetooth недоступен на этом устройстве")
         if (!bluetoothAdapter.isEnabled) {
             setError("Сначала включите Bluetooth")
@@ -379,79 +508,169 @@ class BluetoothRelayManager @Inject constructor(
         }
 
         stopDiscovery()
-        stopHosting()
+        stopReceiving()
         connectJob?.cancel()
         closeClientSocket()
+
+        // СИНХРОННО выставляем isConnecting/isTransferring=true ДО `scope.launch`.
+        // Без этого LaunchedEffect в RelayScreen видит «всё false» в окне между
+        // sendTrip() и моментом, когда coroutine стартанул и выставил состояние,
+        // и в этот ~20мс зазор зовёт startDiscovery, который cancel'ит свежий
+        // connectJob. Также сразу пишем connectedDeviceName/statusMessage —
+        // юзер видит «Подключаемся к POCO M4 Pro...» сразу после тапа.
+        val initialRemoteName = runCatching { bluetoothAdapter.getRemoteDevice(address).displayName() }
+            .getOrNull() ?: address
+        _state.update {
+            it.copy(
+                isConnecting = true,
+                isTransferring = true,
+                connectedDeviceName = initialRemoteName,
+                statusMessage = "Подключаемся к $initialRemoteName...",
+                error = null
+            )
+        }
 
         connectJob = scope.launch {
             val device = runCatching { bluetoothAdapter.getRemoteDevice(address) }
                 .getOrElse {
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false,
+                            connectedDeviceName = null
+                        )
+                    }
                     setError("Не удалось найти выбранное устройство")
                     return@launch
                 }
             val remoteName = device.displayName()
-            _state.update {
-                it.copy(
-                    isConnecting = true,
-                    isTransferring = true,
-                    connectedDeviceName = remoteName,
-                    statusMessage = "Подключаемся к $remoteName...",
-                    error = null
-                )
-            }
 
             val socket = connectWithRetry(device, remoteName) ?: run {
-                _state.update {
-                    it.copy(
-                        isConnecting = false,
-                        isTransferring = false,
-                        connectedDeviceName = null,
-                        error = "Не удалось подключиться к $remoteName. Попробуйте ещё раз."
+                // RFCOMM иногда закрывает сокет сразу за ACK'ом — если только
+                // что мы видели APPLIED, "Не удалось подключиться..." это шум.
+                val ackJustHappened =
+                    System.currentTimeMillis() - lastSuccessfulAckAt < 3000
+                if (ackJustHappened) {
+                    android.util.Log.d(
+                        TAG,
+                        "suppressed post-ack connectWithRetry failure for $remoteName"
                     )
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false,
+                            connectedDeviceName = null,
+                            error = "Не удалось подключиться к $remoteName. Попробуйте ещё раз."
+                        )
+                    }
                 }
                 return@launch
             }
             clientSocket = socket
 
+            // Внутри coroutine'ы пометим момент, когда основной обмен
+            // завершён (ACK получен от гостя). После этого любой IOException —
+            // это «socket закрылся после успеха», такой сценарий не должен
+            // превращаться в красный баннер.
+            var transferCompleted = false
+
             try {
                 _state.update {
-                    it.copy(statusMessage = "Запрашиваем изменения у $remoteName...")
+                    it.copy(statusMessage = "Отправляем запрос $remoteName...")
                 }
-                sendSyncRequest(
+                sendIntent(
                     socket = socket,
+                    senderUserId = senderUserId,
+                    senderDisplayName = senderDisplayName,
                     tripId = tripId,
-                    knownChangeCursor = knownChangeCursor,
-                    hasCompleteSnapshot = hasCompleteSnapshot
+                    tripName = tripName
                 )
-                // Двунаправленный обмен: после sync-request'а гость шлёт свой
-                // снапшот (или NO_PACKAGE для онбординга), чтобы хост сначала
-                // смерджил его, а потом вернул объединённую версию. Если
-                // guestPayloadProvider бросит — отбиваем коннект, лучше упасть,
-                // чем отдать неполный/некорректный пакет.
-                val guestOutgoing = runCatching { guestPayloadProvider() }
+
+                _state.update {
+                    it.copy(statusMessage = "Ждём подтверждения у $remoteName...")
+                }
+                val consent = readConsent(socket)
+                android.util.Log.d(
+                    TAG,
+                    "sendTrip: consent accepted=${consent.accepted} guestUserId=${consent.guestUserId}"
+                )
+                if (!consent.accepted) {
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false,
+                            connectedDeviceName = null,
+                            error = "$remoteName отклонил передачу"
+                        )
+                    }
+                    closeSocket(socket)
+                    if (clientSocket == socket) {
+                        clientSocket = null
+                    }
+                    return@launch
+                }
+
+                // Записываем гостя в Participant'ы ДО сборки пакета — тогда
+                // в пакете уже будет правильный список участников, и обе
+                // стороны после ack'а увидят одинаковый набор.
+                if (consent.guestUserId.isNotBlank()) {
+                    runCatching {
+                        onGuestIdentified(consent.guestUserId, consent.guestDisplayName)
+                    }.onFailure {
+                        android.util.Log.w(
+                            TAG,
+                            "sendTrip: onGuestIdentified failed: ${it.message}"
+                        )
+                    }
+                }
+
+                _state.update {
+                    it.copy(statusMessage = "Отправляем поездку $remoteName...")
+                }
+                val payload = runCatching { packageProvider() }
                     .getOrElse { error ->
                         throw IOException(
-                            "Не удалось подготовить локальный пакет для отправки",
+                            "Не удалось подготовить пакет синхронизации",
                             error
                         )
                     }
-                writeOutgoingPackage(socket, guestOutgoing, tripId)
-                val payload = readIncomingPackage(socket, tripId)
-                val transferId = UUID.randomUUID().toString()
-                activeIncomingSockets[transferId] = socket
-                _incomingPayloads.emit(
-                    IncomingBluetoothRelayPayload(
-                        transferId = transferId,
-                        payload = payload,
-                        deviceName = remoteName
+                writePackage(socket, payload, tripId)
+
+                _state.update {
+                    it.copy(statusMessage = "Ждём подтверждения у $remoteName...")
+                }
+                val ack = readAck(socket)
+                if (ack.status == BluetoothRelayAckStatus.APPLIED ||
+                    ack.status == BluetoothRelayAckStatus.DUPLICATE
+                ) {
+                    lastSuccessfulAckAt = System.currentTimeMillis()
+                    _outgoingAcks.tryEmit(
+                        BluetoothRelayOutgoingAck(
+                            status = ack.status,
+                            deviceName = remoteName
+                        )
                     )
-                )
+                    android.util.Log.d(
+                        TAG,
+                        "sendTrip: received APPLIED/DUPLICATE ack from $remoteName" +
+                            " ts=$lastSuccessfulAckAt"
+                    )
+                }
+                transferCompleted = true
                 _state.update {
                     it.copy(
                         isConnecting = false,
-                        isTransferring = true,
+                        isTransferring = false,
                         connectedDeviceName = remoteName,
-                        statusMessage = "Пакет получен от $remoteName. Применяем изменения..."
+                        statusMessage = ack.toStatusMessage(remoteName),
+                        error = ack.toErrorMessage()
                     )
                 }
             } catch (error: IOException) {
@@ -459,13 +678,28 @@ class BluetoothRelayManager @Inject constructor(
                 if (clientSocket == socket) {
                     clientSocket = null
                 }
-                _state.update {
-                    it.copy(
-                        isConnecting = false,
-                        isTransferring = false,
-                        connectedDeviceName = null,
-                        error = error.message ?: "Не удалось получить пакет от $remoteName"
+                val ackJustHappened =
+                    System.currentTimeMillis() - lastSuccessfulAckAt < 3000
+                if (transferCompleted || ackJustHappened) {
+                    android.util.Log.d(
+                        TAG,
+                        "suppressed post-success sendTrip IOException: ${error.message}"
                     )
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false
+                        )
+                    }
+                } else {
+                    _state.update {
+                        it.copy(
+                            isConnecting = false,
+                            isTransferring = false,
+                            connectedDeviceName = null,
+                            error = error.message ?: "Не удалось отправить пакет $remoteName"
+                        )
+                    }
                 }
             } catch (_: SecurityException) {
                 closeSocket(socket)
@@ -480,6 +714,11 @@ class BluetoothRelayManager @Inject constructor(
                         error = "Нет доступа к Bluetooth. Проверьте разрешения."
                     )
                 }
+            } finally {
+                closeSocket(socket)
+                if (clientSocket == socket) {
+                    clientSocket = null
+                }
             }
         }
     }
@@ -491,20 +730,45 @@ class BluetoothRelayManager @Inject constructor(
     ) {
         val socket = activeIncomingSockets.remove(transferId) ?: return
         scope.launch {
+            // Запомним «совершён успешный обмен» ещё ДО записи ACK, чтобы даже
+            // если writeAckResponse упадёт с IOException (POCO закрыл сокет
+            // одновременно с финальным flush'ем) — не выпадал баннер ошибки.
+            if (status == BluetoothRelayAckStatus.APPLIED ||
+                status == BluetoothRelayAckStatus.DUPLICATE
+            ) {
+                lastSuccessfulAckAt = System.currentTimeMillis()
+                _outgoingAcks.tryEmit(
+                    BluetoothRelayOutgoingAck(
+                        status = status,
+                        deviceName = _state.value.connectedDeviceName
+                    )
+                )
+                android.util.Log.d(
+                    TAG,
+                    "guest wrote APPLIED/DUPLICATE ack ts=$lastSuccessfulAckAt" +
+                        " peer=${_state.value.connectedDeviceName}"
+                )
+            }
             runCatching {
                 writeAckResponse(socket, status, message)
             }.onFailure {
-                setError("Не удалось отправить подтверждение синхронизации")
+                // Если только что мы зафиксировали успех — не валим UI ошибкой
+                // отправки подтверждения; принимающая сторона уже всё применила.
+                val ackJustHappened =
+                    System.currentTimeMillis() - lastSuccessfulAckAt < 3000
+                if (!ackJustHappened) {
+                    setError("Не удалось отправить подтверждение синхронизации")
+                } else {
+                    android.util.Log.d(
+                        TAG,
+                        "suppressed post-success ack-write failure: ${it.message}"
+                    )
+                }
             }.also {
                 closeSocket(socket)
-                if (clientSocket == socket) {
-                    clientSocket = null
-                }
                 _state.update { current ->
                     current.copy(
-                        isConnecting = false,
                         isTransferring = false,
-                        connectedDeviceName = null,
                         statusMessage = when (status) {
                             BluetoothRelayAckStatus.APPLIED -> "Пакет успешно применён"
                             BluetoothRelayAckStatus.DUPLICATE -> "Этот пакет уже был импортирован"
@@ -523,7 +787,7 @@ class BluetoothRelayManager @Inject constructor(
 
     fun stopAll() {
         stopDiscovery()
-        stopHosting()
+        stopReceiving()
         connectJob?.cancel()
         connectJob = null
         closeClientSocket()
@@ -599,9 +863,7 @@ class BluetoothRelayManager @Inject constructor(
             val existing = byAddress[newDevice.address]
             // Если входящая запись пришла только с MAC'ом (displayName ==
             // address), а у нас уже есть та же запись с реальным именем —
-            // имя не теряем. Это важно для ACTION_FOUND/ACTION_NAME_CHANGED:
-            // часто первое событие приходит без имени, второе уже с именем,
-            // но в редких сборках одна сторона может прислать пустоту назад.
+            // имя не теряем.
             val newIsMacOnly = newDevice.name == newDevice.address
             val existingHasName = existing != null && existing.name != existing.address
             byAddress[newDevice.address] = if (newIsMacOnly && existingHasName) {
@@ -628,8 +890,7 @@ class BluetoothRelayManager @Inject constructor(
             // системный процесс `com.android.bluetooth` (uid=1002). С флагом
             // RECEIVER_NOT_EXPORTED Android 13+ глушит эти broadcast'ы как
             // «Exported Denial» — UI запускает discovery, BtRelay видит
-            // result=true, но ни одно найденное устройство до нас не доходит,
-            // и пользователь видит «кнопка не работает».
+            // result=true, но ни одно найденное устройство до нас не доходит.
             appContext.registerReceiver(discoveryReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
@@ -670,86 +931,106 @@ class BluetoothRelayManager @Inject constructor(
         activeIncomingSockets.clear()
     }
 
-    private suspend fun sendPayloadAndAwaitAck(
+    // region wire protocol v7
+
+    /** Хост → гость, после connect: id+имя отправителя, id+имя поездки. */
+    private fun sendIntent(
         socket: BluetoothSocket,
-        remoteName: String,
-        payloadProvider: suspend (BluetoothRelaySyncRequest, guestPackage: String?) -> String
-    ): BluetoothRelayAckStatusMessage {
-        val syncRequest = readSyncRequest(socket, remoteName)
-        // Сразу за sync-request гость присылает свой пакет (или маркер «нет»).
-        // Ключ шифрования общий — derive по tripId из sync-request'а; на
-        // онбординге tripId пустой, ключ тоже общий, маркер NO_PACKAGE
-        // обходит расшифровку.
-        val guestPackage = readOptionalIncomingPackage(socket, syncRequest.tripId)
-        val payload = payloadProvider(syncRequest, guestPackage)
+        senderUserId: String,
+        senderDisplayName: String,
+        tripId: String,
+        tripName: String
+    ) {
         val output = DataOutputStream(socket.outputStream)
+        output.writeUTF(PROTOCOL_MAGIC)
+        output.writeInt(PROTOCOL_VERSION)
+        output.writeUTF(FRAME_INTENT)
+        output.writeUTF(senderUserId)
+        output.writeUTF(senderDisplayName)
+        output.writeUTF(tripId)
+        output.writeUTF(tripName)
+        output.flush()
+    }
+
+    /** Гость читает INTENT-фрейм. Если магия/версия не совпали — IOException. */
+    private fun readIntent(
+        socket: BluetoothSocket,
+        remoteBtName: String
+    ): IncomingTransferIntent {
         val input = DataInputStream(socket.inputStream)
+        val magic = input.readUTF()
+        val version = input.readInt()
+        val frame = input.readUTF()
+        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_INTENT) {
+            throw IOException("Несовместимый формат запроса Bluetooth relay")
+        }
+        val senderUserId = input.readUTF()
+        val senderDisplayName = input.readUTF()
+        val tripId = input.readUTF()
+        val tripName = input.readUTF()
+        return IncomingTransferIntent(
+            senderUserId = senderUserId,
+            senderDisplayName = senderDisplayName,
+            senderBtName = remoteBtName,
+            tripId = tripId,
+            tripName = tripName
+        )
+    }
 
-        val key = RelayEncryption.deriveKey(syncRequest.tripId)
+    /**
+     * Гость → хост: accepted + guestUserId + guestDisplayName. Хост по этим
+     * полям заведёт Participant'а перед buildPackage.
+     */
+    private fun sendConsent(
+        socket: BluetoothSocket,
+        accepted: Boolean,
+        guestUserId: String,
+        guestDisplayName: String
+    ) {
+        val output = DataOutputStream(socket.outputStream)
+        output.writeUTF(PROTOCOL_MAGIC)
+        output.writeInt(PROTOCOL_VERSION)
+        output.writeUTF(FRAME_CONSENT)
+        output.writeBoolean(accepted)
+        output.writeUTF(guestUserId)
+        output.writeUTF(guestDisplayName)
+        output.flush()
+    }
+
+    private fun readConsent(socket: BluetoothSocket): ConsentResponse {
+        val input = DataInputStream(socket.inputStream)
+        val magic = input.readUTF()
+        val version = input.readInt()
+        val frame = input.readUTF()
+        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_CONSENT) {
+            throw IOException("Несовместимый формат ответа Bluetooth relay")
+        }
+        val accepted = input.readBoolean()
+        val guestUserId = input.readUTF()
+        val guestDisplayName = input.readUTF()
+        return ConsentResponse(accepted, guestUserId, guestDisplayName)
+    }
+
+    /** Хост → гость: зашифрованный пакет поездки (после consent=accepted). */
+    private fun writePackage(socket: BluetoothSocket, payload: String, tripId: String) {
+        val output = DataOutputStream(socket.outputStream)
+        val key = RelayEncryption.deriveKey(tripId)
         val encrypted = RelayEncryption.encrypt(payload.toByteArray(Charsets.UTF_8), key)
-
         output.writeUTF(PROTOCOL_MAGIC)
         output.writeInt(PROTOCOL_VERSION)
         output.writeUTF(FRAME_PACKAGE)
         output.writeInt(encrypted.size)
         output.write(encrypted)
         output.flush()
-
-        val magic = input.readUTF()
-        val version = input.readInt()
-        val frame = input.readUTF()
-        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_RESPONSE) {
-            throw IOException("Получен некорректный ответ синхронизации")
-        }
-
-        val status = runCatching { BluetoothRelayAckStatus.valueOf(input.readUTF()) }
-            .getOrElse { throw IOException("Неизвестный статус подтверждения") }
-        val message = input.readUTF().ifBlank { null }
-        return BluetoothRelayAckStatusMessage(status, message)
     }
 
-    private fun sendSyncRequest(
-        socket: BluetoothSocket,
-        tripId: String,
-        knownChangeCursor: Long,
-        hasCompleteSnapshot: Boolean
-    ) {
-        val output = DataOutputStream(socket.outputStream)
-        output.writeUTF(PROTOCOL_MAGIC)
-        output.writeInt(PROTOCOL_VERSION)
-        output.writeUTF(FRAME_SYNC_REQUEST)
-        output.writeUTF(tripId)
-        output.writeBoolean(hasCompleteSnapshot)
-        output.writeLong(knownChangeCursor)
-        output.flush()
-    }
-
-    private fun readSyncRequest(
-        socket: BluetoothSocket,
-        remoteName: String
-    ): BluetoothRelaySyncRequest {
-        val input = DataInputStream(socket.inputStream)
-        val magic = input.readUTF()
-        val version = input.readInt()
-        val frame = input.readUTF()
-        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_SYNC_REQUEST) {
-            throw IOException("Несовместимый формат запроса Bluetooth relay")
-        }
-        return BluetoothRelaySyncRequest(
-            tripId = input.readUTF(),
-            hasCompleteSnapshot = input.readBoolean(),
-            knownChangeCursor = input.readLong(),
-            deviceName = remoteName
-        )
-    }
-
-    private fun readIncomingPackage(socket: BluetoothSocket, tripId: String): String {
+    private fun readPackage(socket: BluetoothSocket, tripId: String): String {
         val input = DataInputStream(socket.inputStream)
         val magic = input.readUTF()
         val version = input.readInt()
         val frame = input.readUTF()
         if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_PACKAGE) {
-            throw IOException("Несовместимый формат Bluetooth relay")
+            throw IOException("Несовместимый формат пакета Bluetooth relay")
         }
         val length = input.readInt()
         if (length <= 0) {
@@ -762,63 +1043,7 @@ class BluetoothRelayManager @Inject constructor(
         return String(decrypted, Charsets.UTF_8)
     }
 
-    /**
-     * Читает optional-frame пакета: либо FRAME_PACKAGE с зашифрованным телом
-     * (после расшифровки возвращается plain JSON), либо FRAME_NO_PACKAGE без
-     * тела — тогда возвращаем null. Используется host'ом для входящего пакета
-     * гостя в двусторонней синхронизации.
-     */
-    private fun readOptionalIncomingPackage(
-        socket: BluetoothSocket,
-        tripId: String
-    ): String? {
-        val input = DataInputStream(socket.inputStream)
-        val magic = input.readUTF()
-        val version = input.readInt()
-        val frame = input.readUTF()
-        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION) {
-            throw IOException("Несовместимый формат Bluetooth relay")
-        }
-        return when (frame) {
-            FRAME_NO_PACKAGE -> null
-            FRAME_PACKAGE -> {
-                val length = input.readInt()
-                if (length <= 0) throw IOException("Пустой пакет синхронизации")
-                val encrypted = ByteArray(length)
-                input.readFully(encrypted)
-                val key = RelayEncryption.deriveKey(tripId)
-                val decrypted = RelayEncryption.decrypt(encrypted, key)
-                String(decrypted, Charsets.UTF_8)
-            }
-            else -> throw IOException("Несовместимый формат Bluetooth relay")
-        }
-    }
-
-    /**
-     * Пишет в socket optional-frame пакета: либо FRAME_PACKAGE с шифровкой,
-     * либо FRAME_NO_PACKAGE без тела (для онбординга/гостей без локальной
-     * копии). Парный к readOptionalIncomingPackage.
-     */
-    private fun writeOutgoingPackage(
-        socket: BluetoothSocket,
-        payload: String?,
-        tripId: String
-    ) {
-        val output = DataOutputStream(socket.outputStream)
-        output.writeUTF(PROTOCOL_MAGIC)
-        output.writeInt(PROTOCOL_VERSION)
-        if (payload == null) {
-            output.writeUTF(FRAME_NO_PACKAGE)
-        } else {
-            output.writeUTF(FRAME_PACKAGE)
-            val key = RelayEncryption.deriveKey(tripId)
-            val encrypted = RelayEncryption.encrypt(payload.toByteArray(Charsets.UTF_8), key)
-            output.writeInt(encrypted.size)
-            output.write(encrypted)
-        }
-        output.flush()
-    }
-
+    /** Гость → хост: ack APPLIED/DUPLICATE/FAILED + опциональное сообщение. */
     private fun writeAckResponse(
         socket: BluetoothSocket,
         status: BluetoothRelayAckStatus,
@@ -832,6 +1057,22 @@ class BluetoothRelayManager @Inject constructor(
         output.writeUTF(message.orEmpty())
         output.flush()
     }
+
+    private fun readAck(socket: BluetoothSocket): BluetoothRelayAckStatusMessage {
+        val input = DataInputStream(socket.inputStream)
+        val magic = input.readUTF()
+        val version = input.readInt()
+        val frame = input.readUTF()
+        if (magic != PROTOCOL_MAGIC || version != PROTOCOL_VERSION || frame != FRAME_RESPONSE) {
+            throw IOException("Получен некорректный ответ синхронизации")
+        }
+        val status = runCatching { BluetoothRelayAckStatus.valueOf(input.readUTF()) }
+            .getOrElse { throw IOException("Неизвестный статус подтверждения") }
+        val message = input.readUTF().ifBlank { null }
+        return BluetoothRelayAckStatusMessage(status, message)
+    }
+
+    // endregion
 
     private fun closeQuietly(socket: BluetoothServerSocket) {
         runCatching { socket.close() }
@@ -863,6 +1104,12 @@ class BluetoothRelayManager @Inject constructor(
             getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
     }
+
+    private data class ConsentResponse(
+        val accepted: Boolean,
+        val guestUserId: String,
+        val guestDisplayName: String
+    )
 
     private data class BluetoothRelayAckStatusMessage(
         val status: BluetoothRelayAckStatus,
@@ -896,16 +1143,16 @@ class BluetoothRelayManager @Inject constructor(
             UUID.fromString("4cf14d9b-cb79-4b27-90df-f69a8b1450c5")
         private const val SERVICE_NAME = "TripFlowRelay"
         private const val PROTOCOL_MAGIC = "TRILOO_BT"
-        // v5: добавили двусторонний обмен пакетами. Гость после
-        // FRAME_SYNC_REQUEST шлёт либо FRAME_PACKAGE со своим снапшотом,
-        // либо FRAME_NO_PACKAGE (онбординг/нет локальной поездки). Хост
-        // мерджит и шлёт свой пакет назад. Версия инкрементнута, чтобы
-        // старые сборки сразу видели «несовместимый формат» вместо
-        // зависания на чтении.
-        private const val PROTOCOL_VERSION = 5
-        private const val FRAME_SYNC_REQUEST = "SYNC_REQUEST"
+        // v7: инвертированы роли — хост (владелец поездки) теперь client,
+        // гость — server. Протокол:
+        //   1) host → guest: FRAME_INTENT (senderUserId, senderName, tripId, tripName)
+        //   2) guest → host: FRAME_CONSENT (accepted, guestUserId, guestDisplayName)
+        //   3) host → guest: FRAME_PACKAGE (encrypted body)
+        //   4) guest → host: FRAME_RESPONSE (ack status + message)
+        private const val PROTOCOL_VERSION = 7
+        private const val FRAME_INTENT = "INTENT"
+        private const val FRAME_CONSENT = "CONSENT"
         private const val FRAME_PACKAGE = "PACKAGE"
-        private const val FRAME_NO_PACKAGE = "NO_PACKAGE"
         private const val FRAME_RESPONSE = "RESPONSE"
     }
 }

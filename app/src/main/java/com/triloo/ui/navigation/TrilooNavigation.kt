@@ -352,7 +352,16 @@ fun TrilooNavHost(
         ) {
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 RelayScreen(
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    // Хост никогда сюда не попадёт (lastReceivedTripId == null),
+                    // но callback на всякий случай умеет открыть TripDetails
+                    // и убрать relay-экран из стека.
+                    onNavigateToTrip = { tripId ->
+                        navController.navigate(Screen.TripDetails.createRoute(tripId)) {
+                            popUpTo(Screen.Relay.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }
@@ -363,7 +372,17 @@ fun TrilooNavHost(
         composable(route = Screen.RelayJoin.route) {
             SwipeBackContainer(onBack = { navController.popBackStack() }) {
                 RelayScreen(
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    // Гость закончил приём поездки — уходим напрямую в её
+                    // TripDetails, а RelayJoin вышибаем из стека (чтобы
+                    // кнопка «назад» с TripDetails вела на список групп,
+                    // а не обратно в BT-экран).
+                    onNavigateToTrip = { tripId ->
+                        navController.navigate(Screen.TripDetails.createRoute(tripId)) {
+                            popUpTo(Screen.RelayJoin.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }

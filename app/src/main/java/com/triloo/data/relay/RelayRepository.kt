@@ -280,6 +280,69 @@ class RelayRepository @Inject constructor(
         }
     }
 
+    /**
+     * Вставляет/обновляет Participant'a, который пришёл из BT-обмена, в обход
+     * правил доступа `TripRepository.addParticipant` (там есть `requireRole`,
+     * который не пустит «нового» пользователя без OWNER/ADMIN-прав). Сюда зовут:
+     *   • хост сразу после `readSyncRequest`, чтобы записать гостя как
+     *     Participant до сборки ответного пакета (вариант B);
+     *   • гость после `mergePackage`, чтобы вписать себя самого как MEMBER
+     *     даже если хост по какой-то причине не прислал нас в участниках
+     *     (safety net для варианта A, например при v5-хосте).
+     *
+     * КРИТИЧНО: `role`-параметр применяется ТОЛЬКО при INSERT новой записи.
+     * Для существующей записи роль НЕ перезаписываем — иначе onboarding-флоу
+     * разжалует OWNER'а в MEMBER, когда «гость» оказался прежним владельцем
+     * trip'a, заходящим со второго устройства (и так как updatedAt у нас
+     * новый, дальше через merge зараза дойдёт до всех реплик). Если нужно
+     * сменить роль участника — это делается через `TripRepository`-API с
+     * нормальными проверками прав.
+     */
+    suspend fun upsertParticipantFromRelay(
+        tripId: String,
+        userId: String,
+        displayName: String,
+        role: com.triloo.data.model.ParticipantRole = com.triloo.data.model.ParticipantRole.MEMBER
+    ): Boolean {
+        if (tripId.isBlank() || userId.isBlank()) return false
+        val now = System.currentTimeMillis()
+        val existing = tripDao.getParticipant(tripId, userId)
+        if (existing == null) {
+            val participant = Participant(
+                tripId = tripId,
+                userId = userId,
+                displayName = displayName.ifBlank { "Участник" },
+                role = role,
+                joinedAt = now,
+                createdAt = now,
+                updatedAt = now
+            )
+            tripDao.insertParticipant(participant)
+            android.util.Log.d(
+                TAG,
+                "upsertParticipantFromRelay: inserted tripId=$tripId userId=$userId name=${participant.displayName} role=$role"
+            )
+            return true
+        }
+        // Существующая запись: трогаем только displayName (если что-то новое
+        // пришло). Роль НЕ перезаписываем — см. KDoc выше.
+        val updatedName = displayName.ifBlank { existing.displayName }
+        if (updatedName == existing.displayName) {
+            return false
+        }
+        val merged = existing.copy(
+            displayName = updatedName,
+            updatedAt = now
+        )
+        tripDao.updateParticipant(merged)
+        android.util.Log.d(
+            TAG,
+            "upsertParticipantFromRelay: updated displayName only tripId=$tripId userId=$userId" +
+                " name=${merged.displayName} keptRole=${existing.role}"
+        )
+        return true
+    }
+
     private suspend fun upsertTripDay(day: TripDay): Pair<Int, Int> {
         val local = placeDao.getTripDayById(day.id)
         return if (local == null) {
