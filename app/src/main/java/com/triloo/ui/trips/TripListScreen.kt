@@ -128,7 +128,8 @@ private fun TripListContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp),
+        flingBehavior = trilooFlingBehavior()
     ) {
         // Hero — только приветствие. Иконка «Настройки» убрана: Settings
         // теперь доступны как четвёртый таб liquid-glass нав-бара.

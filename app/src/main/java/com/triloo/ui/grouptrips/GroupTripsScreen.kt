@@ -80,6 +80,7 @@ import com.triloo.ui.theme.TealLight
 import com.triloo.ui.theme.TealSecondary
 import com.triloo.ui.theme.TrilooShapes
 import com.triloo.ui.theme.TrilooTheme
+import com.triloo.ui.theme.trilooFlingBehavior
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -189,7 +190,8 @@ private fun GroupTripsContent(
                 top = 8.dp,
                 bottom = 100.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            flingBehavior = trilooFlingBehavior()
         ) {
             item {
                 GreetingCard(

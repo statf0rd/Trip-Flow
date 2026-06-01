@@ -155,7 +155,8 @@ fun PlanTab(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            flingBehavior = trilooFlingBehavior()
         ) {
             if (showOptimizeBanner) {
                 item(key = "optimize-banner") {
@@ -2140,7 +2141,8 @@ fun ExpensesTab(
                     // ExpenseItem, чтобы FAB его не накрывал).
                     bottom = if (isReadOnly) 16.dp else 92.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                flingBehavior = trilooFlingBehavior()
             ) {
                 item(key = "donut") {
                     ExpensesDonutCard(

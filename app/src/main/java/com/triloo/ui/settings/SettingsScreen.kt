@@ -161,7 +161,7 @@ private fun SettingsContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState(), flingBehavior = trilooFlingBehavior())
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
