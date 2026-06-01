@@ -122,22 +122,24 @@ class GroupTripsViewModel @Inject constructor(
             try {
                 val profile = userProfileRepository.getProfile()
                 val localUserId = profile.userId
-                val trip = tripRepository.getTripByInviteCode(code)
-                val joinedTripId = if (trip != null) {
-                    tripRepository.addParticipant(
-                        Participant(
-                            tripId = trip.id,
-                            userId = localUserId,
-                            displayName = name
-                        )
-                    )
-                    trip.id
-                } else {
-                    remoteTripInviteRepository.joinByInviteCode(code, name)
-                        .getOrElse { error ->
-                            throw error
-                        }
-                }
+                val localTrip = tripRepository.getTripByInviteCode(code)
+                val joinedTripId = remoteTripInviteRepository.joinByInviteCode(code, name)
+                    .getOrElse { error ->
+                        localTrip?.let { trip ->
+                            val isAlreadyParticipant = tripRepository.getParticipants(trip.id)
+                                .any { it.userId == localUserId }
+                            if (!isAlreadyParticipant) {
+                                tripRepository.addParticipant(
+                                    Participant(
+                                        tripId = trip.id,
+                                        userId = localUserId,
+                                        displayName = name
+                                    )
+                                )
+                            }
+                            trip.id
+                        } ?: throw error
+                    }
 
                 userProfileRepository.updateDisplayName(name)
 
