@@ -112,6 +112,21 @@ class LocationSharingForegroundService : Service() {
             activeUserId = profile.userId
             ensureCurrentParticipant(tripId, profile.userId, profile.displayName)
             tripRepository.updateParticipantOnlineStatus(tripId, profile.userId, true)
+
+            // Стартовая координата one-shot: на Samsung One UI live-callback
+            // может дросселиться FusedLocation'ом, поэтому без этого
+            // начального fix'а партнёр не увидит нас на карте часами.
+            runCatching { locationSharingManager.currentLocation() }
+                .getOrNull()
+                ?.let { point ->
+                    tripRepository.updateParticipantLocation(
+                        tripId = tripId,
+                        userId = profile.userId,
+                        latitude = point.latitude,
+                        longitude = point.longitude
+                    )
+                }
+
             syncOnline(tripId, force = true)
 
             runCatching {

@@ -38,11 +38,15 @@ class LocationSharingManager @Inject constructor(
         intervalMillis: Long = 15_000L,
         minIntervalMillis: Long = 8_000L
     ): Flow<SharedLocationPoint> = callbackFlow {
+        // HIGH_ACCURACY + minUpdateDistanceMeters=0 нужны на Samsung One UI:
+        // на BALANCED Samsung GMS дросселит callback с пометкой
+        // "location delivery blocked - too close", и live-шаринг молчит.
         val request = LocationRequest.Builder(
-            Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+            Priority.PRIORITY_HIGH_ACCURACY,
             intervalMillis
         )
             .setMinUpdateIntervalMillis(minIntervalMillis)
+            .setMinUpdateDistanceMeters(0f)
             .setWaitForAccurateLocation(false)
             .build()
 
