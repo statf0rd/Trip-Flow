@@ -902,7 +902,7 @@ private fun RelayCluster(
 ) {
     val sortedPeers = remember(peers) { peers.sortedBy { it.address } }
 
-    BoxWithConstraints(
+    Box(
         modifier = modifier.size(300.dp),
         contentAlignment = Alignment.Center
     ) {
