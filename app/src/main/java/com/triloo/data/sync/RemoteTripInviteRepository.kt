@@ -32,8 +32,10 @@ class RemoteTripInviteRepository @Inject constructor(
                     displayName = displayName?.trim()?.takeIf { it.isNotBlank() }
                 )
             )
-            serverSessionRepository.updateLastSyncAt(response.serverUpdatedAt)
-            onlineSyncRepository.pullRemoteChanges()
+            // Join changes the server snapshot at response.serverUpdatedAt.
+            // Pulling from the previous cursor is required; setting lastSyncAt
+            // first would skip the exact snapshot that contains the new member.
+            onlineSyncRepository.pullRemoteChanges(sinceOverride = 0L)
             response.tripId
         }.recoverCatching { error ->
             throw error.toUserFacingError()

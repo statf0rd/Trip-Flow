@@ -11,8 +11,11 @@ import com.triloo.data.model.Place
 import com.triloo.data.model.SplitType
 import com.triloo.data.model.Trip
 import com.triloo.data.model.TripDay
+import com.triloo.data.remote.BackendTripApi
 import com.triloo.data.remote.CurrencyApi
 import com.triloo.data.remote.CurrencyRatesResponse
+import com.triloo.data.remote.JoinByInviteRequest
+import com.triloo.data.remote.JoinByInviteResponse
 import com.triloo.data.remote.OnlineSyncApi
 import com.triloo.data.remote.SyncPullResponse
 import com.triloo.data.remote.SyncPushResponse
@@ -61,6 +64,7 @@ class ExpenseRepositoryTest {
         )
         val onlineSyncRepository = OnlineSyncRepository(
             onlineSyncApi = StubOnlineSyncApi(),
+            backendTripApi = StubBackendTripApi(),
             relayRepository = relayRepository,
             serverSessionRepository = ServerSessionRepository(context),
             appSettingsRepository = AppSettingsRepository(context),
@@ -162,6 +166,15 @@ class ExpenseRepositoryTest {
 
         override suspend fun pull(authorization: String, since: Long): SyncPullResponse {
             return SyncPullResponse()
+        }
+    }
+
+    private class StubBackendTripApi : BackendTripApi {
+        override suspend fun joinByInviteCode(
+            authorization: String,
+            request: JoinByInviteRequest
+        ): JoinByInviteResponse {
+            return JoinByInviteResponse(tripId = "trip-expense", serverUpdatedAt = 0L)
         }
     }
 }

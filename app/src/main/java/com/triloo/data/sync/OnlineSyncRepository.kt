@@ -2,8 +2,12 @@ package com.triloo.data.sync
 
 import com.triloo.BuildConfig
 import com.triloo.data.auth.ServerSessionRepository
+import com.triloo.data.model.Trip
+import com.triloo.data.remote.BackendTripApi
+import com.triloo.data.remote.JoinByInviteRequest
 import com.triloo.data.local.dao.TripDao
 import com.triloo.data.remote.OnlineSyncApi
+import com.triloo.data.remote.SyncRejectedTrip
 import com.triloo.data.remote.SyncPushItem
 import com.triloo.data.remote.SyncPushRequest
 import com.triloo.data.relay.RelayRepository
@@ -21,6 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class OnlineSyncRepository @Inject constructor(
     private val onlineSyncApi: OnlineSyncApi,
+    private val backendTripApi: BackendTripApi,
     private val relayRepository: RelayRepository,
     private val serverSessionRepository: ServerSessionRepository,
     private val appSettingsRepository: AppSettingsRepository,
@@ -54,6 +59,13 @@ class OnlineSyncRepository @Inject constructor(
     }
 
     suspend fun syncTripNow(tripId: String): Boolean {
+        return syncTripNowInternal(tripId, canRepairMembership = true)
+    }
+
+    private suspend fun syncTripNowInternal(
+        tripId: String,
+        canRepairMembership: Boolean
+    ): Boolean {
         val trip = tripDao.getTripById(tripId) ?: return false
         if (!trip.isGroupTrip) return true
 
@@ -61,7 +73,7 @@ class OnlineSyncRepository @Inject constructor(
         val relayPackage = relayRepository.buildPackage(tripId) ?: return false
         val payloadJson = relayRepository.encodePackage(relayPackage)
 
-        val hasServerConflict = syncMutex.withLock {
+        val pushOutcome = syncMutex.withLock {
             runCatching {
                 val response = onlineSyncApi.push(
                     authorization = token.asBearer(),
@@ -77,6 +89,7 @@ class OnlineSyncRepository @Inject constructor(
                 val isRejected = response.rejected.any {
                     it.tripId == null || it.tripId == tripId
                 }
+                val hasMembershipRejection = response.rejected.hasMembershipRejection(tripId)
                 if (!isRejected) {
                     val maxTimestamp = buildList {
                         add(response.serverTime)
@@ -86,11 +99,26 @@ class OnlineSyncRepository @Inject constructor(
                         serverSessionRepository.updateLastSyncAt(maxTimestamp)
                     }
                 }
-                isRejected
-            }.getOrDefault(true)
+                PushOutcome(
+                    hasServerConflict = isRejected,
+                    hasMembershipRejection = hasMembershipRejection
+                )
+            }.getOrDefault(
+                PushOutcome(
+                    hasServerConflict = true,
+                    hasMembershipRejection = false
+                )
+            )
         }
 
-        if (hasServerConflict) {
+        if (pushOutcome.hasMembershipRejection && canRepairMembership) {
+            val repaired = repairRemoteMembership(token, trip)
+            if (repaired) {
+                return syncTripNowInternal(tripId, canRepairMembership = false)
+            }
+        }
+
+        if (pushOutcome.hasServerConflict) {
             pullRemoteChanges()
             return false
         }
@@ -116,15 +144,16 @@ class OnlineSyncRepository @Inject constructor(
         return pulled || pushed
     }
 
-    suspend fun pullRemoteChanges(): Boolean {
+    suspend fun pullRemoteChanges(sinceOverride: Long? = null): Boolean {
         val token = getAuthorizedToken() ?: return false
         val session = serverSessionRepository.getSession()
+        val since = sinceOverride ?: session.lastSyncAt
 
         return syncMutex.withLock {
             runCatching {
                 val response = onlineSyncApi.pull(
                     authorization = token.asBearer(),
-                    since = session.lastSyncAt
+                    since = since
                 )
                 response.items.forEach { item ->
                     val relayPackage = relayRepository.decodePackage(item.payloadJson)
@@ -150,4 +179,31 @@ class OnlineSyncRepository @Inject constructor(
     }
 
     private fun String.asBearer(): String = "Bearer $this"
+
+    private suspend fun repairRemoteMembership(token: String, trip: Trip): Boolean {
+        if (trip.inviteCode.isBlank()) return false
+        val user = serverSessionRepository.getSession().user
+        return runCatching {
+            backendTripApi.joinByInviteCode(
+                authorization = token.asBearer(),
+                request = JoinByInviteRequest(
+                    inviteCode = trip.inviteCode,
+                    displayName = user?.displayName?.takeIf { it.isNotBlank() }
+                )
+            )
+            pullRemoteChanges(sinceOverride = 0L)
+        }.isSuccess
+    }
+
+    private fun List<SyncRejectedTrip>.hasMembershipRejection(tripId: String): Boolean {
+        return any { rejection ->
+            (rejection.tripId == null || rejection.tripId == tripId) &&
+                rejection.message.contains("not a participant", ignoreCase = true)
+        }
+    }
+
+    private data class PushOutcome(
+        val hasServerConflict: Boolean,
+        val hasMembershipRejection: Boolean
+    )
 }
