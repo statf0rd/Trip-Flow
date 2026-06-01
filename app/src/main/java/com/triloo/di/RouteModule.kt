@@ -2,8 +2,10 @@ package com.triloo.di
 
 import com.triloo.data.places.NearbyPlacesProvider
 import com.triloo.data.places.PlacesService
+import com.triloo.data.route.MapRouteProvider
 import com.triloo.data.route.NearestNeighborRouteOptimizer
 import com.triloo.data.route.RouteOptimizer
+import com.triloo.data.route.YandexRouter
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -28,4 +30,10 @@ abstract class RouteModule {
     abstract fun bindRouteOptimizer(
         optimizer: NearestNeighborRouteOptimizer
     ): RouteOptimizer
+
+    @Binds
+    @Singleton
+    abstract fun bindMapRouteProvider(
+        yandexRouter: YandexRouter
+    ): MapRouteProvider
 }

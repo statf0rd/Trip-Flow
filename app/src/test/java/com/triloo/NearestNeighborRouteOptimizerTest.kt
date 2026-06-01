@@ -11,7 +11,9 @@ import com.triloo.data.remote.OpenRouteServiceDirectionsResponse
 import com.triloo.data.remote.OpenRouteServiceRoute
 import com.triloo.data.remote.OpenRouteServiceSegment
 import com.triloo.data.remote.OpenRouteServiceSummary
+import com.triloo.data.route.MapRouteProvider
 import com.triloo.data.route.NearestNeighborRouteOptimizer
+import com.triloo.data.route.YandexRouteResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +29,8 @@ class NearestNeighborRouteOptimizerTest {
     fun calculateRouteReturnsLegsForTwoPlaces() = runBlocking {
         val optimizer = NearestNeighborRouteOptimizer(
             openRouteServiceApi = StubOpenRouteServiceApi(),
-            nearbyPlacesProvider = StubNearbyPlacesProvider()
+            nearbyPlacesProvider = StubNearbyPlacesProvider(),
+            mapRouteProvider = NoopMapRouteProvider()
         )
         val places = listOf(
             Place(
@@ -59,7 +62,8 @@ class NearestNeighborRouteOptimizerTest {
     fun getRecommendationsReturnsNearbyPlaces() = runBlocking {
         val optimizer = NearestNeighborRouteOptimizer(
             openRouteServiceApi = StubOpenRouteServiceApi(),
-            nearbyPlacesProvider = StubNearbyPlacesProvider()
+            nearbyPlacesProvider = StubNearbyPlacesProvider(),
+            mapRouteProvider = NoopMapRouteProvider()
         )
         val places = listOf(
             Place(
@@ -127,5 +131,12 @@ class NearestNeighborRouteOptimizerTest {
                 )
             )
         }
+    }
+
+    private class NoopMapRouteProvider : MapRouteProvider {
+        override suspend fun route(
+            places: List<Place>,
+            mode: TravelMode
+        ): YandexRouteResult? = null
     }
 }

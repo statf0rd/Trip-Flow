@@ -54,13 +54,17 @@ data class RoutePoint(
     val longitude: Double
 )
 
+interface MapRouteProvider {
+    suspend fun route(places: List<Place>, mode: TravelMode): YandexRouteResult?
+}
+
 /**
  * Все вызовы Yandex-роутеров обязаны идти с main-thread'а (внутреннее
  * ограничение MapKit), поэтому каждый метод оборачивает работу в
  * `withContext(Dispatchers.Main)` + `suspendCancellableCoroutine`.
  */
 @Singleton
-class YandexRouter @Inject constructor() {
+class YandexRouter @Inject constructor() : MapRouteProvider {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -88,7 +92,7 @@ class YandexRouter @Inject constructor() {
         }
     }
 
-    suspend fun route(places: List<Place>, mode: TravelMode): YandexRouteResult? {
+    override suspend fun route(places: List<Place>, mode: TravelMode): YandexRouteResult? {
         if (places.size < 2) return null
         val requestPoints = places.map { place ->
             RequestPoint(
