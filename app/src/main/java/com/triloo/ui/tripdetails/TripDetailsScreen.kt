@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -124,6 +125,22 @@ fun TripDetailsScreen(
     LaunchedEffect(pagerState.currentPage, uiState.trip?.isGroupTrip) {
         val isMapTab = pagerState.currentPage == 1 && uiState.trip?.isGroupTrip == true
         viewModel.setMapVisible(isMapTab)
+    }
+
+    // При первом заходе на вкладку карты автоматически просим FINE_LOCATION,
+    // чтобы пользователь сразу увидел свою позицию и партнёров. Запрашиваем
+    // не чаще одного раза за время жизни экрана — system-диалог всё равно
+    // не покажется повторно, если юзер отказал.
+    var mapLocationPermissionAsked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(pagerState.currentPage, uiState.trip?.id) {
+        if (pagerState.currentPage == 1 &&
+            uiState.trip != null &&
+            !hasLocationPermission &&
+            !mapLocationPermissionAsked
+        ) {
+            mapLocationPermissionAsked = true
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
     }
 
     DisposableEffect(Unit) {
