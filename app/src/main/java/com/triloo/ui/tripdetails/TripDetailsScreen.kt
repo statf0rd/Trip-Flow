@@ -64,13 +64,20 @@ fun TripDetailsScreen(
     onNavigateToEditPlace: (String) -> Unit = {},
     onNavigateToPlaceDetails: (String) -> Unit = {}, // placeId
     onNavigateToEditExpense: (String, String) -> Unit = { _, _ -> }, // tripId, expenseId
+    initialTab: Int = 0,
     viewModel: TripDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Поездка в архиве (`endDate < сегодня`) — все write-actions скрываем,
     // оставляем только чтение и удаление всей поездки.
     val isReadOnly = uiState.trip?.isPast == true
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    // Pager поднимает 3 страницы: 0 — План, 1 — Карта, 2 — Расходы.
+    // initialTab прилетает из route-аргумента (?tab=N): таб «Бюджет» в
+    // нижней навигации открывает поездку сразу на странице расходов.
+    val pagerState = rememberPagerState(
+        initialPage = initialTab.coerceIn(0, 2),
+        pageCount = { 3 }
+    )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }

@@ -63,8 +63,12 @@ sealed class Screen(val route: String) {
     // увидит null и переключится в режим discovery.
     object RelayJoin : Screen("relay/join")
 
-    object TripDetails : Screen("trips/{tripId}") {
-        fun createRoute(tripId: String) = "trips/$tripId"
+    object TripDetails : Screen("trips/{tripId}?tab={tab}") {
+        // tab — индекс начального таба внутри TripDetails (0 — План,
+        // 1 — Карта, 2 — Расходы). Используется, например, тапом по
+        // «Бюджет» в нижней навигации, чтобы открыть поездку сразу на
+        // вкладке расходов.
+        fun createRoute(tripId: String, tab: Int = 0) = "trips/$tripId?tab=$tab"
     }
     object AddPlace : Screen("trips/{tripId}/days/{dayId}/add-place") {
         fun createRoute(tripId: String, dayId: String) = "trips/$tripId/days/$dayId/add-place"
@@ -251,9 +255,21 @@ fun TrilooNavHost(
             }
         }
 
-        // Глобальный экран бюджета — пока заглушка, см. BudgetScreen.kt.
+        // Таб «Бюджет» — роутер: открываем поездку (текущую или ближайшую
+        // предстоящую) сразу на вкладке «Расходы». Если поездок нет — внутри
+        // BudgetScreen остаётся заглушка.
         composable(Screen.Budget.route) {
-            BudgetScreen()
+            BudgetScreen(
+                onNavigateToTrip = { tripId, tab ->
+                    navController.navigate(Screen.TripDetails.createRoute(tripId, tab)) {
+                        // Выкидываем Budget из стека: иначе кнопка «Назад»
+                        // возвращает на этот же роут, и он мгновенно снова
+                        // отправляет в ту же поездку — получается петля.
+                        popUpTo(Screen.Budget.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
         }
         
         // Создание поездки.
@@ -296,16 +312,22 @@ fun TrilooNavHost(
         composable(
             route = Screen.TripDetails.route,
             arguments = listOf(
-                navArgument("tripId") { type = NavType.StringType }
+                navArgument("tripId") { type = NavType.StringType },
+                navArgument("tab") {
+                    type = NavType.IntType
+                    defaultValue = 0
+                }
             )
         ) { backStackEntry ->
             val tripId = backStackEntry.arguments?.getString("tripId") ?: return@composable
+            val initialTab = backStackEntry.arguments?.getInt("tab") ?: 0
 
             // SwipeBack отключён — на этом экране есть таб «Карта» с Yandex
             // MapView, чьи pan/zoom-жесты ломаются любой Compose-обёрткой
             // с pointerInput. Возврат — стрелка в TopAppBar.
             TripDetailsScreen(
                 tripId = tripId,
+                initialTab = initialTab,
                 onNavigateBack = {
                     navController.popBackStack()
                 },
