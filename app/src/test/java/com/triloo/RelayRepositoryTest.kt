@@ -166,6 +166,54 @@ class RelayRepositoryTest {
     }
 
     @Test
+    fun mergePackageIsIdempotentOnReapply() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(day)
+
+        val remotePlace = samplePlace(
+            id = "place-idem",
+            tripId = trip.id,
+            tripDayId = day.id,
+            name = "Музей",
+            updatedAt = 4_000
+        )
+        val relayPackage = RelayPackage(
+            createdAt = 4_000,
+            deviceId = "remote-device",
+            trip = trip.copy(updatedAt = 4_000),
+            participants = listOf(
+                Participant(
+                    tripId = trip.id,
+                    userId = "owner",
+                    displayName = "Owner",
+                    isOnline = true,
+                    updatedAt = 4_000
+                )
+            ),
+            tripDays = listOf(day.copy(updatedAt = 4_000)),
+            places = listOf(remotePlace),
+            expenses = emptyList(),
+            expenseSplits = emptyList(),
+            deletions = emptyList()
+        )
+
+        val first = repository.mergePackage(relayPackage)
+        val countAfterFirst = database.placeDao().getPlaceCountForTrip(trip.id)
+
+        val second = repository.mergePackage(relayPackage)
+        val countAfterSecond = database.placeDao().getPlaceCountForTrip(trip.id)
+
+        // Повторное применение того же пакета ничего не меняет (LWW: метки равны).
+        assertTrue(first.inserted >= 1)
+        assertEquals(countAfterFirst, countAfterSecond)
+        assertEquals(0, second.inserted)
+        assertEquals(0, second.updated)
+        assertEquals(0, second.deleted)
+    }
+
+    @Test
     fun buildPackageSinceCursorIncludesOnlyRecentChanges() = runBlocking {
         val trip = sampleTrip().copy(updatedAt = 3_000)
         val dayOld = sampleDay(trip.id).copy(id = "day-old", updatedAt = 2_000)

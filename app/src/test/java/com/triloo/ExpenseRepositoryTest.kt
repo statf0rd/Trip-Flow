@@ -129,6 +129,64 @@ class ExpenseRepositoryTest {
         assertTrue(balancesAfter.isEmpty())
     }
 
+    @Test
+    fun debtsSimplifiedToMinimalTransfers() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id, trip.startDate)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(day)
+        database.tripDao().insertParticipants(
+            listOf(
+                Participant(tripId = trip.id, userId = "alice", displayName = "Alice"),
+                Participant(tripId = trip.id, userId = "bob", displayName = "Bob"),
+                Participant(tripId = trip.id, userId = "charlie", displayName = "Charlie")
+            )
+        )
+
+        repository.addExpense(
+            Expense(
+                tripId = trip.id,
+                description = "Музей",
+                amount = 120.0,
+                currency = trip.baseCurrency,
+                amountInBaseCurrency = 120.0,
+                exchangeRate = 1.0,
+                exchangeRateDate = trip.startDate,
+                category = ExpenseCategory.FOOD,
+                paidByUserId = "alice",
+                paidByName = "Alice",
+                splitType = SplitType.EQUAL,
+                date = trip.startDate
+            )
+        )
+        repository.addExpense(
+            Expense(
+                tripId = trip.id,
+                description = "Такси",
+                amount = 30.0,
+                currency = trip.baseCurrency,
+                amountInBaseCurrency = 30.0,
+                exchangeRate = 1.0,
+                exchangeRateDate = trip.startDate,
+                category = ExpenseCategory.FOOD,
+                paidByUserId = "bob",
+                paidByName = "Bob",
+                splitType = SplitType.EQUAL,
+                date = trip.startDate
+            )
+        )
+
+        val balances = repository.calculateBalances(trip.id)
+
+        // Нетто-балансы: Alice кредитор 70, Charlie должен 50, Bob должен 20.
+        // Минимальный набор переводов: Charlie -> Alice 50, Bob -> Alice 20.
+        assertEquals(2, balances.size)
+        assertTrue(balances.all { it.toUserId == "alice" })
+        val byFrom = balances.associate { it.fromUserId to it.amount }
+        assertEquals(50.0, byFrom["charlie"] ?: 0.0, 0.01)
+        assertEquals(20.0, byFrom["bob"] ?: 0.0, 0.01)
+    }
+
     private fun sampleTrip(): Trip {
         return Trip(
             id = "trip-expense",
