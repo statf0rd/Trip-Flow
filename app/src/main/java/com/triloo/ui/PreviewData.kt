@@ -247,8 +247,7 @@ object PreviewData {
     )
 
     val groupTripsState: GroupTripsUiState = GroupTripsUiState(
-        inviteCode = "TRIL00",
-        displayName = "Аня"
+        userDisplayName = "Аня"
     )
 
     val inviteState: InviteUiState = InviteUiState(

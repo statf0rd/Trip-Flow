@@ -6,7 +6,6 @@ import com.triloo.data.model.Participant
 import com.triloo.data.model.ParticipantRole
 import com.triloo.data.model.Trip
 import com.triloo.data.repository.TripRepository
-import com.triloo.data.sync.RemoteTripInviteRepository
 import com.triloo.data.user.UserProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,15 +19,15 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Управляет состоянием экрана групповых поездок: приветствие, фильтр,
- * вход по коду и сводка по каждому групповому маршруту с участниками
- * и ролью текущего пользователя.
+ * Управляет состоянием экрана групповых поездок: приветствие, фильтр
+ * и сводка по каждому групповому маршруту с участниками и ролью
+ * текущего пользователя. Вход в поездку — только по Bluetooth (Relay):
+ * UI «по коду или QR» удалён, такого способа присоединения нет.
  */
 @HiltViewModel
 class GroupTripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
-    private val userProfileRepository: UserProfileRepository,
-    private val remoteTripInviteRepository: RemoteTripInviteRepository
+    private val userProfileRepository: UserProfileRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupTripsUiState())
@@ -63,106 +62,13 @@ class GroupTripsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             userProfileRepository.profile.collect { profile ->
-                val name = profile.displayName.trim()
-                _uiState.update { state ->
-                    val shouldAutofill = name.isNotBlank() && (
-                        state.displayName.isBlank() ||
-                            state.displayName == state.lastAutofillName
-                    )
-                    state.copy(
-                        userDisplayName = name,
-                        displayName = if (shouldAutofill) name else state.displayName,
-                        lastAutofillName = if (shouldAutofill) name else state.lastAutofillName
-                    )
-                }
+                _uiState.update { it.copy(userDisplayName = profile.displayName.trim()) }
             }
         }
-    }
-
-    fun updateInviteCode(value: String) {
-        val normalized = value.uppercase().replace(" ", "").take(12)
-        _uiState.update { it.copy(inviteCode = normalized, error = null) }
-    }
-
-    fun updateDisplayName(value: String) {
-        _uiState.update { it.copy(displayName = value, error = null) }
     }
 
     fun setFilter(filter: TripFilter) {
         _uiState.update { it.copy(filter = filter) }
-    }
-
-    fun openJoinByCodeSheet() {
-        _uiState.update { it.copy(showJoinByCodeSheet = true, error = null) }
-    }
-
-    fun dismissJoinByCodeSheet() {
-        _uiState.update { it.copy(showJoinByCodeSheet = false, error = null) }
-    }
-
-    fun joinByInviteCode() {
-        val state = _uiState.value
-        if (state.isJoining) return
-
-        val code = state.inviteCode.trim().uppercase()
-        val name = state.displayName.trim()
-
-        if (code.isBlank()) {
-            _uiState.update { it.copy(error = "Введите код приглашения") }
-            return
-        }
-        if (name.isBlank()) {
-            _uiState.update { it.copy(error = "Введите ваше имя") }
-            return
-        }
-
-        _uiState.update { it.copy(isJoining = true, error = null, joinedTripId = null) }
-
-        viewModelScope.launch {
-            try {
-                val profile = userProfileRepository.getProfile()
-                val localUserId = profile.userId
-                val localTrip = tripRepository.getTripByInviteCode(code)
-                val joinedTripId = remoteTripInviteRepository.joinByInviteCode(code, name)
-                    .getOrElse { error ->
-                        localTrip?.let { trip ->
-                            val isAlreadyParticipant = tripRepository.getParticipants(trip.id)
-                                .any { it.userId == localUserId }
-                            if (!isAlreadyParticipant) {
-                                tripRepository.addParticipant(
-                                    Participant(
-                                        tripId = trip.id,
-                                        userId = localUserId,
-                                        displayName = name
-                                    )
-                                )
-                            }
-                            trip.id
-                        } ?: throw error
-                    }
-
-                userProfileRepository.updateDisplayName(name)
-
-                _uiState.update {
-                    it.copy(
-                        isJoining = false,
-                        joinedTripId = joinedTripId,
-                        showJoinByCodeSheet = false
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isJoining = false,
-                        error = e.message ?: "Не удалось присоединиться"
-                    )
-                }
-            }
-        }
-    }
-
-    fun consumeJoinedTripNavigation() {
-        _uiState.update { it.copy(joinedTripId = null) }
     }
 }
 
@@ -187,19 +93,9 @@ enum class TripFilter {
 }
 
 /**
- * Состояние экрана присоединения к групповой поездке.
+ * Состояние экрана групповых поездок: имя для приветствия и активный фильтр.
  */
 data class GroupTripsUiState(
     val userDisplayName: String = "",
-    val inviteCode: String = "",
-    val displayName: String = "",
-    val lastAutofillName: String = "",
-    val isJoining: Boolean = false,
-    val joinedTripId: String? = null,
-    val error: String? = null,
-    val filter: TripFilter = TripFilter.ACTIVE,
-    val showJoinByCodeSheet: Boolean = false
-) {
-    val isJoinEnabled: Boolean
-        get() = inviteCode.isNotBlank() && displayName.isNotBlank() && !isJoining
-}
+    val filter: TripFilter = TripFilter.ACTIVE
+)

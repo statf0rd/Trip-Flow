@@ -102,24 +102,12 @@ fun GroupTripsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groupTrips by viewModel.groupTrips.collectAsStateWithLifecycle()
 
-    LaunchedEffect(uiState.joinedTripId) {
-        uiState.joinedTripId?.let { tripId ->
-            onNavigateToTrip(tripId)
-            viewModel.consumeJoinedTripNavigation()
-        }
-    }
-
     GroupTripsContent(
         uiState = uiState,
         groupTrips = groupTrips,
         onNavigateBack = onNavigateBack,
         onNavigateToTrip = onNavigateToTrip,
-        onOpenJoinByCode = viewModel::openJoinByCodeSheet,
-        onDismissJoinByCode = viewModel::dismissJoinByCodeSheet,
         onNavigateToJoinByBluetooth = onNavigateToJoinByBluetooth,
-        onInviteCodeChange = viewModel::updateInviteCode,
-        onDisplayNameChange = viewModel::updateDisplayName,
-        onJoin = viewModel::joinByInviteCode,
         onFilterChange = viewModel::setFilter
     )
 }
@@ -131,12 +119,7 @@ private fun GroupTripsContent(
     groupTrips: List<GroupTripSummary>,
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
-    onOpenJoinByCode: () -> Unit,
-    onDismissJoinByCode: () -> Unit,
     onNavigateToJoinByBluetooth: () -> Unit,
-    onInviteCodeChange: (String) -> Unit,
-    onDisplayNameChange: (String) -> Unit,
-    onJoin: () -> Unit,
     onFilterChange: (TripFilter) -> Unit
 ) {
     val today = remember { LocalDate.now() }
@@ -201,27 +184,17 @@ private fun GroupTripsContent(
             }
 
             item {
-                Row(
+                // Единственный способ присоединиться к чужой поездке —
+                // Bluetooth (Relay). Карточка «По коду или QR» удалена:
+                // такой фичи нет и не будет.
+                JoinActionCard(
+                    title = "По Bluetooth",
+                    subtitle = "Без интернета",
+                    icon = Icons.Rounded.Bluetooth,
+                    accent = TealSecondary,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    JoinActionCard(
-                        title = "По коду или QR",
-                        subtitle = "6 знаков или скан",
-                        icon = Icons.Rounded.QrCodeScanner,
-                        accent = CoralPrimary,
-                        modifier = Modifier.weight(1f),
-                        onClick = onOpenJoinByCode
-                    )
-                    JoinActionCard(
-                        title = "По Bluetooth",
-                        subtitle = "Без интернета",
-                        icon = Icons.Rounded.Bluetooth,
-                        accent = TealSecondary,
-                        modifier = Modifier.weight(1f),
-                        onClick = onNavigateToJoinByBluetooth
-                    )
-                }
+                    onClick = onNavigateToJoinByBluetooth
+                )
             }
 
             item {
@@ -250,44 +223,6 @@ private fun GroupTripsContent(
         }
     }
 
-    if (uiState.showJoinByCodeSheet) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = onDismissJoinByCode,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-            ) {
-                Text(
-                    text = "Присоединиться по коду",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Введите 6-значный код приглашения. Сканирование QR появится позже — пока вставьте код вручную.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Slate600
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                JoinByCodeForm(
-                    inviteCode = uiState.inviteCode,
-                    displayName = uiState.displayName,
-                    isJoining = uiState.isJoining,
-                    error = uiState.error,
-                    onInviteCodeChange = onInviteCodeChange,
-                    onDisplayNameChange = onDisplayNameChange,
-                    onJoin = onJoin
-                )
-            }
-        }
-    }
 }
 
 @Composable
@@ -723,73 +658,6 @@ private fun InviteCodePill(
     }
 }
 
-@Composable
-private fun JoinByCodeForm(
-    inviteCode: String,
-    displayName: String,
-    isJoining: Boolean,
-    error: String?,
-    onInviteCodeChange: (String) -> Unit,
-    onDisplayNameChange: (String) -> Unit,
-    onJoin: () -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = inviteCode,
-            onValueChange = onInviteCodeChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Код приглашения") },
-            placeholder = { Text("Например: A1B2C3", color = Slate500) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Rounded.Keyboard,
-                    contentDescription = null,
-                    tint = Slate500
-                )
-            },
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = displayName,
-            onValueChange = onDisplayNameChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Ваше имя") },
-            placeholder = { Text("Например: Стас", color = Slate500) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Rounded.Person,
-                    contentDescription = null,
-                    tint = Slate500
-                )
-            },
-            singleLine = true
-        )
-
-        error?.let { message ->
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = Error
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        TrilooButton(
-            text = "Присоединиться",
-            onClick = onJoin,
-            enabled = inviteCode.isNotBlank() && displayName.isNotBlank(),
-            isLoading = isJoining,
-            icon = Icons.Rounded.Login,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
 private fun pluralizeActiveTrips(count: Int): String {
     val rem10 = count % 10
     val rem100 = count % 100
@@ -906,12 +774,7 @@ private fun GroupTripsScreenPreview() {
             groupTrips = summaries,
             onNavigateBack = {},
             onNavigateToTrip = {},
-            onOpenJoinByCode = {},
-            onDismissJoinByCode = {},
             onNavigateToJoinByBluetooth = {},
-            onInviteCodeChange = {},
-            onDisplayNameChange = {},
-            onJoin = {},
             onFilterChange = {}
         )
     }
