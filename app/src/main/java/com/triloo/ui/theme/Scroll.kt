@@ -1,47 +1,26 @@
 package com.triloo.ui.theme
 
-import androidx.compose.animation.core.AnimationState
-import androidx.compose.animation.core.DecayAnimationSpec
-import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.gestures.FlingBehavior
-import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import kotlin.math.abs
 
 /**
- * Более «инерционный» fling для скроллируемых списков и форм: дефолтный
- * spline-decay Compose ощущается обрывистым — короткий свайп почти не
- * уносит. Используем экспоненциальную кривую с пониженным трением и
- * слегка усиливаем initial velocity, чтобы даже лёгкий жест давал
- * заметный «доезд», ближе к iOS-ощущению.
+ * Fling-поведение для скроллируемых списков и форм приложения.
+ *
+ * Сейчас — платформенный сплайновый decay ([ScrollableDefaults.flingBehavior]).
+ * Ранее здесь жил кастомный exponentialDecay(friction 0.32) с бустом начальной
+ * скорости ×1.45 «под iOS», но на 90Hz-экранах он давал два артефакта:
+ *   1. Скачок скорости в момент отпускания пальца (+45% мгновенно) —
+ *      пролистывание начиналось заметным рывком.
+ *   2. Экспоненциальный хвост гаснет асимптотически: последние секунды список
+ *      полз сабпиксельными шагами (~1px раз в несколько кадров) — выглядело
+ *      как подёргивание/лаг в конце броска, и анимация впустую жгла кадры
+ *      ещё ~8 секунд после визуальной остановки.
+ * Сплайновый decay Android лишён обоих: скорость непрерывна на старте,
+ * остановка детерминированная и быстрая.
+ *
+ * Функция оставлена как единая точка тюнинга: если ощущение инерции снова
+ * захочется менять — правка в одном месте на все экраны.
  */
 @Composable
-fun trilooFlingBehavior(): FlingBehavior {
-    val flingDecay = remember { exponentialDecay<Float>(frictionMultiplier = 0.32f) }
-    return remember(flingDecay) {
-        TrilooFlingBehavior(flingDecay = flingDecay, velocityMultiplier = 1.45f)
-    }
-}
-
-private class TrilooFlingBehavior(
-    private val flingDecay: DecayAnimationSpec<Float>,
-    private val velocityMultiplier: Float
-) : FlingBehavior {
-    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
-        if (abs(initialVelocity) <= 1f) return initialVelocity
-        val boostedVelocity = initialVelocity * velocityMultiplier
-        var velocityLeft = boostedVelocity
-        var lastValue = 0f
-        AnimationState(initialValue = 0f, initialVelocity = boostedVelocity)
-            .animateDecay(flingDecay) {
-                val delta = value - lastValue
-                val consumed = scrollBy(delta)
-                lastValue = value
-                velocityLeft = this.velocity
-                if (abs(delta - consumed) > 0.5f) cancelAnimation()
-            }
-        return velocityLeft
-    }
-}
+fun trilooFlingBehavior(): FlingBehavior = ScrollableDefaults.flingBehavior()
