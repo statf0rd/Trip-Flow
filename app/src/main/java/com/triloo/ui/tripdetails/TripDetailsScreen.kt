@@ -228,8 +228,6 @@ fun TripDetailsScreen(
                             selectedTravelMode = uiState.selectedTravelMode,
                             selectedPlanningMode = uiState.selectedPlanningMode,
                             suggestedTravelMode = uiState.suggestedTravelMode,
-                            routePlanningSummary = uiState.routePlanningSummary,
-                            routePlanningSource = uiState.routePlanningSource,
                             locationPermissionGranted = hasLocationPermission,
                             showLocationSharingPrompt = uiState.trip!!.isGroupTrip && !hasLocationPermission,
                             locationSharingActive = uiState.isLocationSharingActive,

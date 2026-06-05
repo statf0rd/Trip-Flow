@@ -151,10 +151,12 @@ data class Route(
     val fareCurrency: String? = null
 )
 
-enum class TravelMode(val displayName: String, val icon: String) {
-    WALKING("Пешком", "🚶"),
-    DRIVING("На машине", "🚗"),
-    TRANSIT("Общ. транспорт", "🚇"),
-    BICYCLING("На велосипеде", "🚴")
+// Иконки режимов живут в UI-слое (travelModeIcon в TripDetailsTabs) —
+// модель знает только человекочитаемое имя.
+enum class TravelMode(val displayName: String) {
+    WALKING("Пешком"),
+    DRIVING("На машине"),
+    TRANSIT("Общ. транспорт"),
+    BICYCLING("На велосипеде")
 }
 

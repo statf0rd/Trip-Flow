@@ -37,7 +37,6 @@ import com.triloo.data.heatmap.HeatmapConfig
 import com.triloo.data.model.*
 import com.triloo.data.route.LatLng
 import com.triloo.data.route.PlaceRecommendation
-import com.triloo.data.route.RoutePlanSource
 import com.triloo.data.route.RouteDetails
 import com.triloo.data.route.RoutePlanningMode
 import com.triloo.feature.map.MapCoordinate
@@ -924,8 +923,6 @@ fun MapTab(
     selectedTravelMode: TravelMode = TravelMode.WALKING,
     selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
     suggestedTravelMode: TravelMode? = null,
-    routePlanningSummary: String? = null,
-    routePlanningSource: RoutePlanSource? = null,
     locationPermissionGranted: Boolean = false,
     showLocationSharingPrompt: Boolean = false,
     locationSharingActive: Boolean = false,
@@ -1371,8 +1368,6 @@ fun MapTab(
                     selectedMode = selectedTravelMode,
                     suggestedMode = suggestedTravelMode,
                     routeDetails = routeDetails,
-                    summary = routePlanningSummary,
-                    source = routePlanningSource,
                     onModeSelected = onTravelModeSelected,
                     onApplySuggested = onApplySuggestedTravelMode
                 )
@@ -1560,58 +1555,28 @@ private fun PlanningModeSelector(
     }
 }
 
-@Composable
-private fun TravelModeSelector(
-    selectedMode: TravelMode,
-    onTravelModeSelected: (TravelMode) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.widthIn(max = 420.dp)
-        ) {
-            items(TravelMode.entries.toList()) { mode ->
-                FilterChip(
-                    selected = mode == selectedMode,
-                    onClick = { onTravelModeSelected(mode) },
-                    label = { Text("${mode.icon} ${mode.displayName}") },
-                    leadingIcon = if (mode == selectedMode) {
-                        {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    } else {
-                        null
-                    }
-                )
-            }
-        }
-
-        if (selectedMode == TravelMode.TRANSIT) {
-            Text(
-                text = "Для общественного транспорта пока показывается оценочное время без live-маршрута.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+/**
+ * Векторные иконки режимов передвижения для панели маршрута. Раньше в модели
+ * TravelMode жили emoji-стикеры — заменены на Material-иконки, единые со
+ * остальной иконографикой приложения.
+ */
+private fun travelModeIcon(mode: TravelMode) = when (mode) {
+    TravelMode.WALKING -> Icons.Rounded.DirectionsWalk
+    TravelMode.DRIVING -> Icons.Rounded.DirectionsCar
+    TravelMode.TRANSIT -> Icons.Rounded.DirectionsBus
+    TravelMode.BICYCLING -> Icons.Rounded.DirectionsBike
 }
 
 /**
  * Нижняя панель маршрута в стиле Яндекс.Карт: горизонтальный ряд иконок
- * режимов с подписью времени, подсказка планировщика под выбранным режимом и
- * км/мин в одну строку. Заменяет старую плашку «Подсказка маршрута» сверху.
+ * режимов с подписью времени и км/мин в одну строку. Текстовая подсказка
+ * планировщика убрана — она дублировала CTA-кнопку и съедала место на карте.
  */
 @Composable
 private fun RouteModesPanel(
     selectedMode: TravelMode,
     suggestedMode: TravelMode?,
     routeDetails: RouteDetails?,
-    summary: String?,
-    source: RoutePlanSource?,
     onModeSelected: (TravelMode) -> Unit,
     onApplySuggested: () -> Unit
 ) {
@@ -1626,20 +1591,27 @@ private fun RouteModesPanel(
             modifier = Modifier.padding(vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Чипы режимов: иконка + время для текущего маршрута. Подсветка
-            // только у выбранного, остальные приглушены.
+            // Чипы режимов: векторная иконка + время для текущего маршрута.
+            // Подсветка только у выбранного, остальные приглушены.
+            // TRANSIT скрыт из выбора: live-маршрутов общественного
+            // транспорта нет, оценка по средней скорости только путала.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                TravelMode.entries.forEach { mode ->
+                TravelMode.entries.filter { it != TravelMode.TRANSIT }.forEach { mode ->
                     val isSelected = mode == selectedMode
                     val durationText = if (isSelected && routeDetails != null) {
                         formatModeDuration(routeDetails.totalDurationMinutes)
                     } else {
                         null
+                    }
+                    val accent = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     Surface(
                         modifier = Modifier
@@ -1657,18 +1629,16 @@ private fun RouteModesPanel(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Text(
-                                text = mode.icon,
-                                style = MaterialTheme.typography.titleMedium
+                            Icon(
+                                imageVector = travelModeIcon(mode),
+                                contentDescription = mode.displayName,
+                                tint = accent,
+                                modifier = Modifier.size(22.dp)
                             )
                             Text(
                                 text = durationText ?: mode.displayName,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                color = accent,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -1698,35 +1668,9 @@ private fun RouteModesPanel(
                 )
             }
 
-            // Подсказка планировщика — компактно, с указанием источника AI / эвристики.
-            if (!summary.isNullOrBlank()) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = if (source == RoutePlanSource.AI) {
-                            Icons.Rounded.AutoAwesome
-                        } else {
-                            Icons.Rounded.AltRoute
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp).padding(top = 2.dp)
-                    )
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // CTA «Включить рекомендованный режим» — только если он отличается от текущего.
-            if (suggestedMode != null && suggestedMode != selectedMode) {
+            // CTA «Включить рекомендованный режим» — только если он отличается
+            // от текущего. TRANSIT не предлагаем: режим скрыт из панели.
+            if (suggestedMode != null && suggestedMode != selectedMode && suggestedMode != TravelMode.TRANSIT) {
                 FilledTonalButton(
                     onClick = onApplySuggested,
                     modifier = Modifier
@@ -1777,123 +1721,6 @@ private fun pluralizeHours(count: Int): String {
         count % 10 == 1 -> "час"
         count % 10 in 2..4 -> "часа"
         else -> "часов"
-    }
-}
-
-@Composable
-private fun RoutePlanningCard(
-    selectedTravelMode: TravelMode,
-    suggestedTravelMode: TravelMode?,
-    summary: String,
-    source: RoutePlanSource?,
-    routeDetails: RouteDetails?,
-    onApplySuggestedTravelMode: () -> Unit
-) {
-    Surface(
-        shape = TrilooShapes.Md,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp,
-        shadowElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .widthIn(max = 360.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Шапка: иконка + короткий лейбл источника + чип «текущий режим».
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = if (source == RoutePlanSource.AI) {
-                        Icons.Rounded.AutoAwesome
-                    } else {
-                        Icons.Rounded.AltRoute
-                    },
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = when (source) {
-                        RoutePlanSource.AI -> "AI-планировщик"
-                        else -> "Подсказка маршрута"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                Surface(
-                    shape = TrilooShapes.pill,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = "${selectedTravelMode.icon} ${selectedTravelMode.displayName}",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-
-            // Краткая сводка — две строки максимум.
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Метрики маршрута (если посчитаны) — компактной строкой.
-            if (routeDetails != null) {
-                val km = routeDetails.totalDistanceMeters / 1000.0
-                Text(
-                    text = buildString {
-                        append(String.format(Locale.US, "%.1f", km))
-                        append(" км · ")
-                        append(formatModeDuration(routeDetails.totalDurationMinutes))
-                        if (routeDetails.isEstimated) {
-                            append(" · ")
-                            append(routeDetails.sourceLabel)
-                        }
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            // CTA — только когда планировщик предлагает режим, отличный от текущего.
-            if (suggestedTravelMode != null && suggestedTravelMode != selectedTravelMode) {
-                FilledTonalButton(
-                    onClick = onApplySuggestedTravelMode,
-                    modifier = Modifier.align(Alignment.End),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = TrilooShapes.pill,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Bolt,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Включить «${suggestedTravelMode.displayName}»",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
     }
 }
 
