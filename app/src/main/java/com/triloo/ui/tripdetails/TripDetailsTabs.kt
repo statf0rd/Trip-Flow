@@ -922,7 +922,6 @@ fun MapTab(
     destinationMarker: DestinationMapMarker? = null,
     selectedTravelMode: TravelMode = TravelMode.WALKING,
     selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
-    suggestedTravelMode: TravelMode? = null,
     locationPermissionGranted: Boolean = false,
     showLocationSharingPrompt: Boolean = false,
     locationSharingActive: Boolean = false,
@@ -930,7 +929,6 @@ fun MapTab(
     locationSharingError: String? = null,
     onPlanningModeSelected: (RoutePlanningMode) -> Unit = {},
     onTravelModeSelected: (TravelMode) -> Unit = {},
-    onApplySuggestedTravelMode: () -> Unit = {},
     onStartLocationSharing: () -> Unit = {},
     onStopLocationSharing: () -> Unit = {},
     onEnableLocationSharing: () -> Unit = {},
@@ -1366,10 +1364,8 @@ fun MapTab(
             if (validPlaces.size >= 2) {
                 RouteModesPanel(
                     selectedMode = selectedTravelMode,
-                    suggestedMode = suggestedTravelMode,
                     routeDetails = routeDetails,
-                    onModeSelected = onTravelModeSelected,
-                    onApplySuggested = onApplySuggestedTravelMode
+                    onModeSelected = onTravelModeSelected
                 )
             }
             if (recommendations.isNotEmpty()) {
@@ -1569,16 +1565,15 @@ private fun travelModeIcon(mode: TravelMode) = when (mode) {
 
 /**
  * Нижняя панель маршрута в стиле Яндекс.Карт: горизонтальный ряд иконок
- * режимов с подписью времени и км/мин в одну строку. Текстовая подсказка
- * планировщика убрана — она дублировала CTA-кнопку и съедала место на карте.
+ * режимов с подписью времени и км/мин в одну строку. Подсказка планировщика
+ * и CTA «Переключить на…» убраны — режим меняется только явным тапом по
+ * чипу, без рекомендаций.
  */
 @Composable
 private fun RouteModesPanel(
     selectedMode: TravelMode,
-    suggestedMode: TravelMode?,
     routeDetails: RouteDetails?,
-    onModeSelected: (TravelMode) -> Unit,
-    onApplySuggested: () -> Unit
+    onModeSelected: (TravelMode) -> Unit
 ) {
     Surface(
         shape = TrilooShapes.Md,
@@ -1668,34 +1663,6 @@ private fun RouteModesPanel(
                 )
             }
 
-            // CTA «Включить рекомендованный режим» — только если он отличается
-            // от текущего. TRANSIT не предлагаем: режим скрыт из панели.
-            if (suggestedMode != null && suggestedMode != selectedMode && suggestedMode != TravelMode.TRANSIT) {
-                FilledTonalButton(
-                    onClick = onApplySuggested,
-                    modifier = Modifier
-                        .padding(horizontal = 14.dp)
-                        .align(Alignment.End),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = TrilooShapes.pill,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Bolt,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Переключить на «${suggestedMode.displayName}»",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
         }
     }
 }

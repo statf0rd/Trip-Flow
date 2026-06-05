@@ -227,7 +227,6 @@ fun TripDetailsScreen(
                             destinationMarker = uiState.destinationMarker,
                             selectedTravelMode = uiState.selectedTravelMode,
                             selectedPlanningMode = uiState.selectedPlanningMode,
-                            suggestedTravelMode = uiState.suggestedTravelMode,
                             locationPermissionGranted = hasLocationPermission,
                             showLocationSharingPrompt = uiState.trip!!.isGroupTrip && !hasLocationPermission,
                             locationSharingActive = uiState.isLocationSharingActive,
@@ -235,7 +234,6 @@ fun TripDetailsScreen(
                             locationSharingError = uiState.locationSharingError,
                             onPlanningModeSelected = viewModel::setPlanningMode,
                             onTravelModeSelected = viewModel::setTravelMode,
-                            onApplySuggestedTravelMode = viewModel::applySuggestedTravelMode,
                             onStartLocationSharing = {
                                 if (hasLocationPermission) {
                                     viewModel.startLocationSharing()

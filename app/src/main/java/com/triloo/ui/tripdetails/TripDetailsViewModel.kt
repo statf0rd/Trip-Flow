@@ -11,7 +11,6 @@ import com.triloo.data.places.PlacesService
 import com.triloo.data.route.LatLng
 import com.triloo.data.route.PlaceRecommendation
 import com.triloo.data.route.RouteDetails
-import com.triloo.data.route.RoutePlanSource
 import com.triloo.data.route.RoutePlanSuggestion
 import com.triloo.data.route.RoutePlanningAssistant
 import com.triloo.data.route.RoutePlanningMode
@@ -235,18 +234,14 @@ class TripDetailsViewModel @Inject constructor(
         combine(
             routeState,
             recommendationState,
-            planningSuggestionState,
             _selectedTravelMode,
             _selectedPlanningMode
-        ) { routeDetails, recommendations, planningSuggestion, travelMode, planningMode ->
+        ) { routeDetails, recommendations, travelMode, planningMode ->
             MapUiState(
                 routeDetails = routeDetails,
                 recommendations = recommendations,
                 selectedTravelMode = travelMode,
-                selectedPlanningMode = planningMode,
-                suggestedTravelMode = planningSuggestion?.suggestedTravelMode,
-                routePlanningSummary = planningSuggestion?.summary,
-                routePlanningSource = planningSuggestion?.source
+                selectedPlanningMode = planningMode
             )
         },
         destinationMarkerState,
@@ -280,9 +275,6 @@ class TripDetailsViewModel @Inject constructor(
                 destinationMarker = map.destinationMarker,
                 selectedTravelMode = map.selectedTravelMode,
                 selectedPlanningMode = map.selectedPlanningMode,
-                suggestedTravelMode = map.suggestedTravelMode,
-                routePlanningSummary = map.routePlanningSummary,
-                routePlanningSource = map.routePlanningSource,
                 isLocationSharingActive = map.isLocationSharingActive,
                 locationSharingStatus = map.locationSharingStatus,
                 locationSharingError = map.locationSharingError
@@ -304,9 +296,6 @@ class TripDetailsViewModel @Inject constructor(
             destinationMarker = partial.destinationMarker,
             selectedTravelMode = partial.selectedTravelMode,
             selectedPlanningMode = partial.selectedPlanningMode,
-            suggestedTravelMode = partial.suggestedTravelMode,
-            routePlanningSummary = partial.routePlanningSummary,
-            routePlanningSource = partial.routePlanningSource,
             isLocationSharingActive = partial.isLocationSharingActive,
             locationSharingStatus = partial.locationSharingStatus,
             locationSharingError = partial.locationSharingError,
@@ -462,12 +451,6 @@ class TripDetailsViewModel @Inject constructor(
 
     fun setTravelMode(mode: TravelMode) {
         _selectedTravelMode.value = mode
-    }
-
-    fun applySuggestedTravelMode() {
-        planningSuggestionState.value?.suggestedTravelMode?.let { suggestion ->
-            _selectedTravelMode.value = suggestion
-        }
     }
 
     fun startLocationSharing() {
@@ -643,9 +626,6 @@ private data class MapUiState(
     val destinationMarker: DestinationMapMarker? = null,
     val selectedTravelMode: TravelMode = TravelMode.WALKING,
     val selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
-    val suggestedTravelMode: TravelMode? = null,
-    val routePlanningSummary: String? = null,
-    val routePlanningSource: RoutePlanSource? = null,
     val isLocationSharingActive: Boolean = false,
     val locationSharingStatus: String? = null,
     val locationSharingError: String? = null
@@ -664,9 +644,6 @@ data class TripDetailsUiState(
     val destinationMarker: DestinationMapMarker? = null,
     val selectedTravelMode: TravelMode = TravelMode.WALKING,
     val selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
-    val suggestedTravelMode: TravelMode? = null,
-    val routePlanningSummary: String? = null,
-    val routePlanningSource: RoutePlanSource? = null,
     val isLocationSharingActive: Boolean = false,
     val locationSharingStatus: String? = null,
     val locationSharingError: String? = null,
@@ -688,9 +665,6 @@ private data class PartialTripDetailsUiState(
     val destinationMarker: DestinationMapMarker? = null,
     val selectedTravelMode: TravelMode = TravelMode.WALKING,
     val selectedPlanningMode: RoutePlanningMode = RoutePlanningMode.CLASSIC,
-    val suggestedTravelMode: TravelMode? = null,
-    val routePlanningSummary: String? = null,
-    val routePlanningSource: RoutePlanSource? = null,
     val isLocationSharingActive: Boolean = false,
     val locationSharingStatus: String? = null,
     val locationSharingError: String? = null
