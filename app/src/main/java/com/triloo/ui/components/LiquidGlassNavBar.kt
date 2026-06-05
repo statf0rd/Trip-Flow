@@ -117,22 +117,18 @@ fun LiquidGlassNavBar(
             .fillMaxWidth()
             .padding(horizontal = 14.dp)
             .height(70.dp)
-            // Drop-shadow по HTML — две тени стопкой:
-            //   1. `0 22px 50px black@55%` — большая глубокая тень снизу
-            //   2. `0 4px 14px black@35%`  — тонкая ближняя тень
-            // В Compose это две `Modifier.shadow` подряд; шейп задаём
-            // одинаковый, чтобы обе тени совпадали по контуру с баром.
+            // Drop-shadow: в HTML-мокапе были две тени стопкой (22px/50px +
+            // 4px/14px), и раньше они повторялись двумя Modifier.shadow.
+            // Каждый .shadow — отдельный RenderNode с тенью, которую HWUI
+            // пере-растеризует КАЖДЫЙ кадр скролла (бар перекрывает
+            // двигающийся список → всегда в damage-области). На 90Hz две
+            // стопочные тени заметно били по RenderThread — сведено к одной
+            // средней тени, визуально близкой к сумме.
             .shadow(
-                elevation = 32.dp,
+                elevation = 16.dp,
                 shape = barShape,
-                ambientColor = Color.Black.copy(alpha = 0.55f),
-                spotColor = Color.Black.copy(alpha = 0.55f)
-            )
-            .shadow(
-                elevation = 8.dp,
-                shape = barShape,
-                ambientColor = Color.Black.copy(alpha = 0.35f),
-                spotColor = Color.Black.copy(alpha = 0.35f)
+                ambientColor = Color.Black.copy(alpha = 0.5f),
+                spotColor = Color.Black.copy(alpha = 0.5f)
             )
             .clip(barShape)
             .then(
@@ -246,12 +242,10 @@ fun LiquidGlassNavBar(
                 .graphicsLayer { translationX = pillOffsetX.toPx() }
                 .width(tabSlotWidth)
                 .height(58.dp)
-                .shadow(
-                    elevation = 14.dp,
-                    shape = pillShape,
-                    ambientColor = Color.White.copy(alpha = 0.18f),
-                    spotColor = Color.White.copy(alpha = 0.18f)
-                )
+                // Из HTML-стопки убран отдельный white-glow shadow (14dp,
+                // white 18%) — на тёмном стекле он почти не считывался, а
+                // лишний RenderNode с тенью растеризовался каждый кадр
+                // скролла. Остался только чёрный drop.
                 .shadow(
                     elevation = 8.dp,
                     shape = pillShape,

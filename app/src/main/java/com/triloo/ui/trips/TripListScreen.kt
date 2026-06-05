@@ -59,7 +59,11 @@ fun TripListScreen(
         // живёт в центральной FAB-кнопке нижней liquid-glass нав-панели
         // (`LiquidGlassNavBar.centerActionIcon`), а не на этом экране.
         // Иконка настроек убрана — Settings доступны как четвёртый таб бара.
-        containerColor = MaterialTheme.colorScheme.background
+        //
+        // Transparent вместо background: корневой Surface в MainActivity уже
+        // красит фон этим же цветом — вторая полноэкранная заливка здесь
+        // удваивала overdraw на 90Hz-экране (RenderThread не влезал в 11 мс).
+        containerColor = Color.Transparent
     ) { paddingValues ->
 
         if (isLoading) {
@@ -367,7 +371,10 @@ private fun JournalPastTripCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = TrilooShapes.Md
+        shape = TrilooShapes.Md,
+        // Сцена закрывает карточку целиком — непрозрачная подложка Surface
+        // только добавляла лишний слой overdraw под градиентом.
+        color = Color.Transparent
     ) {
         Box {
             JourneySceneBackground(
@@ -467,6 +474,8 @@ private fun CurrentTripCard(
                 onLongClick = onLongClick
             ),
         shape = TrilooShapes.Lg,
+        // См. JournalPastTripCard: сцена непрозрачна, подложка не нужна.
+        color = Color.Transparent
     ) {
         Box {
             JourneySceneBackground(
@@ -641,7 +650,9 @@ private fun UpcomingTripCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = TrilooShapes.Md
+        shape = TrilooShapes.Md,
+        // См. JournalPastTripCard: сцена непрозрачна, подложка не нужна.
+        color = Color.Transparent
     ) {
         Box {
             JourneySceneBackground(

@@ -6,6 +6,11 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <!-- Окно не рисует собственный фон: корневой Compose-Surface в
+             MainActivity непрозрачен и закрывает весь экран. Дефолтный
+             светлый windowBackground у Theme.Material добавлял лишнюю
+             полноэкранную заливку каждый кадр (overdraw при скролле). -->
+        <item name="android:windowBackground">@null</item>
     </style>
 
     <!-- Splash screen theme -->
