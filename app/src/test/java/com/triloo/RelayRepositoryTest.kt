@@ -5,7 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.triloo.data.local.TrilooDatabase
 import com.triloo.data.model.DeletionLog
 import com.triloo.data.model.Expense
+import com.triloo.data.model.InvitePackage
 import com.triloo.data.model.Participant
+import com.triloo.data.model.ParticipantRole
 import com.triloo.data.model.Place
 import com.triloo.data.model.PlaceCategory
 import com.triloo.data.model.RelayEntityType
@@ -306,6 +308,261 @@ class RelayRepositoryTest {
         assertEquals(listOf("place-deleted"), relayPackage.deletions.map { it.entityId })
         assertEquals(12_000L, relayPackage.changeCursor)
         assertFalse(relayPackage.places.any { it.id == placeOld.id })
+    }
+
+    @Test
+    fun buildPackageFullIncludesAllEntities() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val place = samplePlace("place-full", trip.id, day.id, "Пантеон", updatedAt = 5_000)
+        val expense = sampleExpense("exp-full", trip.id, updatedAt = 5_000)
+        database.tripDao().insertTrip(trip)
+        database.tripDao().insertParticipant(
+            Participant(tripId = trip.id, userId = "owner", displayName = "Owner", updatedAt = 5_000)
+        )
+        database.placeDao().insertTripDay(day)
+        database.placeDao().insertPlace(place)
+        database.expenseDao().insertExpense(expense)
+        database.expenseDao().insertExpenseSplits(
+            listOf(
+                com.triloo.data.model.ExpenseSplit(
+                    expenseId = expense.id,
+                    userId = "owner",
+                    userName = "Owner",
+                    shareAmount = 10.0,
+                    shareAmountInBaseCurrency = 10.0
+                )
+            )
+        )
+        database.deletionLogDao().insertDeletion(
+            DeletionLog(
+                tripId = trip.id,
+                entityType = RelayEntityType.PLACE,
+                entityId = "ghost",
+                deletedAt = 6_000,
+                deviceId = "dev"
+            )
+        )
+
+        val pkg = repository.buildPackage(trip.id)!!
+
+        // Полный (не-delta) пакет: курсора нет, попадают все сущности.
+        assertFalse(pkg.isDelta)
+        assertNull(pkg.baseCursor)
+        assertEquals(listOf("place-full"), pkg.places.map { it.id })
+        assertEquals(listOf("exp-full"), pkg.expenses.map { it.id })
+        assertEquals(listOf("exp-full"), pkg.expenseSplits.map { it.expenseId })
+        assertEquals(listOf("owner"), pkg.participants.map { it.userId })
+        assertEquals(listOf("ghost"), pkg.deletions.map { it.entityId })
+    }
+
+    @Test
+    fun encodeAndDecodePackageRoundTrip() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val place = samplePlace("place-rt", trip.id, day.id, "Колизей", updatedAt = 5_000)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(day)
+        database.placeDao().insertPlace(place)
+
+        val original = repository.buildPackage(trip.id)
+        assertNotNull(original)
+
+        val decoded = repository.decodePackage(repository.encodePackage(original!!))
+
+        assertEquals(original.trip.id, decoded.trip.id)
+        assertEquals(original.places.map { it.id }, decoded.places.map { it.id })
+        // Кастомные Gson-адаптеры LocalDate должны корректно round-trip'иться.
+        assertEquals(trip.startDate, decoded.trip.startDate)
+    }
+
+    @Test
+    fun encodeAndDecodeInviteRoundTrip() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val place = samplePlace("place-inv", trip.id, day.id, "Форум", updatedAt = 5_000)
+        database.tripDao().insertTrip(trip)
+        database.tripDao().insertParticipant(
+            Participant(tripId = trip.id, userId = "owner", displayName = "Owner", updatedAt = 5_000)
+        )
+        database.placeDao().insertTripDay(day)
+        database.placeDao().insertPlace(place)
+
+        val invite = repository.buildInvitePackage(trip.id)
+        assertNotNull(invite)
+
+        val decoded = repository.decodeInvite(repository.encodeInvite(invite!!))
+
+        assertEquals(trip.id, decoded.trip.id)
+        assertEquals(listOf("owner"), decoded.participants.map { it.userId })
+        assertEquals(listOf(place.id), decoded.places.map { it.id })
+    }
+
+    @Test
+    fun mergeInvitePackageInsertsTripData() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val place = samplePlace("place-mi", trip.id, day.id, "Ватикан", updatedAt = 5_000)
+        val invite = InvitePackage(
+            createdAt = 5_000,
+            deviceId = "remote",
+            trip = trip,
+            participants = listOf(
+                Participant(tripId = trip.id, userId = "owner", displayName = "Owner", updatedAt = 5_000)
+            ),
+            tripDays = listOf(day),
+            places = listOf(place)
+        )
+
+        val result = repository.mergeInvitePackage(invite)
+
+        // trip + participant + day + place.
+        assertTrue(result.inserted >= 4)
+        assertEquals(0, result.deleted)
+        assertNotNull(database.tripDao().getTripById(trip.id))
+        assertNotNull(database.placeDao().getPlaceById(place.id))
+    }
+
+    @Test
+    fun mergeAppliesTripDeletion() = runBlocking {
+        val trip = sampleTrip()
+        database.tripDao().insertTrip(trip)
+        database.tripDao().insertParticipant(
+            Participant(tripId = trip.id, userId = "owner", displayName = "Owner", updatedAt = 1_000)
+        )
+
+        val pkg = relayPackageOf(
+            trip = trip,
+            deletions = listOf(
+                DeletionLog(
+                    tripId = trip.id,
+                    entityType = RelayEntityType.TRIP,
+                    entityId = trip.id,
+                    deletedAt = 9_000,
+                    deviceId = "remote"
+                )
+            )
+        )
+
+        val result = repository.mergePackage(pkg)
+
+        assertEquals(1, result.deleted)
+        assertNull(database.tripDao().getTripById(trip.id))
+    }
+
+    @Test
+    fun mergeAppliesDeletionsForDayParticipantAndExpense() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val expense = sampleExpense("exp-del", trip.id, updatedAt = 1_000)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(day)
+        database.tripDao().insertParticipant(
+            Participant(tripId = trip.id, userId = "victim", displayName = "Victim", updatedAt = 1_000)
+        )
+        database.expenseDao().insertExpense(expense)
+
+        val pkg = relayPackageOf(
+            trip = trip,
+            deletions = listOf(
+                DeletionLog(tripId = trip.id, entityType = RelayEntityType.TRIP_DAY, entityId = day.id, deletedAt = 9_000, deviceId = "remote"),
+                DeletionLog(tripId = trip.id, entityType = RelayEntityType.PARTICIPANT, entityId = "victim", deletedAt = 9_000, deviceId = "remote"),
+                DeletionLog(tripId = trip.id, entityType = RelayEntityType.EXPENSE, entityId = expense.id, deletedAt = 9_000, deviceId = "remote")
+            )
+        )
+
+        val result = repository.mergePackage(pkg)
+
+        assertEquals(3, result.deleted)
+        assertNull(database.placeDao().getTripDayById(day.id))
+        assertNull(database.tripDao().getParticipant(trip.id, "victim"))
+        assertNull(database.expenseDao().getExpenseById(expense.id))
+    }
+
+    @Test
+    fun mergeUpdatesExistingEntitiesWhenRemoteNewer() = runBlocking {
+        val trip = sampleTrip()
+        val day = sampleDay(trip.id)
+        val place = samplePlace("place-upd", trip.id, day.id, "Старое имя", updatedAt = 1_000)
+        val expense = sampleExpense("exp-upd", trip.id, updatedAt = 1_000)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(day)
+        database.placeDao().insertPlace(place)
+        database.expenseDao().insertExpense(expense)
+
+        val pkg = relayPackageOf(
+            trip = trip,
+            places = listOf(place.copy(name = "Новое имя", updatedAt = 9_000)),
+            expenses = listOf(expense.copy(description = "Обновлён", updatedAt = 9_000))
+        )
+
+        val result = repository.mergePackage(pkg)
+
+        assertTrue(result.updated >= 2)
+        assertEquals("Новое имя", database.placeDao().getPlaceById(place.id)?.name)
+        assertEquals("Обновлён", database.expenseDao().getExpenseById(expense.id)?.description)
+    }
+
+    @Test
+    fun upsertParticipantFromRelayInsertsUpdatesAndGuards() = runBlocking {
+        val trip = sampleTrip()
+        database.tripDao().insertTrip(trip)
+
+        // Пустые id игнорируются.
+        assertFalse(repository.upsertParticipantFromRelay("", "u", "Name"))
+        assertFalse(repository.upsertParticipantFromRelay(trip.id, "", "Name"))
+
+        // Новый участник вставляется с указанной ролью.
+        assertTrue(repository.upsertParticipantFromRelay(trip.id, "guest", "Guest", ParticipantRole.MEMBER))
+        val inserted = database.tripDao().getParticipant(trip.id, "guest")!!
+        assertEquals("Guest", inserted.displayName)
+        assertEquals(ParticipantRole.MEMBER, inserted.role)
+
+        // Тот же displayName -> изменений нет.
+        assertFalse(repository.upsertParticipantFromRelay(trip.id, "guest", "Guest"))
+
+        // Новый displayName -> обновляется имя, но роль НЕ перезаписывается (см. KDoc метода).
+        assertTrue(repository.upsertParticipantFromRelay(trip.id, "guest", "Renamed", ParticipantRole.OWNER))
+        val updated = database.tripDao().getParticipant(trip.id, "guest")!!
+        assertEquals("Renamed", updated.displayName)
+        assertEquals(ParticipantRole.MEMBER, updated.role)
+    }
+
+    private fun sampleExpense(id: String, tripId: String, updatedAt: Long): Expense {
+        return Expense(
+            id = id,
+            tripId = tripId,
+            description = "Expense",
+            amount = 10.0,
+            currency = "EUR",
+            amountInBaseCurrency = 10.0,
+            exchangeRate = 1.0,
+            exchangeRateDate = LocalDate.now(),
+            paidByUserId = "owner",
+            paidByName = "Owner",
+            splitType = SplitType.EQUAL,
+            date = LocalDate.now(),
+            updatedAt = updatedAt
+        )
+    }
+
+    private fun relayPackageOf(
+        trip: Trip,
+        places: List<Place> = emptyList(),
+        expenses: List<Expense> = emptyList(),
+        deletions: List<DeletionLog> = emptyList()
+    ): RelayPackage {
+        return RelayPackage(
+            createdAt = 9_000,
+            deviceId = "remote",
+            trip = trip,
+            participants = emptyList(),
+            tripDays = emptyList(),
+            places = places,
+            expenses = expenses,
+            expenseSplits = emptyList(),
+            deletions = deletions
+        )
     }
 
     private fun sampleTrip(): Trip {

@@ -2,32 +2,30 @@ package com.triloo
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.triloo.data.local.TrilooDatabase
 import com.triloo.data.auth.ServerSessionRepository
+import com.triloo.data.local.TrilooDatabase
 import com.triloo.data.model.Expense
 import com.triloo.data.model.ExpenseCategory
 import com.triloo.data.model.Participant
-import com.triloo.data.model.Place
+import com.triloo.data.model.RelayEntityType
 import com.triloo.data.model.SplitType
 import com.triloo.data.model.Trip
 import com.triloo.data.model.TripDay
-import com.triloo.data.remote.BackendTripApi
+import com.triloo.data.relay.RelayRepository
 import com.triloo.data.remote.CurrencyApi
 import com.triloo.data.remote.CurrencyRatesResponse
-import com.triloo.data.remote.JoinByInviteRequest
-import com.triloo.data.remote.JoinByInviteResponse
-import com.triloo.data.remote.OnlineSyncApi
-import com.triloo.data.remote.SyncPullResponse
-import com.triloo.data.remote.SyncPushResponse
-import com.triloo.data.relay.RelayRepository
 import com.triloo.data.repository.ExpenseRepository
 import com.triloo.data.settings.AppSettingsRepository
 import com.triloo.data.sync.OnlineSyncRepository
 import com.triloo.data.user.UserProfileRepository
 import java.time.LocalDate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +37,7 @@ class ExpenseRepositoryTest {
 
     private lateinit var database: TrilooDatabase
     private lateinit var repository: ExpenseRepository
+    private lateinit var currencyApi: StubCurrencyApi
 
     @Before
     fun setUp() {
@@ -70,12 +69,13 @@ class ExpenseRepositoryTest {
             appSettingsRepository = AppSettingsRepository(context),
             tripDao = database.tripDao()
         )
+        currencyApi = StubCurrencyApi()
         repository = ExpenseRepository(
             expenseDao = database.expenseDao(),
             tripDao = database.tripDao(),
             deletionLogDao = database.deletionLogDao(),
             userProfileRepository = userProfileRepository,
-            currencyApi = StubCurrencyApi(),
+            currencyApi = currencyApi,
             onlineSyncRepository = onlineSyncRepository
         )
     }
@@ -187,9 +187,169 @@ class ExpenseRepositoryTest {
         assertEquals(20.0, byFrom["bob"] ?: 0.0, 0.01)
     }
 
-    private fun sampleTrip(): Trip {
+    @Test
+    fun addExpenseStoresExpenseAndEqualSplits() = runBlocking {
+        val trip = insertGroupTrip()
+        val expense = sampleExpense(trip.id, amount = 100.0)
+
+        repository.addExpense(expense)
+
+        assertNotNull(repository.getExpenseById(expense.id))
+        assertEquals(1, repository.getExpensesByTrip(trip.id).size)
+        val splits = database.expenseDao().getSplitsForExpense(expense.id)
+        assertEquals(2, splits.size)
+        assertTrue(splits.all { it.shareAmount == 50.0 })
+    }
+
+    @Test
+    fun updateExpenseRebuildsSplits() = runBlocking {
+        val trip = insertGroupTrip()
+        val expense = sampleExpense(trip.id, amount = 100.0)
+        repository.addExpense(expense)
+
+        repository.updateExpense(expense.copy(amount = 60.0, amountInBaseCurrency = 60.0))
+
+        val splits = database.expenseDao().getSplitsForExpense(expense.id)
+        assertEquals(2, splits.size)
+        assertTrue(splits.all { it.shareAmount == 30.0 })
+    }
+
+    @Test
+    fun deleteExpenseRemovesSplitsAndLogsDeletion() = runBlocking {
+        val trip = insertGroupTrip()
+        val expense = sampleExpense(trip.id)
+        repository.addExpense(expense)
+
+        repository.deleteExpense(expense.id)
+
+        assertNull(repository.getExpenseById(expense.id))
+        assertTrue(database.expenseDao().getSplitsForExpense(expense.id).isEmpty())
+        val deletions = database.deletionLogDao().getDeletionsForTrip(trip.id)
+        assertTrue(deletions.any { it.entityId == expense.id && it.entityType == RelayEntityType.EXPENSE })
+    }
+
+    @Test
+    fun exactSplitUsesProvidedAmounts() = runBlocking {
+        val trip = insertGroupTrip()
+        val expense = sampleExpense(
+            trip.id,
+            amount = 100.0,
+            splitType = SplitType.EXACT,
+            splitAmounts = mapOf("alice" to 70.0, "bob" to 30.0)
+        )
+
+        repository.addExpense(expense)
+
+        val splits = database.expenseDao().getSplitsForExpense(expense.id)
+            .associate { it.userId to it.shareAmount }
+        assertEquals(70.0, splits["alice"] ?: 0.0, 0.001)
+        assertEquals(30.0, splits["bob"] ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun payerOnlyExpenseHasNoSplits() = runBlocking {
+        val trip = insertGroupTrip()
+        val expense = sampleExpense(trip.id, splitType = SplitType.PAYER_ONLY)
+
+        repository.addExpense(expense)
+
+        assertTrue(database.expenseDao().getSplitsForExpense(expense.id).isEmpty())
+    }
+
+    @Test
+    fun expenseSummaryAggregatesTotalsCategoriesAndPeople() = runBlocking {
+        val trip = insertGroupTrip()
+        repository.addExpense(
+            sampleExpense(trip.id, amount = 100.0, paidBy = "alice" to "Alice", category = ExpenseCategory.FOOD)
+        )
+        repository.addExpense(
+            sampleExpense(trip.id, amount = 50.0, paidBy = "bob" to "Bob", category = ExpenseCategory.TRANSPORT)
+        )
+
+        val summary = repository.getExpenseSummary(trip.id)!!
+        assertEquals(150.0, summary.totalAmount, 0.001)
+        assertEquals(100.0, summary.byCategory[ExpenseCategory.FOOD] ?: 0.0, 0.001)
+        assertEquals(50.0, summary.byCategory[ExpenseCategory.TRANSPORT] ?: 0.0, 0.001)
+        assertEquals(100.0, summary.byPerson["alice"] ?: 0.0, 0.001)
+        assertEquals(50.0, summary.byPerson["bob"] ?: 0.0, 0.001)
+        assertEquals(75.0, summary.averagePerPerson, 0.001)
+    }
+
+    @Test
+    fun expenseSummaryEmptyTripReturnsZeroes() = runBlocking {
+        val trip = insertGroupTrip()
+        val summary = repository.getExpenseSummary(trip.id)!!
+        assertEquals(0.0, summary.totalAmount, 0.001)
+        assertTrue(summary.byCategory.isEmpty())
+    }
+
+    @Test
+    fun sameCurrencyRateIsOne() = runBlocking {
+        assertEquals(1.0, repository.getOrFetchCurrencyRate("EUR", "EUR", LocalDate.now()) ?: 0.0, 0.0)
+        assertEquals(1.0, repository.getCurrencyRate("usd", "USD", LocalDate.now()) ?: 0.0, 0.0)
+    }
+
+    @Test
+    fun getOrFetchCurrencyRateFetchesThenServesFromCache() = runBlocking {
+        val date = LocalDate.now()
+        currencyApi.result = "success"
+        currencyApi.rates = mapOf("USD" to 1.1)
+
+        val first = repository.getOrFetchCurrencyRate("EUR", "USD", date)
+        assertEquals(1.1, first ?: 0.0, 0.0001)
+
+        // Меняем ответ API — повторный вызов должен вернуть закэшированное (без сети).
+        currencyApi.rates = mapOf("USD" to 9.9)
+        val second = repository.getOrFetchCurrencyRate("EUR", "USD", date)
+        assertEquals(1.1, second ?: 0.0, 0.0001)
+    }
+
+    @Test
+    fun getOrFetchCurrencyRateReturnsNullWhenApiFailsAndNoCache() = runBlocking {
+        currencyApi.result = "error"
+        currencyApi.rates = emptyMap()
+        assertNull(repository.getOrFetchCurrencyRate("EUR", "GBP", LocalDate.now()))
+    }
+
+    @Test
+    fun savedCurrencyRateIsReturnedDirectlyAndAsLatest() = runBlocking {
+        val date = LocalDate.now()
+        repository.saveCurrencyRate("EUR", "JPY", 160.0, date)
+
+        assertEquals(160.0, repository.getCurrencyRate("EUR", "JPY", date) ?: 0.0, 0.0001)
+        // Точного курса на другую дату нет — берётся последний известный.
+        assertEquals(160.0, repository.getCurrencyRate("EUR", "JPY", date.plusDays(3)) ?: 0.0, 0.0001)
+    }
+
+    @Test
+    fun observeExpensesAndTotalEmitCurrentData() = runBlocking {
+        val trip = insertGroupTrip()
+        repository.addExpense(sampleExpense(trip.id, amount = 100.0))
+        repository.addExpense(sampleExpense(trip.id, amount = 50.0))
+
+        assertEquals(2, repository.observeExpensesByTrip(trip.id).first().size)
+        assertEquals(150.0, repository.observeTotalExpenses(trip.id).first() ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun addExpenseDeniedForNonParticipant() {
+        val trip = sampleTrip("trip-noaccess")
+        runBlocking {
+            database.tripDao().insertTrip(trip)
+            database.tripDao().insertParticipant(
+                Participant(tripId = trip.id, userId = "bob", displayName = "Bob")
+            )
+        }
+        val expense = sampleExpense(trip.id)
+
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { repository.addExpense(expense) }
+        }
+    }
+
+    private fun sampleTrip(id: String = "trip-expense"): Trip {
         return Trip(
-            id = "trip-expense",
+            id = id,
             name = "Lisbon",
             destination = "Portugal",
             startDate = LocalDate.now(),
@@ -208,31 +368,49 @@ class ExpenseRepositoryTest {
         )
     }
 
+    private fun sampleExpense(
+        tripId: String,
+        amount: Double = 100.0,
+        paidBy: Pair<String, String> = "alice" to "Alice",
+        category: ExpenseCategory = ExpenseCategory.FOOD,
+        splitType: SplitType = SplitType.EQUAL,
+        splitAmounts: Map<String, Double>? = null,
+        date: LocalDate = LocalDate.now()
+    ): Expense = Expense(
+        tripId = tripId,
+        description = "expense",
+        amount = amount,
+        currency = "EUR",
+        amountInBaseCurrency = amount,
+        exchangeRate = 1.0,
+        exchangeRateDate = date,
+        category = category,
+        paidByUserId = paidBy.first,
+        paidByName = paidBy.second,
+        splitType = splitType,
+        splitAmounts = splitAmounts,
+        date = date
+    )
+
+    private suspend fun insertGroupTrip(
+        id: String = "trip-expense",
+        participants: List<Pair<String, String>> = listOf("alice" to "Alice", "bob" to "Bob")
+    ): Trip {
+        val trip = sampleTrip(id)
+        database.tripDao().insertTrip(trip)
+        database.placeDao().insertTripDay(sampleDay(trip.id, trip.startDate))
+        database.tripDao().insertParticipants(
+            participants.map { (uid, name) -> Participant(tripId = trip.id, userId = uid, displayName = name) }
+        )
+        return trip
+    }
+
     private class StubCurrencyApi : CurrencyApi {
+        var result: String = "success"
+        var rates: Map<String, Double> = emptyMap()
+
         override suspend fun latestRates(base: String): CurrencyRatesResponse {
-            return CurrencyRatesResponse(result = "success", baseCode = base, rates = emptyMap())
-        }
-    }
-
-    private class StubOnlineSyncApi : OnlineSyncApi {
-        override suspend fun push(
-            authorization: String,
-            request: com.triloo.data.remote.SyncPushRequest
-        ): SyncPushResponse {
-            return SyncPushResponse()
-        }
-
-        override suspend fun pull(authorization: String, since: Long): SyncPullResponse {
-            return SyncPullResponse()
-        }
-    }
-
-    private class StubBackendTripApi : BackendTripApi {
-        override suspend fun joinByInviteCode(
-            authorization: String,
-            request: JoinByInviteRequest
-        ): JoinByInviteResponse {
-            return JoinByInviteResponse(tripId = "trip-expense", serverUpdatedAt = 0L)
+            return CurrencyRatesResponse(result = result, baseCode = base, rates = rates)
         }
     }
 }

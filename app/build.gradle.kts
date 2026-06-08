@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.secrets.gradle)
     alias(libs.plugins.firebase.crashlytics) apply false
+    alias(libs.plugins.kover)
 }
 
 if (file("google-services.json").exists()) {
@@ -233,4 +234,34 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// Покрытие кода тестами (JetBrains Kover).
+// Отчёты: ./gradlew koverHtmlReportDebug — HTML в app/build/reports/kover/htmlDebug/index.html
+//         ./gradlew koverLogDebug       — процент покрытия в консоль
+kover {
+    reports {
+        filters {
+            // Исключаем сгенерированный/инфраструктурный код, чтобы процент
+            // отражал покрытие реальной логики, а не автогенерации.
+            excludes {
+                classes(
+                    "*.BuildConfig",
+                    "*.databinding.*",
+                    "*.di.*",                 // Hilt-модули (NetworkModule, DatabaseModule, …)
+                    "hilt_aggregated_deps.*",
+                    "dagger.hilt.*",
+                    "*_Factory",
+                    "*_Factory\$*",
+                    "*_MembersInjector",
+                    "*_HiltModules*",
+                    "*_GeneratedInjector",
+                    "*Hilt_*",                // Hilt-обёртки Activity/Application
+                    "*_Impl",                 // Room: сгенерированные DAO/БД
+                    "*_Impl\$*",
+                    "*ComposableSingletons*", // Compose: синглтоны лямбд
+                )
+            }
+        }
+    }
 }
