@@ -95,7 +95,7 @@ class PlacesService @Inject constructor(
 
         if (hasValidGeosuggestKey()) {
             val geosuggestSuggestions = runCatching {
-                searchWithGeosuggest(query)
+                searchWithGeosuggest(query, latitude, longitude)
             }.getOrDefault(emptyList())
             if (geosuggestSuggestions.isNotEmpty()) {
                 return geosuggestSuggestions.cacheSuggestions()
@@ -274,10 +274,23 @@ class PlacesService @Inject constructor(
         continuation.invokeOnCancellation { session.reset() }
     }
 
-    private suspend fun searchWithGeosuggest(query: String): List<PlaceSuggestion> {
+    private suspend fun searchWithGeosuggest(
+        query: String,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ): List<PlaceSuggestion> {
+        // ll/spn приоритизируют подсказки вокруг региона поездки: без них
+        // Geosuggest отвечает глобально и на «кафе» предлагает другие страны.
+        val ll = if (latitude != null && longitude != null) {
+            String.format(Locale.US, "%.6f,%.6f", longitude, latitude)
+        } else {
+            null
+        }
         val response = geosuggestApi.suggest(
             apiKey = BuildConfig.APP_GEOSUGGEST_API_KEY,
-            text = query
+            text = query,
+            ll = ll,
+            spn = ll?.let { "0.6,0.6" }
         )
         return buildList {
             response.results.forEach { item ->

@@ -15,7 +15,12 @@ interface GeosuggestApi {
         @Query("lang") language: String = "ru_RU",
         @Query("results") results: Int = 6,
         @Query("types") types: String = "geo,biz",
-        @Query("attrs") attrs: String = "uri"
+        @Query("attrs") attrs: String = "uri",
+        // Центр и размер окна приоритета подсказок: «lon,lat» и «dlon,dlat».
+        // Retrofit опускает null-параметры, поэтому без координат запрос
+        // остаётся глобальным.
+        @Query("ll") ll: String? = null,
+        @Query("spn") spn: String? = null
     ): GeosuggestResponse
 }
 

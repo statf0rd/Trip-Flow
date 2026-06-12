@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Login
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,13 +43,16 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,7 +112,9 @@ fun GroupTripsScreen(
         onNavigateBack = onNavigateBack,
         onNavigateToTrip = onNavigateToTrip,
         onNavigateToJoinByBluetooth = onNavigateToJoinByBluetooth,
-        onFilterChange = viewModel::setFilter
+        onFilterChange = viewModel::setFilter,
+        onJoinByCode = viewModel::joinByInviteCode,
+        onJoinDismiss = viewModel::consumeJoinResult
     )
 }
 
@@ -120,9 +126,22 @@ private fun GroupTripsContent(
     onNavigateBack: () -> Unit,
     onNavigateToTrip: (String) -> Unit,
     onNavigateToJoinByBluetooth: () -> Unit,
-    onFilterChange: (TripFilter) -> Unit
+    onFilterChange: (TripFilter) -> Unit,
+    onJoinByCode: (String) -> Unit = {},
+    onJoinDismiss: () -> Unit = {}
 ) {
     val today = remember { LocalDate.now() }
+    var joinDialogVisible by remember { mutableStateOf(false) }
+
+    // Успешный вход по коду: закрываем диалог и открываем поездку.
+    LaunchedEffect(uiState.joinedTripId) {
+        val joinedTripId = uiState.joinedTripId
+        if (joinedTripId != null) {
+            joinDialogVisible = false
+            onJoinDismiss()
+            onNavigateToTrip(joinedTripId)
+        }
+    }
     val filtered = remember(groupTrips, uiState.filter) {
         groupTrips.filter { summary ->
             when (uiState.filter) {
@@ -184,17 +203,27 @@ private fun GroupTripsContent(
             }
 
             item {
-                // Единственный способ присоединиться к чужой поездке —
-                // Bluetooth (Relay). Карточка «По коду или QR» удалена:
-                // такой фичи нет и не будет.
-                JoinActionCard(
-                    title = "По Bluetooth",
-                    subtitle = "Без интернета",
-                    icon = Icons.Rounded.Bluetooth,
-                    accent = TealSecondary,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onNavigateToJoinByBluetooth
-                )
+                // Два способа присоединиться к чужой поездке: удалённо —
+                // по 6-символьному коду приглашения через backend, рядом —
+                // по Bluetooth (Relay) без интернета.
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    JoinActionCard(
+                        title = "По коду",
+                        subtitle = "Через интернет",
+                        icon = Icons.Rounded.Keyboard,
+                        accent = CoralPrimary,
+                        modifier = Modifier.weight(1f),
+                        onClick = { joinDialogVisible = true }
+                    )
+                    JoinActionCard(
+                        title = "По Bluetooth",
+                        subtitle = "Без интернета",
+                        icon = Icons.Rounded.Bluetooth,
+                        accent = TealSecondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToJoinByBluetooth
+                    )
+                }
             }
 
             item {
@@ -223,6 +252,71 @@ private fun GroupTripsContent(
         }
     }
 
+    if (joinDialogVisible) {
+        JoinByCodeDialog(
+            inProgress = uiState.joinInProgress,
+            error = uiState.joinError,
+            onDismiss = {
+                joinDialogVisible = false
+                onJoinDismiss()
+            },
+            onSubmit = onJoinByCode
+        )
+    }
+}
+
+@Composable
+private fun JoinByCodeDialog(
+    inProgress: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit
+) {
+    var code by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!inProgress) onDismiss() },
+        title = { Text("Присоединиться по коду") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Введите 6-символьный код приглашения, который дал владелец поездки.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Slate600
+                )
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { input ->
+                        code = input.uppercase().filter { it.isLetterOrDigit() }.take(6)
+                    },
+                    singleLine = true,
+                    enabled = !inProgress,
+                    isError = error != null,
+                    placeholder = { Text("Например, 9Y66G6") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSubmit(code) },
+                enabled = !inProgress && code.length == 6
+            ) {
+                Text(if (inProgress) "Подключение…" else "Войти")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !inProgress) {
+                Text("Отмена")
+            }
+        }
+    )
 }
 
 @Composable

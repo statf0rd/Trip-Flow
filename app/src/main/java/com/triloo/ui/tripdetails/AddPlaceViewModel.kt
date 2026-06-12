@@ -86,15 +86,18 @@ class AddPlaceViewModel @Inject constructor(
 
             // Координаты направления поездки нужны и для центрирования карты,
             // и для bias-поиска подсказок: пользователь добавляет места внутри
-            // конкретного города, не из Москвы.
+            // конкретного города, не из Москвы. У поездки, созданной с текстовым
+            // направлением, координат направления нет, поэтому каскад фолбэков:
+            // направление → отель → центр уже добавленных мест → геокодирование
+            // текстового направления.
             val trip = tripRepository.getTripById(tripId)
-            if (trip?.destinationLatitude != null && trip.destinationLongitude != null) {
-                _uiState.update { state ->
-                    state.copy(
-                        tripDestinationLatitude = trip.destinationLatitude,
-                        tripDestinationLongitude = trip.destinationLongitude
-                    )
-                }
+            var biasLatitude = trip?.destinationLatitude
+            var biasLongitude = trip?.destinationLongitude
+            if ((biasLatitude == null || biasLongitude == null) &&
+                trip?.hotelLatitude != null && trip.hotelLongitude != null
+            ) {
+                biasLatitude = trip.hotelLatitude
+                biasLongitude = trip.hotelLongitude
             }
 
             // Уже добавленные точки всей поездки — для контекстных маркеров
@@ -111,6 +114,32 @@ class AddPlaceViewModel @Inject constructor(
                         .map { ExistingTripPlace(it.id, it.name, it.latitude, it.longitude) }
                         .toList()
                 )
+            }
+
+            if (biasLatitude == null || biasLongitude == null) {
+                val anchors = tripPlaces.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                if (anchors.isNotEmpty()) {
+                    biasLatitude = anchors.map { it.latitude }.average()
+                    biasLongitude = anchors.map { it.longitude }.average()
+                }
+            }
+            val destinationQuery = trip?.destination.orEmpty()
+            if ((biasLatitude == null || biasLongitude == null) && destinationQuery.isNotBlank()) {
+                val hit = runCatching { placesService.searchPlaces(destinationQuery) }
+                    .getOrDefault(emptyList())
+                    .firstOrNull()
+                if (hit != null) {
+                    biasLatitude = hit.latitude
+                    biasLongitude = hit.longitude
+                }
+            }
+            if (biasLatitude != null && biasLongitude != null) {
+                _uiState.update { state ->
+                    state.copy(
+                        tripDestinationLatitude = biasLatitude,
+                        tripDestinationLongitude = biasLongitude
+                    )
+                }
             }
 
             val existing = tripRepository.getPlacesByDay(dayId)
@@ -130,6 +159,14 @@ class AddPlaceViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(isEditing = true)
                     }
+                }
+            } else if (_uiState.value.time.isBlank()) {
+                // Для нового места подставляем следующий свободный слот дня:
+                // конец последнего запланированного места (время + длительность),
+                // для пустого дня — 10:00. Значение можно отредактировать.
+                val slotFormat = lockedFormat ?: _uiState.value.timeFormat
+                _uiState.update { state ->
+                    state.copy(time = formatTime(suggestNextFreeSlot(existing), slotFormat))
                 }
             }
         }
@@ -378,6 +415,18 @@ class AddPlaceViewModel @Inject constructor(
             phoneNumber = details.phoneNumber,
             isLoadingDetails = false
         )
+    }
+
+    private fun suggestNextFreeSlot(existing: List<Place>): LocalTime {
+        val lastEndMinutes = existing.mapNotNull { place ->
+            val raw = place.scheduledTime ?: return@mapNotNull null
+            val time = parseTime(raw, TimeFormat.HOURS_24)
+                ?: parseTime(raw, TimeFormat.HOURS_12)
+                ?: return@mapNotNull null
+            time.toSecondOfDay() / 60 + (place.estimatedDuration ?: 60)
+        }.maxOrNull()
+        val minutes = (lastEndMinutes ?: 10 * 60).coerceAtMost(23 * 60)
+        return LocalTime.of(minutes / 60, minutes % 60)
     }
 
     private fun parseDurationValue(value: String): Double? {

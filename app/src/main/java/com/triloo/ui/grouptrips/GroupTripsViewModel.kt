@@ -6,6 +6,7 @@ import com.triloo.data.model.Participant
 import com.triloo.data.model.ParticipantRole
 import com.triloo.data.model.Trip
 import com.triloo.data.repository.TripRepository
+import com.triloo.data.sync.RemoteTripInviteRepository
 import com.triloo.data.user.UserProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -21,13 +23,15 @@ import javax.inject.Inject
 /**
  * Управляет состоянием экрана групповых поездок: приветствие, фильтр
  * и сводка по каждому групповому маршруту с участниками и ролью
- * текущего пользователя. Вход в поездку — только по Bluetooth (Relay):
- * UI «по коду или QR» удалён, такого способа присоединения нет.
+ * текущего пользователя. Присоединиться к чужой поездке можно двумя
+ * способами: рядом — по Bluetooth (Relay), удалённо — по 6-символьному
+ * коду приглашения через backend (joinByInviteCode).
  */
 @HiltViewModel
 class GroupTripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
-    private val userProfileRepository: UserProfileRepository
+    private val userProfileRepository: UserProfileRepository,
+    private val remoteTripInviteRepository: RemoteTripInviteRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GroupTripsUiState())
@@ -70,6 +74,41 @@ class GroupTripsViewModel @Inject constructor(
     fun setFilter(filter: TripFilter) {
         _uiState.update { it.copy(filter = filter) }
     }
+
+    /**
+     * Присоединение к поездке по коду приглашения: backend добавляет
+     * участника и pull подтягивает поездку локально, после чего она
+     * появляется в списке через observeAllTrips.
+     */
+    fun joinByInviteCode(code: String) {
+        val normalized = code.trim().uppercase()
+        if (normalized.length != 6) {
+            _uiState.update { it.copy(joinError = "Код приглашения состоит из 6 символов") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(joinInProgress = true, joinError = null) }
+            val displayName = userProfileRepository.profile.first().displayName
+            remoteTripInviteRepository.joinByInviteCode(normalized, displayName).fold(
+                onSuccess = { tripId ->
+                    _uiState.update { it.copy(joinInProgress = false, joinedTripId = tripId) }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            joinInProgress = false,
+                            joinError = error.message ?: "Не удалось присоединиться к поездке"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    /** Сбрасывает результат и ошибку входа по коду (диалог закрыт/обработан). */
+    fun consumeJoinResult() {
+        _uiState.update { it.copy(joinedTripId = null, joinError = null) }
+    }
 }
 
 /**
@@ -93,9 +132,13 @@ enum class TripFilter {
 }
 
 /**
- * Состояние экрана групповых поездок: имя для приветствия и активный фильтр.
+ * Состояние экрана групповых поездок: имя для приветствия, активный фильтр
+ * и состояние входа по коду приглашения.
  */
 data class GroupTripsUiState(
     val userDisplayName: String = "",
-    val filter: TripFilter = TripFilter.ACTIVE
+    val filter: TripFilter = TripFilter.ACTIVE,
+    val joinInProgress: Boolean = false,
+    val joinError: String? = null,
+    val joinedTripId: String? = null
 )
