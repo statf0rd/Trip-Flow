@@ -341,7 +341,7 @@ class NearestNeighborRouteOptimizer @Inject constructor(
                     TravelMode.TRANSIT -> "Yandex Transit"
                     TravelMode.DRIVING -> "Yandex Driving"
                     TravelMode.WALKING -> "Yandex Pedestrian"
-                    TravelMode.BICYCLING -> "Yandex"
+                    TravelMode.BICYCLING -> "Yandex Bicycle"
                 }
             )
         }
